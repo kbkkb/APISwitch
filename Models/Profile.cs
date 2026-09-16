@@ -18,13 +18,22 @@ public class Profile
     public long? ExpiryTimestamp { get; set; }
     public string? SubscriptionTier { get; set; }
 
-    // 5H Quota
+    // 5H Quota (Gemini)
     public double? Quota5hFraction { get; set; }
     public string? Quota5hResetTime { get; set; }
 
-    // Weekly Quota
+    // Weekly Quota (Gemini)
     public double? QuotaWeeklyFraction { get; set; }
     public string? QuotaWeeklyResetTime { get; set; }
+
+    // Claude / GPT (3P) Quotas
+    public double? Quota3p5hFraction { get; set; }
+    public string? Quota3p5hResetTime { get; set; }
+    public double? Quota3pWeeklyFraction { get; set; }
+    public string? Quota3pWeeklyResetTime { get; set; }
+
+    // Virtual Device Profile (sync with storage.json)
+    public DeviceProfile? DeviceProfile { get; set; }
 
     // Quota Updated Time
     public DateTime? QuotaUpdatedAt { get; set; }
@@ -180,6 +189,65 @@ public class Profile
     }
 
     [JsonIgnore]
+    public bool Has3pQuota => Quota3p5hFraction.HasValue || Quota3pWeeklyFraction.HasValue;
+
+    [JsonIgnore]
+    public double Quota3p5hPercentValue
+    {
+        get => Quota3p5hFraction.HasValue ? Math.Round(Quota3p5hFraction.Value * 100.0, 1) : 100.0;
+        set { }
+    }
+
+    [JsonIgnore]
+    public string Quota3p5hPercentText => Quota3p5hFraction.HasValue ? $"{Math.Round(Quota3p5hFraction.Value * 100.0)}%" : "100%";
+
+    [JsonIgnore]
+    public string Quota3p5hCountdown
+    {
+        get
+        {
+            if (!Quota3p5hFraction.HasValue) return "";
+            if (string.IsNullOrEmpty(Quota3p5hResetTime)) return "";
+            if (DateTime.TryParse(Quota3p5hResetTime, out var dt))
+            {
+                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
+                if (diff.TotalSeconds <= 0) return "已重置";
+                if (diff.TotalHours >= 1) return $"剩 {(int)diff.TotalHours}h {diff.Minutes}m";
+                return $"剩 {diff.Minutes}m";
+            }
+            return "";
+        }
+    }
+
+    [JsonIgnore]
+    public double Quota3pWeeklyPercentValue
+    {
+        get => Quota3pWeeklyFraction.HasValue ? Math.Round(Quota3pWeeklyFraction.Value * 100.0, 1) : 100.0;
+        set { }
+    }
+
+    [JsonIgnore]
+    public string Quota3pWeeklyPercentText => Quota3pWeeklyFraction.HasValue ? $"{Math.Round(Quota3pWeeklyFraction.Value * 100.0)}%" : "100%";
+
+    [JsonIgnore]
+    public string Quota3pWeeklyCountdown
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Quota3pWeeklyResetTime)) return "";
+            if (DateTime.TryParse(Quota3pWeeklyResetTime, out var dt))
+            {
+                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
+                if (diff.TotalSeconds <= 0) return "已刷新";
+                if (diff.TotalDays >= 1) return $"剩 {(int)diff.TotalDays}天{diff.Hours}小时";
+                if (diff.TotalHours >= 1) return $"剩 {(int)diff.TotalHours}小时";
+                return $"剩 {diff.Minutes}分钟";
+            }
+            return "";
+        }
+    }
+
+    [JsonIgnore]
     public string QuotaUpdatedText
     {
         get
@@ -192,4 +260,12 @@ public class Profile
             return QuotaUpdatedAt.Value.ToLocalTime().ToString("MM-dd HH:mm") + " 更新";
         }
     }
+}
+
+public class DeviceProfile
+{
+    public string? MachineId { get; set; }
+    public string? MacMachineId { get; set; }
+    public string? DevDeviceId { get; set; }
+    public string? SqmId { get; set; }
 }

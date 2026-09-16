@@ -185,6 +185,12 @@ h1{color:#F85149;margin:0 0 10px;font-size:20px;} p{color:#8B949E;font-size:14px
         }
         catch { }
 
+        try
+        {
+            profile.Values = AgAuthHelper.BuildAuthValues(profile);
+        }
+        catch { }
+
         ProfileStore.Save(profile);
         return profile;
     }

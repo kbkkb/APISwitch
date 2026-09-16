@@ -56,9 +56,27 @@ public static class OpenCodeCli
             {
                 try { p.BaseUrl = options["baseURL"]?.GetValue<string>(); } catch { }
                 try { p.ApiKey = options["apiKey"]?.GetValue<string>(); } catch { }
+                foreach (var opt in options)
+                {
+                    if (opt.Key is "baseURL" or "apiKey" or "headers") continue;
+                    p.ExtraOptions[opt.Key] = opt.Value?.ToString() ?? "";
+                }
+                if (options["headers"] is JsonObject hObj)
+                {
+                    foreach (var h in hObj)
+                        p.CustomHeaders[h.Key] = h.Value?.ToString() ?? "";
+                }
             }
             var models = node["models"]?.AsObject();
-            if (models != null) p.ModelsJson = models.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            if (models != null)
+            {
+                p.ModelsJson = models.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                foreach (var m in models)
+                {
+                    var dName = m.Value?["name"]?.GetValue<string>() ?? "";
+                    p.CustomModels.Add(new ProviderModelEntry { Id = m.Key, Name = dName });
+                }
+            }
             result.Add(p);
         }
         return result;
@@ -74,8 +92,42 @@ public static class OpenCodeCli
         var options = new JsonObject();
         if (!string.IsNullOrWhiteSpace(p.BaseUrl)) options["baseURL"] = p.BaseUrl;
         if (!string.IsNullOrWhiteSpace(p.ApiKey)) options["apiKey"] = p.ApiKey;
+
+        if (p.ExtraOptions != null)
+        {
+            foreach (var kv in p.ExtraOptions)
+            {
+                if (string.IsNullOrWhiteSpace(kv.Key)) continue;
+                var val = kv.Value?.Trim() ?? "";
+                if (bool.TryParse(val, out var bVal)) options[kv.Key.Trim()] = bVal;
+                else if (long.TryParse(val, out var lVal)) options[kv.Key.Trim()] = lVal;
+                else if (double.TryParse(val, out var dVal)) options[kv.Key.Trim()] = dVal;
+                else options[kv.Key.Trim()] = val;
+            }
+        }
+
+        if (p.CustomHeaders != null && p.CustomHeaders.Count > 0)
+        {
+            var hObj = new JsonObject();
+            foreach (var h in p.CustomHeaders)
+                if (!string.IsNullOrWhiteSpace(h.Key))
+                    hObj[h.Key.Trim()] = h.Value ?? "";
+            options["headers"] = hObj;
+        }
+
         if (options.Count > 0) entry["options"] = options;
-        if (!string.IsNullOrWhiteSpace(p.ModelsJson))
+
+        if (p.CustomModels != null && p.CustomModels.Count > 0)
+        {
+            var mObj = new JsonObject();
+            foreach (var m in p.CustomModels)
+            {
+                if (string.IsNullOrWhiteSpace(m.Id)) continue;
+                mObj[m.Id.Trim()] = new JsonObject { ["name"] = m.Name ?? "" };
+            }
+            entry["models"] = mObj;
+        }
+        else if (!string.IsNullOrWhiteSpace(p.ModelsJson))
         {
             try
             {

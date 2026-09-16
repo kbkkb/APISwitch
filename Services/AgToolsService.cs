@@ -79,6 +79,11 @@ public static class AgToolsService
                     }
                 }
 
+                if (profile.Values.Count == 0 && !string.IsNullOrEmpty(profile.AccessToken) && !string.IsNullOrEmpty(profile.RefreshToken))
+                {
+                    profile.Values = AgAuthHelper.BuildAuthValues(profile);
+                }
+
                 ProfileStore.Save(profile);
                 imported.Add(profile);
             }
@@ -107,6 +112,17 @@ public static class AgToolsService
                     profile.ExpiryTimestamp = expTs;
             }
 
+            if (root.TryGetProperty("device_profile", out var dpElem))
+            {
+                profile.DeviceProfile = new DeviceProfile
+                {
+                    MachineId = dpElem.TryGetProperty("machine_id", out var mid) ? mid.GetString() : null,
+                    MacMachineId = dpElem.TryGetProperty("mac_machine_id", out var mmid) ? mmid.GetString() : null,
+                    DevDeviceId = dpElem.TryGetProperty("dev_device_id", out var ddid) ? ddid.GetString() : null,
+                    SqmId = dpElem.TryGetProperty("sqm_id", out var sqm) ? sqm.GetString() : null,
+                };
+            }
+
             if (root.TryGetProperty("quota", out var quota))
             {
                 if (quota.TryGetProperty("subscription_tier", out var tier))
@@ -124,6 +140,9 @@ public static class AgToolsService
                 {
                     foreach (var group in groups.EnumerateArray())
                     {
+                        var groupName = group.TryGetProperty("display_name", out var gn) ? gn.GetString() ?? "" : "";
+                        bool is3pGroup = groupName.Contains("Claude", StringComparison.OrdinalIgnoreCase) || groupName.Contains("GPT", StringComparison.OrdinalIgnoreCase);
+
                         if (!group.TryGetProperty("buckets", out var buckets)) continue;
                         foreach (var bucket in buckets.EnumerateArray())
                         {
@@ -132,17 +151,30 @@ public static class AgToolsService
                             double frac = bucket.TryGetProperty("remaining_fraction", out var f) && f.TryGetDouble(out var fd) ? fd : 1.0;
                             string? rTime = bucket.TryGetProperty("reset_time", out var rt) ? rt.GetString() : null;
 
-                            if (bId.Contains("5h", StringComparison.OrdinalIgnoreCase) || win.Equals("5h", StringComparison.OrdinalIgnoreCase))
+                            bool is5h = bId.Contains("5h", StringComparison.OrdinalIgnoreCase) || win.Equals("5h", StringComparison.OrdinalIgnoreCase);
+                            bool isWeekly = bId.Contains("weekly", StringComparison.OrdinalIgnoreCase) || win.Equals("weekly", StringComparison.OrdinalIgnoreCase);
+
+                            if (bId.StartsWith("3p", StringComparison.OrdinalIgnoreCase) || is3pGroup)
                             {
-                                if (profile.Quota5hFraction == null || bId.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
+                                if (is5h)
+                                {
+                                    profile.Quota3p5hFraction = frac;
+                                    profile.Quota3p5hResetTime = rTime;
+                                }
+                                else if (isWeekly)
+                                {
+                                    profile.Quota3pWeeklyFraction = frac;
+                                    profile.Quota3pWeeklyResetTime = rTime;
+                                }
+                            }
+                            else
+                            {
+                                if (is5h)
                                 {
                                     profile.Quota5hFraction = frac;
                                     profile.Quota5hResetTime = rTime;
                                 }
-                            }
-                            else if (bId.Contains("weekly", StringComparison.OrdinalIgnoreCase) || win.Equals("weekly", StringComparison.OrdinalIgnoreCase))
-                            {
-                                if (profile.QuotaWeeklyFraction == null || bId.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
+                                else if (isWeekly)
                                 {
                                     profile.QuotaWeeklyFraction = frac;
                                     profile.QuotaWeeklyResetTime = rTime;
@@ -258,6 +290,64 @@ public static class AgToolsService
                             }
                         }
                     }
+                }
+            }
+        }
+        catch { }
+
+        // 5. Sync virtual device profile with storage.json
+        await SyncStorageDeviceProfileAsync(profile);
+    }
+
+    public static async Task SyncStorageDeviceProfileAsync(Profile profile)
+    {
+        try
+        {
+            var dp = profile.DeviceProfile;
+            if (dp == null && Directory.Exists(AccountsDetailDir))
+            {
+                foreach (var file in Directory.GetFiles(AccountsDetailDir, "*.json"))
+                {
+                    try
+                    {
+                        var txt = await File.ReadAllTextAsync(file);
+                        using var doc = JsonDocument.Parse(txt);
+                        if (doc.RootElement.TryGetProperty("email", out var em) &&
+                            profile.Email.Equals(em.GetString(), StringComparison.OrdinalIgnoreCase) &&
+                            doc.RootElement.TryGetProperty("device_profile", out var dpElem))
+                        {
+                            dp = new DeviceProfile
+                            {
+                                MachineId = dpElem.TryGetProperty("machine_id", out var mid) ? mid.GetString() : null,
+                                MacMachineId = dpElem.TryGetProperty("mac_machine_id", out var mmid) ? mmid.GetString() : null,
+                                DevDeviceId = dpElem.TryGetProperty("dev_device_id", out var ddid) ? ddid.GetString() : null,
+                                SqmId = dpElem.TryGetProperty("sqm_id", out var sqm) ? sqm.GetString() : null,
+                            };
+                            profile.DeviceProfile = dp;
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            if (dp == null) return;
+
+            foreach (var userDir in AgPaths.CandidateUserDirs)
+            {
+                var storageJson = Path.Combine(userDir, "User", "globalStorage", "storage.json");
+                if (!File.Exists(storageJson)) continue;
+
+                var text = await File.ReadAllTextAsync(storageJson);
+                var node = JsonNode.Parse(text);
+                if (node is JsonObject obj)
+                {
+                    if (!string.IsNullOrEmpty(dp.MachineId)) obj["telemetry.machineId"] = dp.MachineId;
+                    if (!string.IsNullOrEmpty(dp.MacMachineId)) obj["telemetry.macMachineId"] = dp.MacMachineId;
+                    if (!string.IsNullOrEmpty(dp.DevDeviceId)) obj["telemetry.devDeviceId"] = dp.DevDeviceId;
+                    if (!string.IsNullOrEmpty(dp.SqmId)) obj["telemetry.sqmId"] = dp.SqmId;
+
+                    await File.WriteAllTextAsync(storageJson, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
                 }
             }
         }

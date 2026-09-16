@@ -1,12 +1,46 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Windows;
 using APISwitch.Services;
 
 namespace APISwitch;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
+    private static Mutex? _singleInstanceMutex;
+    private static EventWaitHandle? _wakeupEvent;
+    private static RegisteredWaitHandle? _registeredWait;
+
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int dwProcessId);
+    private const int ASFW_ANY = -1;
+
+    public App()
+    {
+        DispatcherUnhandledException += (s, args) =>
+        {
+            try
+            {
+                var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
+                Directory.CreateDirectory(logDir);
+                File.AppendAllText(Path.Combine(logDir, "crash.log"), $"[{DateTime.Now:O}] DispatcherUnhandledException: {args.Exception}\n");
+            }
+            catch { }
+        };
+        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+        {
+            try
+            {
+                var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
+                Directory.CreateDirectory(logDir);
+                File.AppendAllText(Path.Combine(logDir, "crash.log"), $"[{DateTime.Now:O}] AppDomain UnhandledException: {args.ExceptionObject}\n");
+            }
+            catch { }
+        };
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         if (e.Args.Contains("--probe"))
@@ -21,7 +55,103 @@ public partial class App : Application
             Shutdown();
             return;
         }
+
+        const string mutexName = "APISwitch_Desktop_App_Mutex_6723c035";
+        const string eventName = "APISwitch_Desktop_Wakeup_Event_6723c035";
+
+        bool hasHandle;
+        try
+        {
+            _singleInstanceMutex = new Mutex(false, mutexName);
+            hasHandle = _singleInstanceMutex.WaitOne(0, false);
+        }
+        catch (AbandonedMutexException)
+        {
+            hasHandle = true;
+        }
+        catch
+        {
+            hasHandle = false;
+        }
+
+        if (!hasHandle)
+        {
+            try
+            {
+                AllowSetForegroundWindow(ASFW_ANY);
+                using var wakeHandle = EventWaitHandle.OpenExisting(eventName);
+                wakeHandle.Set();
+            }
+            catch { }
+
+            Shutdown();
+            return;
+        }
+
+        try
+        {
+            _wakeupEvent = new EventWaitHandle(false, EventResetMode.AutoReset, eventName);
+            _registeredWait = ThreadPool.RegisterWaitForSingleObject(_wakeupEvent, (state, timedOut) =>
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (MainWindow is MainWindow mw)
+                        {
+                            mw.RestoreAndActivate();
+                        }
+                    }
+                    catch { }
+                }));
+            }, null, -1, false);
+        }
+        catch { }
+
+        LocalProxyServer.Initialize();
         base.OnStartup(e);
+
+        var mainWindow = new MainWindow();
+        MainWindow = mainWindow;
+        mainWindow.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try
+        {
+            _registeredWait?.Unregister(null);
+            _registeredWait = null;
+        }
+        catch { }
+
+        try
+        {
+            if (_wakeupEvent != null)
+            {
+                _wakeupEvent.Dispose();
+                _wakeupEvent = null;
+            }
+        }
+        catch { }
+
+        try
+        {
+            if (_singleInstanceMutex != null)
+            {
+                _singleInstanceMutex.ReleaseMutex();
+                _singleInstanceMutex.Dispose();
+                _singleInstanceMutex = null;
+            }
+        }
+        catch { }
+
+        try
+        {
+            LocalProxyServer.Stop();
+        }
+        catch { }
+        base.OnExit(e);
     }
 
     static void RunSelfTest()
@@ -126,7 +256,6 @@ public partial class App : Application
         sb.AppendLine("pi_changed_current=" + Services.PiCli.MatchesCurrent(acc));
         Services.PiCli.Restore(acc);
         sb.AppendLine("pi_after_restore=" + Services.PiCli.CurrentDefaults().Provider + "/" + Services.PiCli.CurrentDefaults().Model);
-        sb.AppendLine("pi_after_restore_current=" + Services.PiCli.MatchesCurrent(acc));
 
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "apiswitch-selftest.txt"), sb.ToString());
     }

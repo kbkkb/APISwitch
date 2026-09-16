@@ -58,6 +58,23 @@ public static class CliStore
 
     public static void SaveOpencode(List<OpenCodeProvider> list) => Save(OpenCodeFile, list);
 
+    static string ProxyConfigFile => Path.Combine(AgPaths.AppData, "APISwitch", "proxy-config.json");
+
+    public class ProxySettings
+    {
+        public bool Enabled { get; set; } = true;
+        public bool CodexEnabled { get; set; } = true;
+        public bool ClaudeCliEnabled { get; set; } = false;
+        public bool ClaudeDesktopEnabled { get; set; } = false;
+        public int Port { get; set; } = 15725;
+    }
+
+    public static ProxySettings LoadProxySettings() =>
+        Load<ProxySettings>(ProxyConfigFile) ?? new ProxySettings();
+
+    public static void SaveProxySettings(ProxySettings settings) =>
+        Save(ProxyConfigFile, settings);
+
     public static List<PiAccount> LoadPi() =>
         Load<List<PiAccount>>(PiFile) ?? new List<PiAccount>();
 

@@ -65,7 +65,21 @@ public static class AgQuotaService
                 profile.IdToken = idElem.GetString();
             }
 
-            return !string.IsNullOrEmpty(profile.AccessToken);
+            if (!string.IsNullOrEmpty(profile.AccessToken))
+            {
+                ProfileStore.Save(profile);
+                if (profile.IsCurrent)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try { await AgToolsService.ApplySystemCredentialsAsync(profile); }
+                        catch { }
+                    });
+                }
+                return true;
+            }
+
+            return false;
         }
         catch
         {
@@ -102,8 +116,9 @@ public static class AgQuotaService
         string? companionProject = null;
         var loadUrls = new[]
         {
-            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
         };
 
         foreach (var url in loadUrls)
@@ -186,8 +201,9 @@ public static class AgQuotaService
         // 1. Query Quota Summary (for Paid/Pro users)
         var quotaUrls = new[]
         {
-            "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+            "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
         };
 
         bool quotaGot = false;
@@ -217,8 +233,9 @@ public static class AgQuotaService
         {
             var modelUrls = new[]
             {
-                "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-                "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+                "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
+                "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+                "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
             };
 
             foreach (var url in modelUrls)
@@ -248,8 +265,9 @@ public static class AgQuotaService
         // 2. Query Subscription Tier (loadCodeAssist)
         var tierUrls = new[]
         {
-            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
         };
 
         foreach (var url in tierUrls)
@@ -293,9 +311,17 @@ public static class AgQuotaService
             profile.Quota5hResetTime = null;
             profile.QuotaWeeklyFraction = null;
             profile.QuotaWeeklyResetTime = null;
+            profile.Quota3p5hFraction = null;
+            profile.Quota3p5hResetTime = null;
+            profile.Quota3pWeeklyFraction = null;
+            profile.Quota3pWeeklyResetTime = null;
 
             foreach (var group in groups.EnumerateArray())
             {
+                var groupName = group.TryGetProperty("displayName", out var gn) ? gn.GetString() ?? "" : "";
+                bool isGeminiGroup = groupName.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+                bool is3pGroup = groupName.Contains("Claude", StringComparison.OrdinalIgnoreCase) || groupName.Contains("GPT", StringComparison.OrdinalIgnoreCase);
+
                 if (!group.TryGetProperty("buckets", out var buckets)) continue;
 
                 foreach (var bucket in buckets.EnumerateArray())
@@ -305,18 +331,30 @@ public static class AgQuotaService
                     double fraction = bucket.TryGetProperty("remainingFraction", out var frac) && frac.TryGetDouble(out var d) ? d : 1.0;
                     string? resetTime = bucket.TryGetProperty("resetTime", out var rt) ? rt.GetString() : null;
 
-                    if (bucketId.Contains("5h", StringComparison.OrdinalIgnoreCase) || window.Equals("5h", StringComparison.OrdinalIgnoreCase))
+                    bool is5h = bucketId.Contains("5h", StringComparison.OrdinalIgnoreCase) || window.Equals("5h", StringComparison.OrdinalIgnoreCase);
+                    bool isWeekly = bucketId.Contains("weekly", StringComparison.OrdinalIgnoreCase) || window.Equals("weekly", StringComparison.OrdinalIgnoreCase);
+
+                    if (bucketId.StartsWith("3p", StringComparison.OrdinalIgnoreCase) || is3pGroup)
                     {
-                        // Priority to gemini-5h
-                        if (profile.Quota5hFraction == null || bucketId.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
+                        if (is5h)
+                        {
+                            profile.Quota3p5hFraction = fraction;
+                            profile.Quota3p5hResetTime = resetTime;
+                        }
+                        else if (isWeekly)
+                        {
+                            profile.Quota3pWeeklyFraction = fraction;
+                            profile.Quota3pWeeklyResetTime = resetTime;
+                        }
+                    }
+                    else
+                    {
+                        if (is5h)
                         {
                             profile.Quota5hFraction = fraction;
                             profile.Quota5hResetTime = resetTime;
                         }
-                    }
-                    else if (bucketId.Contains("weekly", StringComparison.OrdinalIgnoreCase) || window.Equals("weekly", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (profile.QuotaWeeklyFraction == null || bucketId.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
+                        else if (isWeekly)
                         {
                             profile.QuotaWeeklyFraction = fraction;
                             profile.QuotaWeeklyResetTime = resetTime;
@@ -336,76 +374,93 @@ public static class AgQuotaService
             var root = doc.RootElement;
             if (!root.TryGetProperty("models", out var modelsElem)) return false;
 
-            string? defaultModel = root.TryGetProperty("defaultAgentModelId", out var def) ? def.GetString() : null;
+            bool foundAny = false;
 
-            double? weeklyFraction = null;
-            string? weeklyResetTime = null;
+            profile.Quota5hFraction = null;
+            profile.Quota5hResetTime = null;
+            profile.QuotaWeeklyFraction = null;
+            profile.QuotaWeeklyResetTime = null;
+            profile.Quota3p5hFraction = null;
+            profile.Quota3p5hResetTime = null;
+            profile.Quota3pWeeklyFraction = null;
+            profile.Quota3pWeeklyResetTime = null;
 
-            // 1. Try defaultAgentModelId first
-            if (!string.IsNullOrEmpty(defaultModel) &&
-                modelsElem.TryGetProperty(defaultModel, out var defModel) &&
-                defModel.TryGetProperty("quotaInfo", out var defQuota))
+            foreach (var prop in modelsElem.EnumerateObject())
             {
-                if (defQuota.TryGetProperty("remainingFraction", out var rf) && rf.TryGetDouble(out var d))
-                    weeklyFraction = d;
-                if (defQuota.TryGetProperty("resetTime", out var rt))
-                    weeklyResetTime = rt.GetString();
-            }
+                var modelId = prop.Name;
+                if (!prop.Value.TryGetProperty("quotaInfo", out var qInfo)) continue;
 
-            // 2. Try preferred primary models if default didn't have quota
-            if (!weeklyFraction.HasValue)
-            {
-                string[] preferredModels =
-                {
-                    "gemini-3.8-flash-high",
-                    "gemini-3.7-flash-medium",
-                    "gemini-3.7-flash-high",
-                    "gemini-pro-agent",
-                    "claude-sonnet-4-6",
-                    "gemini-3.6-flash-high"
-                };
+                double frac = qInfo.TryGetProperty("remainingFraction", out var rf) && rf.TryGetDouble(out var d) ? d : 1.0;
+                string? resetTime = qInfo.TryGetProperty("resetTime", out var rt) ? rt.GetString() : null;
 
-                foreach (var mId in preferredModels)
+                bool isWeekly = false;
+                bool is5h = false;
+
+                if (!string.IsNullOrEmpty(resetTime) && DateTime.TryParse(resetTime, out var dt))
                 {
-                    if (modelsElem.TryGetProperty(mId, out var mObj) &&
-                        mObj.TryGetProperty("quotaInfo", out var qInfo))
+                    var diff = dt.ToUniversalTime() - DateTime.UtcNow;
+                    if (diff.TotalHours > 24)
+                        isWeekly = true;
+                    else
+                        is5h = true;
+                }
+                else
+                {
+                    if (modelId.Contains("agent", StringComparison.OrdinalIgnoreCase) ||
+                        modelId.Contains("sonnet", StringComparison.OrdinalIgnoreCase) ||
+                        modelId.Contains("opus", StringComparison.OrdinalIgnoreCase))
+                        isWeekly = true;
+                    else
+                        is5h = true;
+                }
+
+                bool is3p = modelId.Contains("claude", StringComparison.OrdinalIgnoreCase) || modelId.Contains("gpt", StringComparison.OrdinalIgnoreCase);
+
+                if (is3p)
+                {
+                    if (is5h)
                     {
-                        if (qInfo.TryGetProperty("remainingFraction", out var rf) && rf.TryGetDouble(out var d))
-                            weeklyFraction = d;
-                        if (qInfo.TryGetProperty("resetTime", out var rt))
-                            weeklyResetTime = rt.GetString();
-                        if (weeklyFraction.HasValue) break;
+                        if (profile.Quota3p5hFraction == null || modelId.Contains("sonnet", StringComparison.OrdinalIgnoreCase))
+                        {
+                            profile.Quota3p5hFraction = frac;
+                            profile.Quota3p5hResetTime = resetTime;
+                            foundAny = true;
+                        }
+                    }
+                    else if (isWeekly)
+                    {
+                        if (profile.Quota3pWeeklyFraction == null || modelId.Contains("sonnet", StringComparison.OrdinalIgnoreCase))
+                        {
+                            profile.Quota3pWeeklyFraction = frac;
+                            profile.Quota3pWeeklyResetTime = resetTime;
+                            foundAny = true;
+                        }
                     }
                 }
-            }
-
-            // 3. Fallback to any model with quotaInfo
-            if (!weeklyFraction.HasValue)
-            {
-                foreach (var prop in modelsElem.EnumerateObject())
+                else
                 {
-                    if (prop.Value.TryGetProperty("quotaInfo", out var qInfo))
+                    if (is5h)
                     {
-                        if (qInfo.TryGetProperty("remainingFraction", out var rf) && rf.TryGetDouble(out var d))
+                        if (profile.Quota5hFraction == null || modelId.Contains("flash", StringComparison.OrdinalIgnoreCase))
                         {
-                            weeklyFraction = d;
-                            if (qInfo.TryGetProperty("resetTime", out var rt))
-                                weeklyResetTime = rt.GetString();
-                            break;
+                            profile.Quota5hFraction = frac;
+                            profile.Quota5hResetTime = resetTime;
+                            foundAny = true;
+                        }
+                    }
+                    else if (isWeekly)
+                    {
+                        if (profile.QuotaWeeklyFraction == null || modelId.Contains("pro-agent", StringComparison.OrdinalIgnoreCase) || modelId.Contains("flash-high", StringComparison.OrdinalIgnoreCase))
+                        {
+                            profile.QuotaWeeklyFraction = frac;
+                            profile.QuotaWeeklyResetTime = resetTime;
+                            foundAny = true;
                         }
                     }
                 }
             }
 
-            if (weeklyFraction.HasValue)
-            {
-                // Free/Starter accounts have only weekly quota for agent models, no 5h limit
-                profile.QuotaWeeklyFraction = weeklyFraction.Value;
-                profile.QuotaWeeklyResetTime = weeklyResetTime;
-                profile.Quota5hFraction = null;
-                profile.Quota5hResetTime = null;
-                return true;
-            }
+            return foundAny;
         }
         catch { }
 

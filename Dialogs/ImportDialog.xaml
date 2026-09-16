@@ -61,7 +61,7 @@
                         <GridViewColumn Header="" Width="80">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding CurrentLabel}" Padding="4,6" Foreground="#8BD98B"/>
+                                    <TextBlock Text="{Binding CurrentLabel}" Padding="4,6" Foreground="#16A34A" FontWeight="SemiBold"/>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
@@ -79,7 +79,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="RowBd" Property="Background" Value="#2B2D36"/>
+                                            <Setter TargetName="RowBd" Property="Background" Value="#F1F5F9"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

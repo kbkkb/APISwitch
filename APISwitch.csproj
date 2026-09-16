@@ -4,6 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>APISwitch</AssemblyName>
@@ -13,6 +14,7 @@
     <AssemblyVersion>0.1.1.0</AssemblyVersion>
     <Product>APISwitch</Product>
     <Description>一站式 AI 编程账号与供应商切换器</Description>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +24,14 @@
 
   <ItemGroup>
     <Resource Include="Assets\**" />
+    <Content Include="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.Windows.MessageBox" Alias="MessageBox" />
+    <Using Include="System.Windows.Application" Alias="Application" />
   </ItemGroup>
 
 </Project>

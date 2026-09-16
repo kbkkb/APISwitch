@@ -6,9 +6,14 @@ public class OpenCodeProvider
 {
     public string Id { get; set; } = "";
     public string? Name { get; set; }
+    public string? Notes { get; set; }
+    public string? WebsiteUrl { get; set; }
     public string Npm { get; set; } = "@ai-sdk/openai-compatible";
     public string? BaseUrl { get; set; }
     public string? ApiKey { get; set; }
+    public Dictionary<string, string> CustomHeaders { get; set; } = new();
+    public Dictionary<string, string> ExtraOptions { get; set; } = new();
+    public List<ProviderModelEntry> CustomModels { get; set; } = new();
     public string? ModelsJson { get; set; }
 }
 

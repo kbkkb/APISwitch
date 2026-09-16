@@ -4,6 +4,7 @@ obj/
 publish/
 dist/
 out/
+Release_Package/
 
 ## Visual Studio & IDEs
 .vs/

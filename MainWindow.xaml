@@ -4,11 +4,12 @@
         Title="APISwitch - 一站式 AI 编程账号切换器"
         Height="720" Width="1140" MinHeight="600" MinWidth="960"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/Assets/app.ico"
         Background="{StaticResource BgBrush}"
         FontFamily="Segoe UI, -apple-system, 'Microsoft YaHei UI', 'PingFang SC', sans-serif"
         Foreground="{StaticResource TextBrush}">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="42" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+        <WindowChrome CaptionHeight="42" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="10"/>
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
@@ -25,7 +26,7 @@
                             </Grid.ColumnDefinitions>
 
                             <!-- Sidebar -->
-                            <Border Grid.Column="0" Background="{StaticResource SidebarBrush}" BorderBrush="#1C202E" BorderThickness="0,0,1,0">
+                            <Border Grid.Column="0" Background="{StaticResource SidebarBrush}" BorderBrush="#E2E8F0" BorderThickness="0,0,1,0">
                                 <Grid Margin="0,10,0,14">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -42,17 +43,23 @@
 
                                     <!-- Bottom Utilities -->
                                     <StackPanel Grid.Row="2" Margin="12,12,12,0">
-                                        <Border Height="1" Background="#1C2130" Margin="4,0,4,12"/>
+                                        <Border Height="1" Background="#E2E8F0" Margin="4,0,4,12"/>
                                         <Button Click="OnImportCc" Style="{StaticResource GhostButton}" Padding="11,8" Margin="0,0,0,6">
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                                                 <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
                                                 <TextBlock Text="从 cc-switch 导入" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="Medium"/>
                                             </StackPanel>
                                         </Button>
-                                        <Button Click="OnOpenFolder" Style="{StaticResource GhostButton}" Padding="11,7">
+                                        <Button Click="OnOpenFolder" Style="{StaticResource GhostButton}" Padding="11,7" Margin="0,0,0,6">
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                                                 <Path Data="{StaticResource IconFolder}" Fill="{StaticResource TextDimBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
                                                 <TextBlock Text="打开数据存档目录" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Click="OnCheckUpdateClick" Style="{StaticResource GhostButton}" Padding="11,7">
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                                <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                <TextBlock Text="检查软件更新" Margin="10,0,0,0" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
                                     </StackPanel>
@@ -92,13 +99,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#171A26"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F1F5F9"/>
                                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1F2436"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF"/>
                                 <Setter TargetName="Indicator" Property="Visibility" Value="Visible"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -110,6 +117,7 @@
         <Style x:Key="CardItem" TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="AllowDrop" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -122,13 +130,13 @@
             <Setter Property="Width" Value="40"/>
             <Setter Property="Height" Value="40"/>
             <Setter Property="CornerRadius" Value="20"/>
-            <Setter Property="Background" Value="#252A3B"/>
+            <Setter Property="Background" Value="#EEF2FF"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="AvatarText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
@@ -159,7 +167,7 @@
         </Style>
         <Style x:Key="MiniQuotaProgress" TargetType="ProgressBar">
             <Setter Property="Height" Value="4"/>
-            <Setter Property="Background" Value="#22283C"/>
+            <Setter Property="Background" Value="#E2E8F0"/>
             <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Template">
@@ -184,7 +192,7 @@
         </Grid.RowDefinitions>
 
         <!-- ==================== Custom TitleBar ==================== -->
-        <Border Grid.Row="0" Background="{StaticResource SidebarBrush}" BorderBrush="#1C202E" BorderThickness="0,0,0,1">
+        <Border Grid.Row="0" Background="{StaticResource SidebarBrush}" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="236"/>
@@ -194,24 +202,41 @@
 
                 <!-- Brand -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
-                    <Image Source="pack://application:,,,/Assets/antigravity.png" Width="19" Height="19"
+                    <Image Source="pack://application:,,,/Assets/apiswitch.png" Width="20" Height="20"
                            RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center"/>
                     <TextBlock Text="APISwitch" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextBrush}"
                                Margin="9,0,0,0" VerticalAlignment="Center"/>
-                    <Border Background="#1C2130" CornerRadius="5" Padding="5,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="AppVersionText" Text="v0.1.1" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
-                    </Border>
+                    <Button Click="OnCheckUpdateClick" Style="{StaticResource GhostButton}" WindowChrome.IsHitTestVisibleInChrome="True"
+                            Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="点击检查新版本">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="AppVersionText" Text="v0.1.1" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                            <Border x:Name="UpdateBadge" Background="#EF4444" CornerRadius="4" Padding="4,1" Margin="6,0,0,0"
+                                    Visibility="Collapsed" VerticalAlignment="Center">
+                                <TextBlock Text="New" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                            </Border>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
-                <!-- Middle Draggable Space -->
-                <TextBlock Grid.Column="1" Text="一站式 AI 编程账号与供应商切换器" FontSize="11"
-                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                <!-- Middle Draggable Space & Router Status -->
+                <Grid Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                    <TextBlock Text="一站式 AI 编程账号与供应商切换器" FontSize="11"
+                               Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                    <Button x:Name="TitleBarRouterBtn" HorizontalAlignment="Right" Click="OnToggleProxyServer" Style="{StaticResource GhostButton}"
+                            WindowChrome.IsHitTestVisibleInChrome="True" Padding="8,3"
+                            ToolTip="点击开启/关闭本地路由服务（提供协议转译与无缝热切换）">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="RouterStatusDot" Width="7" Height="7" Fill="#10B981" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="RouterStatusText" Text="本地路由 :15725" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
 
                 <!-- Window Controls -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button Style="{StaticResource CaptionBtn}" Tag="{StaticResource IconMin}" Click="OnMinWindow" ToolTip="最小化"/>
                     <Button x:Name="MaxRestoreBtn" Style="{StaticResource CaptionBtn}" Tag="{StaticResource IconMax}" Click="OnMaxWindow" ToolTip="最大化/还原"/>
-                    <Button Style="{StaticResource CaptionCloseBtn}" Tag="{StaticResource IconClose}" Click="OnCloseWindow" ToolTip="关闭"/>
+                    <Button Style="{StaticResource CaptionCloseBtn}" Tag="{StaticResource IconClose}" Click="OnCloseWindow" ToolTip="最小化隐藏"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -223,7 +248,7 @@
         <TabItem>
             <TabItem.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="6" Background="#161B2E" VerticalAlignment="Center">
+                    <Border Width="28" Height="28" CornerRadius="6" Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" VerticalAlignment="Center">
                         <Image Source="pack://application:,,,/Assets/antigravity.png" Width="18" Height="18" RenderOptions.BitmapScalingMode="HighQuality"/>
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
@@ -312,7 +337,7 @@
                             <TextBlock Text="启动 IDE" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefresh" ToolTip="刷新账号列表与运行状态">
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefresh" ToolTip="一键静默刷新所有账号的最新配额与状态">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
                             <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
@@ -323,9 +348,11 @@
 
                 <!-- Account Cards List -->
                 <Grid Grid.Row="2">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer x:Name="AgScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="ProfileList" Margin="0,4,0,0"
                                  Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  HorizontalContentAlignment="Stretch"
                                  ItemContainerStyle="{StaticResource CardItem}">
@@ -348,7 +375,7 @@
                                                 </Grid.ColumnDefinitions>
 
                                                 <!-- Avatar Initial -->
-                                                <Border Width="42" Height="42" CornerRadius="21" Background="#22283A" VerticalAlignment="Center">
+                                                <Border Width="42" Height="42" CornerRadius="21" Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Initial}" FontSize="16" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
@@ -361,11 +388,11 @@
                                                             <TextBlock Text="● 当前激活" Style="{StaticResource BadgeGreenText}"/>
                                                         </Border>
                                                         <!-- Tier Badge -->
-                                                        <Border Background="#1C2132" BorderBrush="#353E5C" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding TierDisplay}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
                                                         </Border>
                                                         <!-- Activation Badge -->
-                                                        <Border Background="#161B2E" BorderBrush="#252F4A" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                        <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center"
                                                                 ToolTip="{Binding ActivationTooltip}">
                                                             <TextBlock Text="{Binding ActivationStatusText}" FontSize="10" FontWeight="SemiBold">
                                                                 <TextBlock.Style>
@@ -373,10 +400,10 @@
                                                                         <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding IsActivated}" Value="True">
-                                                                                <Setter Property="Foreground" Value="#3DD68C"/>
+                                                                                <Setter Property="Foreground" Value="#16A34A"/>
                                                                             </DataTrigger>
                                                                             <DataTrigger Binding="{Binding IsActivated}" Value="False">
-                                                                                <Setter Property="Foreground" Value="#FF6B6B"/>
+                                                                                <Setter Property="Foreground" Value="#DC2626"/>
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
@@ -393,19 +420,19 @@
 
                                                 <!-- Action Buttons -->
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                    <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowSwitchAntigravity">
+                                                    <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowSwitchAntigravity" ToolTip="切换 Antigravity IDE 到此账号并执行激活">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="一键切换" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="激活切换" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateAntigravity" ToolTip="向 Google 执行官方协议握手激活并测通可用性">
+                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateAntigravity" ToolTip="向 Google 执行官方协议握手并测试连接延迟">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="激活" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="测通" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="在线查询并刷新此账号的最新 5H / 周配额">
+                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="在线查询并刷新此账号的最新配额">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
                                                             <TextBlock Text="刷新配额" Margin="6,0,0,0" VerticalAlignment="Center"/>
@@ -417,8 +444,8 @@
                                                 </StackPanel>
                                             </Grid>
 
-                                            <!-- Row 1: Quota Metrics Panel (5H & Weekly) -->
-                                            <Border Grid.Row="1" Background="#111420" CornerRadius="8" Padding="14,10" Margin="0,12,0,0">
+                                            <!-- Row 1: Dual Quota Metrics Panel (Gemini & Claude/GPT) -->
+                                            <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,12,0,0">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
@@ -426,32 +453,68 @@
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
 
-                                                    <!-- 5H Quota Bucket -->
+                                                    <!-- Left Column: Gemini Models -->
                                                     <StackPanel Grid.Column="0">
-                                                        <Grid>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <Border Background="#EEF2FF" CornerRadius="4" Padding="6,2">
+                                                                <TextBlock Text="Gemini 模型" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <!-- Gemini 5H -->
+                                                        <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <TextBlock Text="5H 动态限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
                                                                 <TextBlock Text="{Binding Quota5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right"/>
                                                         </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota5hPercentValue, Mode=OneWay}" Margin="0,6,0,0"
+                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
                                                                      Foreground="{StaticResource GreenBrush}"/>
-                                                    </StackPanel>
 
-                                                    <Rectangle Grid.Column="1" Width="1" Fill="#1E2336" HorizontalAlignment="Center"/>
-
-                                                    <!-- Weekly Quota Bucket -->
-                                                    <StackPanel Grid.Column="2">
-                                                        <Grid>
+                                                        <!-- Gemini Weekly -->
+                                                        <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <TextBlock Text="周基础限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
                                                                 <TextBlock Text="{Binding QuotaWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right"/>
                                                         </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaWeeklyPercentValue, Mode=OneWay}" Margin="0,6,0,0"
+                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaWeeklyPercentValue, Mode=OneWay}"
                                                                      Foreground="{StaticResource AccentBrush}"/>
+                                                    </StackPanel>
+
+                                                    <Rectangle Grid.Column="1" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"/>
+
+                                                    <!-- Right Column: Claude & GPT Models -->
+                                                    <StackPanel Grid.Column="2">
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <Border Background="#F5F3FF" CornerRadius="4" Padding="6,2">
+                                                                <TextBlock Text="Claude &amp; GPT 模型" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <!-- Claude 5H -->
+                                                        <Grid Margin="0,0,0,3">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="5H 动态限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{Binding Quota3p5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right"/>
+                                                        </Grid>
+                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3p5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
+                                                                     Foreground="#10B981"/>
+
+                                                        <!-- Claude Weekly -->
+                                                        <Grid Margin="0,0,0,3">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="周基础限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{Binding Quota3pWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right"/>
+                                                        </Grid>
+                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3pWeeklyPercentValue, Mode=OneWay}"
+                                                                     Foreground="#8B5CF6"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -473,7 +536,7 @@
                         </ListBox>
                     </ScrollViewer>
                     <StackPanel x:Name="AgEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <Border Width="54" Height="54" CornerRadius="27" Background="#161A26" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconUserPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="还没有账号存档" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
@@ -492,7 +555,7 @@
         <TabItem>
             <TabItem.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="6" Background="#122521" VerticalAlignment="Center">
+                    <Border Width="28" Height="28" CornerRadius="6" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" VerticalAlignment="Center">
                         <Path Data="{StaticResource IconOpenAi}" Fill="{StaticResource OpenAiBrush}" Width="16" Height="16" Stretch="Uniform"/>
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
@@ -518,7 +581,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#132B25" VerticalAlignment="Center">
+                        <Border Width="46" Height="46" CornerRadius="23" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" VerticalAlignment="Center">
                             <Path Data="{StaticResource IconOpenAi}" Fill="{StaticResource OpenAiBrush}" Width="22" Height="22" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -530,6 +593,12 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="当前供应商：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                         <TextBlock x:Name="CodexCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border x:Name="CodexRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse x:Name="CodexRouterDot" Width="6" Height="6" Fill="#10B981" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="CodexRouterChipText" Text="本地路由已接管 (免重启热切/转译)" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -553,12 +622,19 @@
                             <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshCodex">
+                    <Button x:Name="CodexToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleCodexProxy" ToolTip="切换本地路由服务（提供协议转译与无缝热切换）">
                         <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <Ellipse x:Name="CodexToolbarRouterDot" Width="7" Height="7" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CodexToolbarRouterText" Text="本地路由：已开启" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRestartCodex">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="重启 Codex" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenCodexConfig">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
@@ -569,11 +645,19 @@
 
                 <!-- Cards List -->
                 <Grid Grid.Row="2">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="CodexList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}">
+                                 ItemContainerStyle="{StaticResource CardItem}"
+                                 AllowDrop="True"
+                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown"
+                                 PreviewMouseLeftButtonUp="OnCardListPreviewMouseLeftButtonUp"
+                                 PreviewMouseMove="OnCardListPreviewMouseMove"
+                                 DragOver="OnCardListDragOver"
+                                 Drop="OnCardListDrop">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -581,24 +665,40 @@
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="40" Height="40" CornerRadius="20" Background="#162621" VerticalAlignment="Center">
+                                            <!-- Drag Handle Grip -->
+                                            <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                                <Path x:Name="DragGrip" Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
+                                            </Grid>
+                                            <!-- Avatar -->
+                                            <Border Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource OpenAiBrush}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <!-- Info -->
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
                                                         <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
+                                                    <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
+                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
+                                                            VerticalAlignment="Center" Visibility="{Binding RouterBadgeVisibility}"
+                                                            ToolTip="{Binding RouterBadgeTooltip}">
+                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="11" FontWeight="Medium"
+                                                                   Foreground="{Binding RouterBadgeForeground}"/>
+                                                    </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
                                                            Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <!-- Buttons -->
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyCodex">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
@@ -614,6 +714,7 @@
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
@@ -627,7 +728,7 @@
                         </ListBox>
                     </ScrollViewer>
                     <StackPanel x:Name="CodexEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <Border Width="54" Height="54" CornerRadius="27" Background="#161A26" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="还没有 Codex 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
@@ -642,7 +743,7 @@
         <TabItem>
             <TabItem.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="6" Background="#261C16" VerticalAlignment="Center">
+                    <Border Width="28" Height="28" CornerRadius="6" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
                         <Path Data="{StaticResource IconClaude}" Fill="{StaticResource ClaudeBrush}" Width="16" Height="16" Stretch="Uniform"/>
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
@@ -668,7 +769,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#2B1D16" VerticalAlignment="Center">
+                        <Border Width="46" Height="46" CornerRadius="23" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
                             <Path Data="{StaticResource IconClaude}" Fill="{StaticResource ClaudeBrush}" Width="22" Height="22" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -678,8 +779,14 @@
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前端点：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock Text="当前供应商：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                         <TextBlock x:Name="ClaudeCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border x:Name="ClaudeRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse x:Name="ClaudeRouterDot" Width="6" Height="6" Fill="#94A3B8" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="ClaudeRouterChipText" Text="直连直通模式（未开启路由）" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -703,6 +810,12 @@
                             <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <Button x:Name="ClaudeToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeCliProxy" ToolTip="切换 Claude CLI 本地路由服务（通过本地端口统一中转）">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="ClaudeToolbarRouterDot" Width="7" Height="7" Fill="#94A3B8" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="ClaudeToolbarRouterText" Text="本地路由：已停用" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshClaude">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
@@ -719,11 +832,19 @@
 
                 <!-- Cards List -->
                 <Grid Grid.Row="2">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="ClaudeList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}">
+                                 ItemContainerStyle="{StaticResource CardItem}"
+                                 AllowDrop="True"
+                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown"
+                                 PreviewMouseLeftButtonUp="OnCardListPreviewMouseLeftButtonUp"
+                                 PreviewMouseMove="OnCardListPreviewMouseMove"
+                                 DragOver="OnCardListDragOver"
+                                 Drop="OnCardListDrop">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -731,24 +852,40 @@
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="40" Height="40" CornerRadius="20" Background="#291E18" VerticalAlignment="Center">
+                                            <!-- Drag Handle Grip -->
+                                            <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                                <Path x:Name="DragGrip" Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
+                                            </Grid>
+                                            <!-- Avatar -->
+                                            <Border Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource ClaudeBrush}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <!-- Info -->
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
                                                         <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
+                                                    <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
+                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
+                                                            VerticalAlignment="Center" Visibility="{Binding RouterBadgeVisibility}"
+                                                            ToolTip="{Binding RouterBadgeTooltip}">
+                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="11" FontWeight="Medium"
+                                                                   Foreground="{Binding RouterBadgeForeground}"/>
+                                                    </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
                                                            Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <!-- Buttons -->
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyClaude">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
@@ -764,6 +901,7 @@
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
@@ -777,7 +915,7 @@
                         </ListBox>
                     </ScrollViewer>
                     <StackPanel x:Name="ClaudeEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <Border Width="54" Height="54" CornerRadius="27" Background="#161A26" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="还没有 Claude CLI 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
@@ -793,8 +931,8 @@
         <TabItem>
             <TabItem.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="6" Background="#141E2F" VerticalAlignment="Center">
-                        <Path Data="{StaticResource IconDesktop}" Fill="#60A5FA" Width="16" Height="16" Stretch="Uniform"/>
+                    <Border Width="28" Height="28" CornerRadius="6" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" VerticalAlignment="Center">
+                        <Path Data="{StaticResource IconDesktop}" Fill="#2563EB" Width="16" Height="16" Stretch="Uniform"/>
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Claude 客户端" FontSize="13" FontWeight="SemiBold"/>
@@ -819,8 +957,8 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#162238" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconDesktop}" Fill="#60A5FA" Width="22" Height="22" Stretch="Uniform"
+                        <Border Width="46" Height="46" CornerRadius="23" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconDesktop}" Fill="#2563EB" Width="22" Height="22" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
@@ -829,8 +967,14 @@
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前网关：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock Text="当前供应商：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                         <TextBlock x:Name="DesktopCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border x:Name="DesktopRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse x:Name="DesktopRouterDot" Width="6" Height="6" Fill="#94A3B8" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="DesktopRouterChipText" Text="直连直通模式（未开启路由）" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -854,6 +998,12 @@
                             <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <Button x:Name="DesktopToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeDesktopProxy" ToolTip="切换 Claude 桌面客户端本地路由服务（通过本地端口统一中转）">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="DesktopToolbarRouterDot" Width="7" Height="7" Fill="#94A3B8" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="DesktopToolbarRouterText" Text="本地路由：已停用" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshDesktop">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
@@ -870,11 +1020,19 @@
 
                 <!-- Cards List -->
                 <Grid Grid.Row="2">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="DesktopList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}">
+                                 ItemContainerStyle="{StaticResource CardItem}"
+                                 AllowDrop="True"
+                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown"
+                                 PreviewMouseLeftButtonUp="OnCardListPreviewMouseLeftButtonUp"
+                                 PreviewMouseMove="OnCardListPreviewMouseMove"
+                                 DragOver="OnCardListDragOver"
+                                 Drop="OnCardListDrop">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -882,24 +1040,40 @@
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="40" Height="40" CornerRadius="20" Background="#162238" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#60A5FA"
+                                            <!-- Drag Handle Grip -->
+                                            <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                                <Path x:Name="DragGrip" Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
+                                            </Grid>
+                                            <!-- Avatar -->
+                                            <Border Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#2563EB"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <!-- Info -->
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
                                                         <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
+                                                    <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
+                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
+                                                            VerticalAlignment="Center" Visibility="{Binding RouterBadgeVisibility}"
+                                                            ToolTip="{Binding RouterBadgeTooltip}">
+                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="11" FontWeight="Medium"
+                                                                   Foreground="{Binding RouterBadgeForeground}"/>
+                                                    </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
                                                            Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <!-- Buttons -->
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyDesktop">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
@@ -915,6 +1089,7 @@
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
@@ -928,7 +1103,7 @@
                         </ListBox>
                     </ScrollViewer>
                     <StackPanel x:Name="DesktopEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <Border Width="54" Height="54" CornerRadius="27" Background="#161A26" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="还没有 Claude 桌面端供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
@@ -944,8 +1119,8 @@
         <TabItem>
             <TabItem.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="6" Background="#1D1A2E" VerticalAlignment="Center">
-                        <Path Data="{StaticResource IconOpenCode}" Fill="#A78BFA" Width="16" Height="16" Stretch="Uniform"/>
+                    <Border Width="28" Height="28" CornerRadius="6" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" VerticalAlignment="Center">
+                        <Path Data="{StaticResource IconOpenCode}" Fill="#7C3AED" Width="16" Height="16" Stretch="Uniform"/>
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="OpenCode" FontSize="13" FontWeight="SemiBold"/>
@@ -970,8 +1145,8 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#241E3B" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconOpenCode}" Fill="#A78BFA" Width="22" Height="22" Stretch="Uniform"
+                        <Border Width="46" Height="46" CornerRadius="23" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconOpenCode}" Fill="#7C3AED" Width="22" Height="22" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
@@ -1021,8 +1196,10 @@
 
                 <!-- Cards List -->
                 <Grid Grid.Row="2">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="OcList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  HorizontalContentAlignment="Stretch"
                                  ItemContainerStyle="{StaticResource CardItem}">
@@ -1036,8 +1213,8 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="40" Height="40" CornerRadius="20" Background="#241E3B" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#A78BFA"
+                                            <Border Width="40" Height="40" CornerRadius="20" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#7C3AED"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
@@ -1079,7 +1256,7 @@
                         </ListBox>
                     </ScrollViewer>
                     <StackPanel x:Name="OcEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <Border Width="54" Height="54" CornerRadius="27" Background="#161A26" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="还没有 OpenCode 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
@@ -1095,8 +1272,8 @@
         <TabItem>
             <TabItem.Header>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="6" Background="#261E16" VerticalAlignment="Center">
-                        <Path Data="{StaticResource IconPi}" Fill="#F59E0B" Width="16" Height="16" Stretch="Uniform"/>
+                    <Border Width="28" Height="28" CornerRadius="6" Background="#FFFBEB" BorderBrush="#FDE68A" BorderThickness="1" VerticalAlignment="Center">
+                        <Path Data="{StaticResource IconPi}" Fill="#D97706" Width="16" Height="16" Stretch="Uniform"/>
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Pi" FontSize="13" FontWeight="SemiBold"/>
@@ -1121,8 +1298,8 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#2B2016" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconPi}" Fill="#F59E0B" Width="22" Height="22" Stretch="Uniform"
+                        <Border Width="46" Height="46" CornerRadius="23" Background="#FFFBEB" BorderBrush="#FDE68A" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconPi}" Fill="#D97706" Width="22" Height="22" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
@@ -1166,8 +1343,10 @@
 
                 <!-- Cards List -->
                 <Grid Grid.Row="2">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="PiList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  HorizontalContentAlignment="Stretch"
                                  ItemContainerStyle="{StaticResource CardItem}">
@@ -1181,8 +1360,8 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="40" Height="40" CornerRadius="20" Background="#292016" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#F59E0B"
+                                            <Border Width="40" Height="40" CornerRadius="20" Background="#FFFBEB" BorderBrush="#FDE68A" BorderThickness="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#D97706"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
@@ -1223,7 +1402,7 @@
                         </ListBox>
                     </ScrollViewer>
                     <StackPanel x:Name="PiEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <Border Width="54" Height="54" CornerRadius="27" Background="#161A26" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconSave}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="还没有 Pi 凭据快照" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
@@ -1240,11 +1419,11 @@
         <Border x:Name="ToastBanner" Grid.Row="1"
                 HorizontalAlignment="Center" VerticalAlignment="Top"
                 Margin="0,18,0,0" Panel.ZIndex="999"
-                Background="#1E2333" BorderBrush="#3A4460" BorderThickness="1"
+                Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1"
                 CornerRadius="10" Padding="16,10"
                 Opacity="0" Visibility="Collapsed" IsHitTestVisible="False">
             <Border.Effect>
-                <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="#000000"/>
+                <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.12" Color="#0F172A"/>
             </Border.Effect>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Path x:Name="ToastIcon" Data="{StaticResource IconCheck}" Fill="{StaticResource GreenBrush}"
@@ -1255,14 +1434,14 @@
         </Border>
 
         <!-- ==================== Busy Overlay ==================== -->
-        <Grid x:Name="BusyOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#C0090B10" Visibility="Collapsed" Panel.ZIndex="1000">
-            <Border Background="#161A26" BorderBrush="#2A3144" BorderThickness="1" CornerRadius="14"
+        <Grid x:Name="BusyOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#600F172A" Visibility="Collapsed" Panel.ZIndex="1000">
+            <Border Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="14"
                     Padding="28,22" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Border.Effect>
-                    <DropShadowEffect BlurRadius="30" ShadowDepth="6" Opacity="0.5" Color="#000000"/>
+                    <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.15" Color="#0F172A"/>
                 </Border.Effect>
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <ProgressBar IsIndeterminate="True" Width="180" Height="4" Foreground="{StaticResource AccentBrush}" Background="#222838" BorderThickness="0"/>
+                    <ProgressBar IsIndeterminate="True" Width="180" Height="4" Foreground="{StaticResource AccentBrush}" Background="#E2E8F0" BorderThickness="0"/>
                     <TextBlock x:Name="BusyText" Text="正在处理，请稍候…" FontSize="13" FontWeight="Medium"
                                Foreground="{StaticResource TextBrush}" Margin="0,14,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>

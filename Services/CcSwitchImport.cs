@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using APISwitch.Models;
@@ -54,7 +54,7 @@ public static class CcSwitchImport
         using var conn = new SqliteConnection(connStr);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT app_type, name, is_current, settings_config FROM providers WHERE app_type IN ('claude','claude-desktop','codex','opencode') ORDER BY app_type, sort_index";
+        cmd.CommandText = "SELECT app_type, name, is_current, settings_config, id, website_url, notes, meta FROM providers WHERE app_type IN ('claude','claude-desktop','codex','opencode') ORDER BY app_type, sort_index";
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
@@ -62,13 +62,17 @@ public static class CcSwitchImport
             var name = reader.GetString(1);
             var isCurrent = reader.GetInt64(2) != 0;
             var cfgText = reader.IsDBNull(3) ? null : reader.GetString(3);
-            var item = Parse(appType, name, isCurrent, cfgText);
+            var id = reader.IsDBNull(4) ? null : reader.GetString(4);
+            var websiteUrl = reader.IsDBNull(5) ? null : reader.GetString(5);
+            var notes = reader.IsDBNull(6) ? null : reader.GetString(6);
+            var metaText = reader.IsDBNull(7) ? null : reader.GetString(7);
+            var item = Parse(appType, name, isCurrent, cfgText, id, websiteUrl, notes, metaText);
             if (item != null) items.Add(item);
         }
         return items;
     }
 
-    static CcImportItem? Parse(string appType, string name, bool isCurrent, string? cfgText)
+    static CcImportItem? Parse(string appType, string name, bool isCurrent, string? cfgText, string? id, string? websiteUrl, string? notes, string? metaText)
     {
         try
         {
@@ -79,7 +83,10 @@ public static class CcSwitchImport
                 var official = env == null || env.Count == 0;
                 var p = new ClaudeProvider
                 {
+                    Id = !string.IsNullOrWhiteSpace(id) ? id : name,
                     Name = name,
+                    Notes = notes,
+                    WebsiteUrl = websiteUrl,
                     IsOfficial = official,
                     BaseUrl = Str(env, "ANTHROPIC_BASE_URL"),
                     AuthToken = Str(env, "ANTHROPIC_AUTH_TOKEN") ?? Str(env, "ANTHROPIC_API_KEY"),
@@ -93,7 +100,11 @@ public static class CcSwitchImport
                         if (kv.Key is "ANTHROPIC_BASE_URL" or "ANTHROPIC_AUTH_TOKEN" or "ANTHROPIC_API_KEY"
                             or "ANTHROPIC_MODEL" or "ANTHROPIC_SMALL_FAST_MODEL") continue;
                         var v = kv.Value?.GetValue<string>();
-                        if (v != null) p.ExtraEnv[kv.Key] = v;
+                        if (v != null)
+                        {
+                            p.ExtraEnv[kv.Key] = v;
+                            p.ExtraOptions[kv.Key] = v;
+                        }
                     }
                 }
                 return new CcImportItem
@@ -111,9 +122,16 @@ public static class CcSwitchImport
             {
                 var cfg = JsonNode.Parse(cfgText ?? "{}")?.AsObject();
                 var tomlText = cfg?["config"]?.GetValue<string>();
-                var p = new CodexProvider { Name = name };
+                var p = new CodexProvider
+                {
+                    Id = !string.IsNullOrWhiteSpace(id) ? id : name,
+                    Name = name,
+                    Notes = notes,
+                    WebsiteUrl = websiteUrl,
+                };
 
                 string? providerId = null;
+                string? catalogRelPath = null;
                 if (!string.IsNullOrWhiteSpace(tomlText))
                 {
                     var toml = TomlSerializer.Deserialize<TomlTable>(tomlText);
@@ -121,6 +139,7 @@ public static class CcSwitchImport
                     {
                         if (toml.TryGetValue("model_provider", out var mp)) providerId = mp?.ToString();
                         if (toml.TryGetValue("model", out var m)) p.Model = m?.ToString();
+                        if (toml.TryGetValue("model_catalog_json", out var mcj)) catalogRelPath = mcj?.ToString();
                         if (providerId != null &&
                             toml.TryGetValue("model_providers", out var providers) && providers is TomlTable pt &&
                             pt.TryGetValue(providerId, out var entryObj) && entryObj is TomlTable entry)
@@ -131,6 +150,56 @@ public static class CcSwitchImport
                         }
                     }
                 }
+
+                if (cfg?["modelCatalog"]?["models"] is JsonArray mcArr)
+                {
+                    foreach (var item in mcArr)
+                    {
+                        var mId = item?["model"]?.GetValue<string>() ?? item?["slug"]?.GetValue<string>();
+                        var dName = item?["displayName"]?.GetValue<string>() ?? item?["display_name"]?.GetValue<string>() ?? mId;
+                        var cwStr = item?["context_window"]?.ToString() ?? item?["contextWindow"]?.ToString();
+                        var cw = !string.IsNullOrWhiteSpace(cwStr) ? cwStr : "1m";
+                        if (!string.IsNullOrWhiteSpace(mId) && !p.CustomModels.Any(x => string.Equals(x.Id, mId, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            p.CustomModels.Add(new ProviderModelEntry { Id = mId.Trim(), Name = dName?.Trim() ?? mId.Trim(), ContextWindow = cw });
+                        }
+                    }
+                }
+
+                if (p.CustomModels.Count == 0 && !string.IsNullOrWhiteSpace(catalogRelPath))
+                {
+                    try
+                    {
+                        var catFull = Path.IsPathRooted(catalogRelPath)
+                            ? catalogRelPath
+                            : Path.Combine(CodexCli.CodexDir, catalogRelPath);
+                        if (File.Exists(catFull))
+                        {
+                            var catJson = JsonNode.Parse(File.ReadAllText(catFull))?.AsObject();
+                            if (catJson?["models"] is JsonArray arr)
+                            {
+                                foreach (var item in arr)
+                                {
+                                    var mId = item?["slug"]?.GetValue<string>() ?? item?["model"]?.GetValue<string>();
+                                    var dName = item?["display_name"]?.GetValue<string>() ?? item?["displayName"]?.GetValue<string>() ?? mId;
+                                    var cwStr = item?["context_window"]?.ToString() ?? item?["contextWindow"]?.ToString();
+                                    var cw = !string.IsNullOrWhiteSpace(cwStr) ? cwStr : "1m";
+                                    if (!string.IsNullOrWhiteSpace(mId) && !p.CustomModels.Any(x => string.Equals(x.Id, mId, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        p.CustomModels.Add(new ProviderModelEntry { Id = mId.Trim(), Name = dName?.Trim() ?? mId.Trim(), ContextWindow = cw });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+
+                var metaNode = JsonNode.Parse(metaText ?? "{}")?.AsObject();
+                var metaFormat = metaNode?["apiFormat"]?.GetValue<string>();
+                if (metaFormat == "openai_chat") p.WireApi = "chat";
+                else if (metaFormat == "anthropic") p.WireApi = "anthropic";
 
                 var authNode = cfg?["auth"];
                 if (authNode != null)
@@ -161,8 +230,10 @@ public static class CcSwitchImport
                 if (cfg == null) return null;
                 var p = new OpenCodeProvider
                 {
-                    Id = name,
+                    Id = !string.IsNullOrWhiteSpace(id) ? id : name,
                     Name = name,
+                    Notes = notes,
+                    WebsiteUrl = websiteUrl,
                     Npm = Str(cfg, "npm") ?? "@ai-sdk/openai-compatible",
                 };
                 var options = cfg["options"]?.AsObject();
@@ -170,10 +241,27 @@ public static class CcSwitchImport
                 {
                     try { p.BaseUrl = Str(options, "baseURL"); } catch { }
                     try { p.ApiKey = Str(options, "apiKey"); } catch { }
+                    foreach (var kv in options)
+                    {
+                        if (kv.Key is "baseURL" or "apiKey" or "headers") continue;
+                        p.ExtraOptions[kv.Key] = kv.Value?.ToString() ?? "";
+                    }
+                    if (options["headers"] is JsonObject hObj)
+                    {
+                        foreach (var kv in hObj)
+                            p.CustomHeaders[kv.Key] = kv.Value?.ToString() ?? "";
+                    }
                 }
                 var models = cfg["models"]?.AsObject();
                 if (models != null)
+                {
                     p.ModelsJson = models.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                    foreach (var kv in models)
+                    {
+                        var dName = kv.Value?["name"]?.GetValue<string>() ?? "";
+                        p.CustomModels.Add(new ProviderModelEntry { Id = kv.Key, Name = dName });
+                    }
+                }
                 return new CcImportItem
                 {
                     AppType = appType,
