@@ -1,0 +1,44 @@
+## Build and Output Folders
+bin/
+obj/
+publish/
+dist/
+out/
+
+## Visual Studio & IDEs
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+## User Data & Local Cache
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+*.db
+*.sqlite
+*.sqlite3
+
+## Sensitive Credentials & Configs
+*.key
+*.pem
+*.pfx
+*.cert
+oauth_creds.json
+accounts.json
+secrets.json
+appsettings.*.local.json
+.env
+.env.*
+
+## OS Generated Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

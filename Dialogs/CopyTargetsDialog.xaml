@@ -1,0 +1,24 @@
+<Window x:Class="APISwitch.Dialogs.CopyTargetsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="复制供应商到…"
+        Width="380" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{StaticResource BgBrush}"
+        FontFamily="Segoe UI, Microsoft YaHei UI"
+        Foreground="{StaticResource TextBrush}">
+    <StackPanel Margin="22">
+        <TextBlock x:Name="SourceText" Text="将选中的供应商复制到：" FontSize="13"
+                   Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,12"/>
+        <CheckBox x:Name="ClaudeCheck" Content="Claude Code (CLI)" Margin="0,0,0,8"/>
+        <CheckBox x:Name="DesktopCheck" Content="Claude 客户端" Margin="0,0,0,8"/>
+        <CheckBox x:Name="CodexCheck" Content="Codex" Margin="0,0,0,8"/>
+        <CheckBox x:Name="OpenCodeCheck" Content="OpenCode" Margin="0,0,0,4"/>
+        <TextBlock Text="字段自动映射：Auth Token ↔ Bearer Token / API Key；Base URL 与模型原样复制。"
+                   FontSize="11" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="取消" Click="OnCancel" Margin="0,0,10,0" IsCancel="True"/>
+            <Button Content="复制" Style="{StaticResource PrimaryButton}" Click="OnOk" IsDefault="True" MinWidth="90"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
