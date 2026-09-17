@@ -39,3 +39,17 @@ public class PiAccount
     public string SubText => string.Join("   ·   ",
         new[] { DefaultProvider, DefaultModel }.Where(s => !string.IsNullOrEmpty(s)));
 }
+
+public class PiProvider
+{
+    public string Id { get; set; } = "";
+    public string? Name { get; set; }
+    public string? Notes { get; set; }
+    public string? WebsiteUrl { get; set; }
+    public string? BaseUrl { get; set; }
+    public string? ApiKey { get; set; }
+    public string Api { get; set; } = "openai-completions";
+    public Dictionary<string, string> CustomHeaders { get; set; } = new();
+    public List<ProviderModelEntry> CustomModels { get; set; } = new();
+    public string? ModelsJson { get; set; }
+}

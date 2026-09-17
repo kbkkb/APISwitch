@@ -43,10 +43,10 @@ public partial class ImportDialog : Window
         }
         try
         {
-            var (nc, nd, nx, no) = CcSwitchImport.Import(selected);
+            var (nc, nd, nx, no, np) = CcSwitchImport.Import(selected);
             Imported = true;
             MessageBox.Show(
-                $"导入完成：Claude CLI {nc}，Claude 客户端 {nd}，Codex {nx}，OpenCode {no} 个。",
+                $"导入完成：Claude CLI {nc}，Claude 客户端 {nd}，Codex {nx}，OpenCode {no}，Pi {np} 个。",
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
             DialogResult = true;
         }

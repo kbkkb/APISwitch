@@ -13,7 +13,8 @@
         <CheckBox x:Name="ClaudeCheck" Content="Claude Code (CLI)" Margin="0,0,0,8"/>
         <CheckBox x:Name="DesktopCheck" Content="Claude 客户端" Margin="0,0,0,8"/>
         <CheckBox x:Name="CodexCheck" Content="Codex" Margin="0,0,0,8"/>
-        <CheckBox x:Name="OpenCodeCheck" Content="OpenCode" Margin="0,0,0,4"/>
+        <CheckBox x:Name="OpenCodeCheck" Content="OpenCode" Margin="0,0,0,8"/>
+        <CheckBox x:Name="PiCheck" Content="Pi" Margin="0,0,0,4"/>
         <TextBlock Text="字段自动映射：Auth Token ↔ Bearer Token / API Key；Base URL 与模型原样复制。"
                    FontSize="11" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">

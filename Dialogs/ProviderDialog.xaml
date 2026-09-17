@@ -157,6 +157,18 @@
                                     <ComboBoxItem Content="@ai-sdk/azure"/>
                                 </ComboBox>
                             </StackPanel>
+
+                            <!-- Pi Api Format -->
+                            <StackPanel x:Name="PiFormatPanel" Visibility="Collapsed">
+                                <TextBlock Text="接口协议 (api)" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                <TextBlock Text="选择 Pi Agent 调用的底层 API 协议" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                                <ComboBox x:Name="PiApiCombo" IsEditable="True" Height="34" Margin="0,0,0,4">
+                                    <ComboBoxItem Content="openai-completions" IsSelected="True"/>
+                                    <ComboBoxItem Content="anthropic-messages"/>
+                                    <ComboBoxItem Content="openai-responses"/>
+                                    <ComboBoxItem Content="google-generative-ai"/>
+                                </ComboBox>
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- API Key / Token -->

@@ -19,6 +19,7 @@ public class CcImportItem
     public ClaudeProvider? Claude { get; init; }
     public CodexProvider? Codex { get; init; }
     public OpenCodeProvider? OpenCode { get; init; }
+    public PiProvider? Pi { get; init; }
 
     public string TypeLabel => AppType switch
     {
@@ -26,10 +27,11 @@ public class CcImportItem
         "claude-desktop" => "Claude 客户端",
         "codex" => "Codex",
         "opencode" => "OpenCode",
+        "pi" => "Pi",
         _ => AppType,
     };
 
-    public string CurrentLabel => IsCurrent ? "● cc 当前" : "";
+    public string CurrentLabel => IsCurrent ? (AppType is "opencode" or "pi" ? "● cc 已在配置池" : "● cc 当前") : "";
 }
 
 public static class CcSwitchImport
@@ -54,7 +56,7 @@ public static class CcSwitchImport
         using var conn = new SqliteConnection(connStr);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT app_type, name, is_current, settings_config, id, website_url, notes, meta FROM providers WHERE app_type IN ('claude','claude-desktop','codex','opencode') ORDER BY app_type, sort_index";
+        cmd.CommandText = "SELECT app_type, name, is_current, settings_config, id, website_url, notes, meta FROM providers WHERE app_type IN ('claude','claude-desktop','codex','opencode','pi') ORDER BY app_type, sort_index";
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
@@ -333,13 +335,73 @@ public static class CcSwitchImport
                         p.CustomModels.Add(new ProviderModelEntry { Id = kv.Key, Name = dName });
                     }
                 }
+                bool inPool = isCurrent;
+                try
+                {
+                    var metaObj = JsonNode.Parse(metaText ?? "{}")?.AsObject();
+                    if (metaObj != null && metaObj["liveConfigManaged"] != null)
+                        inPool = metaObj["liveConfigManaged"]?.GetValue<bool>() ?? isCurrent;
+                }
+                catch { }
+
                 return new CcImportItem
                 {
                     AppType = appType,
                     Name = name,
-                    IsCurrent = isCurrent,
+                    IsCurrent = inPool,
                     Summary = p.BaseUrl ?? "—",
                     OpenCode = p,
+                };
+            }
+            if (appType == "pi")
+            {
+                var cfg = JsonNode.Parse(cfgText ?? "{}")?.AsObject();
+                if (cfg == null) return null;
+                var p = new PiProvider
+                {
+                    Id = !string.IsNullOrWhiteSpace(id) ? id : name,
+                    Name = name,
+                    Notes = notes,
+                    WebsiteUrl = websiteUrl,
+                    BaseUrl = Str(cfg, "baseUrl"),
+                    ApiKey = Str(cfg, "apiKey"),
+                    Api = Str(cfg, "api") ?? "openai-completions",
+                };
+                if (cfg["headers"] is JsonObject hObj)
+                {
+                    foreach (var kv in hObj)
+                        p.CustomHeaders[kv.Key] = kv.Value?.ToString() ?? "";
+                }
+                if (cfg["models"] is JsonArray mArr)
+                {
+                    p.ModelsJson = mArr.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                    foreach (var m in mArr)
+                    {
+                        if (m is JsonObject mObj)
+                        {
+                            var mId = mObj["id"]?.GetValue<string>() ?? "";
+                            var mName = mObj["name"]?.GetValue<string>() ?? mId;
+                            if (!string.IsNullOrEmpty(mId))
+                                p.CustomModels.Add(new ProviderModelEntry { Id = mId, Name = mName });
+                        }
+                    }
+                }
+                bool inPool = isCurrent;
+                try
+                {
+                    var metaObj = JsonNode.Parse(metaText ?? "{}")?.AsObject();
+                    if (metaObj != null && metaObj["liveConfigManaged"] != null)
+                        inPool = metaObj["liveConfigManaged"]?.GetValue<bool>() ?? isCurrent;
+                }
+                catch { }
+
+                return new CcImportItem
+                {
+                    AppType = appType,
+                    Name = name,
+                    IsCurrent = inPool,
+                    Summary = p.BaseUrl ?? "—",
+                    Pi = p,
                 };
             }
         }
@@ -352,12 +414,14 @@ public static class CcSwitchImport
         try { return obj?[key]?.GetValue<string>(); } catch { return null; }
     }
 
-    public static (int Claude, int Desktop, int Codex, int Oc) Import(IEnumerable<CcImportItem> selected)
+    public static (int Claude, int Desktop, int Codex, int Oc, int Pi) Import(IEnumerable<CcImportItem> selected)
     {
         var claude = CliStore.LoadClaude();
         var desktop = CliStore.LoadClaudeDesktop();
         var codex = CliStore.LoadCodex();
-        int nc = 0, nd = 0, nx = 0, no = 0;
+        var opencode = CliStore.LoadOpencode();
+        var pi = CliStore.LoadPiProviders();
+        int nc = 0, nd = 0, nx = 0, no = 0, np = 0;
 
         foreach (var item in selected)
         {
@@ -380,15 +444,35 @@ public static class CcSwitchImport
             }
             else if (item.AppType == "opencode" && item.OpenCode != null)
             {
-                OpenCodeCli.SaveProvider(item.OpenCode);
+                var idx = opencode.FindIndex(x => x.Id == item.OpenCode.Id || x.Name == item.OpenCode.Name);
+                if (idx >= 0) opencode[idx] = item.OpenCode;
+                else opencode.Add(item.OpenCode);
+                if (item.IsCurrent)
+                {
+                    OpenCodeCli.SaveProvider(item.OpenCode);
+                }
                 no++;
+            }
+            else if (item.AppType == "pi" && item.Pi != null)
+            {
+                var idx = pi.FindIndex(x => x.Id == item.Pi.Id || x.Name == item.Pi.Name);
+                if (idx >= 0) pi[idx] = item.Pi;
+                else pi.Add(item.Pi);
+                if (item.IsCurrent)
+                {
+                    PiCli.SaveProvider(item.Pi);
+                }
+                np++;
             }
         }
 
         CliStore.SaveClaude(claude);
         CliStore.SaveClaudeDesktop(desktop);
         CliStore.SaveCodex(codex);
-        return (nc, nd, nx, no);
+        CliStore.SaveOpencode(opencode);
+        CliStore.SavePiProviders(pi);
+        return (nc, nd, nx, no, np);
     }
 }
+
 

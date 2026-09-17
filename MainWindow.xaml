@@ -150,6 +150,11 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Visibility" Value="Collapsed"/>
         </Style>
+        <Style x:Key="Badge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
         <Style x:Key="BadgeGreenText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="Medium"/>
@@ -1145,17 +1150,17 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="OpenCode API 供应商" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="OpenCode API 供应商池" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前默认：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="OcCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="已加入配置池：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="OcPoolCountText" Text="0 / 0 个供应商" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
                             <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="2,6,0,0"
-                                       Text="读写 ~/.config/opencode/opencode.json（mcp / plugin 等其他配置保留）"/>
+                                       Text="读写 ~/.config/opencode/opencode.json · 所有已添加到配置池的供应商模型均可在 OpenCode 内自由切换"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1214,18 +1219,27 @@
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                                                    <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
-                                                        <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
+                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1"
+                                                            Visibility="{Binding PoolBadgeVisibility}">
+                                                        <TextBlock Text="✓ 已在配置池" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
                                                            Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyOc">
+                                                <Button Style="{StaticResource PrimaryButton}" Padding="14,6" Background="#10B981" BorderBrush="#059669"
+                                                        Visibility="{Binding AddBtnVisibility}" Click="OnRowAddOc">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="设为默认" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <Path Data="{StaticResource IconPlus}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="添加" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource GhostButton}" Padding="12,6" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
+                                                        Visibility="{Binding RemoveBtnVisibility}" Click="OnRowRemoveOc">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconTrash}" Fill="#EA580C" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="移除" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
                                                 <Button Content="编辑" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditOc"/>
@@ -1238,11 +1252,9 @@
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
                                         </Trigger>
-                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
-                                            <Setter TargetName="Card" Property="Background" Value="{StaticResource CardActiveBrush}"/>
-                                            <Setter TargetName="CurrentBadge" Property="Visibility" Value="Visible"/>
-                                            <Setter TargetName="ApplyBtnCard" Property="Visibility" Value="Collapsed"/>
+                                        <DataTrigger Binding="{Binding IsInConfig}" Value="True">
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#DDD6FE"/>
+                                            <Setter TargetName="Card" Property="Background" Value="#FAF8FF"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -1271,7 +1283,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Pi" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="Agent 快照" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="CLI &amp; Core" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem.Header>
@@ -1298,39 +1310,57 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="Pi Agent 凭据快照" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="Pi API 供应商池" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前默认：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="PiCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="已加入配置池：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="PiPoolCountText" Text="0 / 0 个供应商" FontSize="12" FontWeight="SemiBold" Foreground="#D97706"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
                             <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="2,6,0,0"
-                                       Text="快照式切换 ~/.pi/agent 的 auth.json + settings.json（与 OpenCode 多账号机制同思路）"/>
+                                       Text="读写 ~/.pi/agent/models.json 与 settings.json · 终端输入 /model 可在所有已添加的供应商间无缝切换"/>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- Action Toolbar -->
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnCapturePi">
+                    <Button Style="{StaticResource PrimaryButton}" Click="OnAddPi">
                         <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconSave}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="抓取当前凭据" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="添加供应商" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnRefreshPi">
+                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshPi">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
                             <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenPiModels">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="打开 models.json" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenPiDir">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconFolder}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
                             <TextBlock Text="打开 Pi 目录" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCapturePi">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconSave}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="抓取快照" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1361,21 +1391,31 @@
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                                                    <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
-                                                        <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
+                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#FFFBEB" BorderBrush="#FDE68A" BorderThickness="1"
+                                                            Visibility="{Binding PoolBadgeVisibility}">
+                                                        <TextBlock Text="✓ 已在配置池" FontSize="11" FontWeight="SemiBold" Foreground="#D97706"/>
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis">
-                                                    <Run Text="{Binding SubText, Mode=OneWay}"/><Run Text="   ·   抓取于 "/><Run Text="{Binding CapturedAtLocal, Mode=OneWay}"/>
-                                                </TextBlock>
+                                                <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                                           Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyPi">
+                                                <Button Style="{StaticResource PrimaryButton}" Padding="14,6" Background="#10B981" BorderBrush="#059669"
+                                                        Visibility="{Binding AddBtnVisibility}" Click="OnRowAddPi">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="一键还原" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <Path Data="{StaticResource IconPlus}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="添加" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
+                                                <Button Style="{StaticResource GhostButton}" Padding="12,6" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
+                                                        Visibility="{Binding RemoveBtnVisibility}" Click="OnRowRemovePi">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconTrash}" Fill="#EA580C" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="移除" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Content="编辑" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditPi"/>
+                                                <Button Content="跨端复制" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyPi"/>
                                                 <Button Content="删除" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeletePi"/>
                                             </StackPanel>
                                         </Grid>
@@ -1384,11 +1424,9 @@
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
                                         </Trigger>
-                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
-                                            <Setter TargetName="Card" Property="Background" Value="{StaticResource CardActiveBrush}"/>
-                                            <Setter TargetName="CurrentBadge" Property="Visibility" Value="Visible"/>
-                                            <Setter TargetName="ApplyBtnCard" Property="Visibility" Value="Collapsed"/>
+                                        <DataTrigger Binding="{Binding IsInConfig}" Value="True">
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#FDE68A"/>
+                                            <Setter TargetName="Card" Property="Background" Value="#FFFDF5"/>
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -1397,12 +1435,12 @@
                     </ScrollViewer>
                     <StackPanel x:Name="PiEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
                         <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
-                            <Path Data="{StaticResource IconSave}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="还没有 Pi 凭据快照" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="未检测到 Pi（~/.pi/agent）或还没有抓取过凭据快照"
+                        <TextBlock Text="还没有 Pi 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="点击上方「添加供应商」或从 cc-switch 导入配置"
                                    FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,16" HorizontalAlignment="Center"/>
-                        <Button Content="📸 立即抓取当前凭据" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnCapturePi"/>
+                        <Button Content="➕ 立即添加供应商" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddPi"/>
                     </StackPanel>
                 </Grid>
             </Grid>

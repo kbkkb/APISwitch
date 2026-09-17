@@ -11,7 +11,7 @@ using APISwitch.Services;
 
 namespace APISwitch.Dialogs;
 
-public enum ProviderDialogMode { Claude, ClaudeDesktop, Codex, OpenCode }
+public enum ProviderDialogMode { Claude, ClaudeDesktop, Codex, OpenCode, Pi }
 
 public partial class ProviderDialog : Window
 {
@@ -25,6 +25,7 @@ public partial class ProviderDialog : Window
     public ClaudeProvider? ResultClaude { get; private set; }
     public CodexProvider? ResultCodex { get; private set; }
     public OpenCodeProvider? ResultOpenCode { get; private set; }
+    public PiProvider? ResultPi { get; private set; }
 
     public ObservableCollection<KeyValueItem> HeadersList { get; } = new();
     public ObservableCollection<KeyValueItem> OptionsList { get; } = new();
@@ -196,6 +197,28 @@ public partial class ProviderDialog : Window
                 ClaudeConfigPanel.Visibility = Visibility.Collapsed;
                 CodexWirePanel.Visibility = Visibility.Collapsed;
                 OpenCodeFormatPanel.Visibility = Visibility.Visible;
+                PiFormatPanel.Visibility = Visibility.Collapsed;
+                DirectModelPanel.Visibility = Visibility.Visible;
+                ClaudeModelMappingSection.Visibility = Visibility.Collapsed;
+                CodexModelsSection.Visibility = Visibility.Visible;
+                SmallFastPanel.Visibility = Visibility.Collapsed;
+                SmallFastCol.Width = new GridLength(0);
+                SmallFastColSpace.Width = new GridLength(0);
+                break;
+
+            case ProviderDialogMode.Pi:
+                DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
+                CategoryBadgeText.Text = "Pi";
+                CategoryBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF3, 0xC7));
+                CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
+                OfficialCheck.Visibility = Visibility.Collapsed;
+                KeyLabel.Text = "apiKey *";
+                KeyHintText.Text = "系统将写入 ~/.pi/agent/models.json 与 auth.json 配置";
+                FormatPanel.Visibility = Visibility.Visible;
+                ClaudeConfigPanel.Visibility = Visibility.Collapsed;
+                CodexWirePanel.Visibility = Visibility.Collapsed;
+                OpenCodeFormatPanel.Visibility = Visibility.Collapsed;
+                PiFormatPanel.Visibility = Visibility.Visible;
                 DirectModelPanel.Visibility = Visibility.Visible;
                 ClaudeModelMappingSection.Visibility = Visibility.Collapsed;
                 CodexModelsSection.Visibility = Visibility.Visible;
@@ -341,11 +364,63 @@ public partial class ProviderDialog : Window
                 catch { }
             }
         }
+        else if (existing is PiProvider pi)
+        {
+            IdBox.Text = pi.Id;
+            NameBox.Text = pi.Name ?? pi.Id;
+            NotesBox.Text = pi.Notes ?? "";
+            WebsiteUrlBox.Text = pi.WebsiteUrl ?? "";
+            BaseUrlBox.Text = pi.BaseUrl ?? "";
+            SetKey(pi.ApiKey);
+            PiApiCombo.Text = string.IsNullOrWhiteSpace(pi.Api) ? "openai-completions" : pi.Api;
+
+            if (pi.CustomHeaders != null)
+                foreach (var kv in pi.CustomHeaders)
+                    HeadersList.Add(new KeyValueItem { Key = kv.Key, Value = kv.Value });
+
+            if (pi.CustomModels != null && pi.CustomModels.Count > 0)
+            {
+                foreach (var m in pi.CustomModels)
+                {
+                    var entry = new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow };
+                    entry.PropertyChanged += (_, _) => UpdatePreview();
+                    ModelsList.Add(entry);
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(pi.ModelsJson))
+            {
+                try
+                {
+                    if (JsonNode.Parse(pi.ModelsJson) is JsonArray arr)
+                    {
+                        foreach (var item in arr)
+                        {
+                            if (item is JsonObject mObj)
+                            {
+                                var mId = mObj["id"]?.GetValue<string>() ?? "";
+                                var mName = mObj["name"]?.GetValue<string>() ?? mId;
+                                if (!string.IsNullOrEmpty(mId))
+                                {
+                                    var entry = new ProviderModelEntry { Id = mId, Name = mName };
+                                    entry.PropertyChanged += (_, _) => UpdatePreview();
+                                    ModelsList.Add(entry);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
         else
         {
             if (_mode == ProviderDialogMode.OpenCode)
             {
                 OcNpmCombo.Text = "@ai-sdk/openai-compatible";
+            }
+            else if (_mode == ProviderDialogMode.Pi)
+            {
+                PiApiCombo.Text = "openai-completions";
             }
         }
 
@@ -720,6 +795,37 @@ public partial class ProviderDialog : Window
 
                 JsonPreviewBox.Text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             }
+            else if (_mode == ProviderDialogMode.Pi)
+            {
+                var root = new JsonObject
+                {
+                    ["name"] = name,
+                    ["baseUrl"] = baseUrl,
+                    ["api"] = string.IsNullOrWhiteSpace(PiApiCombo.Text) ? "openai-completions" : PiApiCombo.Text.Trim(),
+                };
+                if (!string.IsNullOrWhiteSpace(key)) root["apiKey"] = key;
+
+                if (HeadersList.Any(h => !string.IsNullOrWhiteSpace(h.Key)))
+                {
+                    var hObj = new JsonObject();
+                    foreach (var h in HeadersList.Where(h => !string.IsNullOrWhiteSpace(h.Key)))
+                        hObj[h.Key.Trim()] = h.Value ?? "";
+                    root["headers"] = hObj;
+                }
+
+                var mArr = new JsonArray();
+                foreach (var m in ModelsList.Where(m => !string.IsNullOrWhiteSpace(m.Id)))
+                {
+                    mArr.Add(new JsonObject
+                    {
+                        ["id"] = m.Id.Trim(),
+                        ["name"] = string.IsNullOrWhiteSpace(m.Name) ? m.Id.Trim() : m.Name.Trim(),
+                    });
+                }
+                if (mArr.Count > 0) root["models"] = mArr;
+
+                JsonPreviewBox.Text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            }
             else if (_mode == ProviderDialogMode.Codex)
             {
                 var root = new JsonObject
@@ -995,6 +1101,39 @@ public partial class ProviderDialog : Window
                 ApiKey = key,
                 CustomHeaders = headersDict,
                 ExtraOptions = optionsDict,
+                CustomModels = modelsList,
+                ModelsJson = modelsJson,
+            };
+        }
+        else if (_mode == ProviderDialogMode.Pi)
+        {
+            var api = TrimOrNull(PiApiCombo.Text) ?? "openai-completions";
+
+            string? modelsJson = null;
+            if (modelsList.Count > 0)
+            {
+                var mArr = new JsonArray();
+                foreach (var m in modelsList)
+                {
+                    mArr.Add(new JsonObject
+                    {
+                        ["id"] = m.Id,
+                        ["name"] = string.IsNullOrWhiteSpace(m.Name) ? m.Id : m.Name,
+                    });
+                }
+                modelsJson = mArr.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            ResultPi = new PiProvider
+            {
+                Id = id,
+                Name = name,
+                Notes = notes,
+                WebsiteUrl = websiteUrl,
+                BaseUrl = baseUrl,
+                ApiKey = key,
+                Api = api,
+                CustomHeaders = headersDict,
                 CustomModels = modelsList,
                 ModelsJson = modelsJson,
             };

@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     List<CodexProvider> _codexProviders = new();
     List<PiAccount> _piAccounts = new();
     List<OpenCodeProvider> _openCodeProviders = new();
+    List<PiProvider> _piProviders = new();
     UpdateInfo? _latestUpdate;
 
     System.Windows.Threading.DispatcherTimer? _agQuotaTimer;
@@ -1593,10 +1594,17 @@ public partial class MainWindow : Window
     public class OpenCodeRow
     {
         public OpenCodeProvider P { get; init; } = null!;
-        public bool IsCurrent { get; init; }
+        public bool IsInConfig { get; init; }
+        public bool IsDefault { get; init; }
         public string Name => string.IsNullOrEmpty(P.Name) ? P.Id : P.Name;
-        public string Initial =>
-            (string.IsNullOrEmpty(P.Name) ? P.Id : P.Name).Substring(0, 1).ToUpperInvariant();
+        public string Initial
+        {
+            get
+            {
+                var s = string.IsNullOrWhiteSpace(P.Name) ? P.Id : P.Name;
+                return string.IsNullOrWhiteSpace(s) ? "O" : s.Trim().Substring(0, 1).ToUpperInvariant();
+            }
+        }
         public string SubText => string.Join("   ·   ",
             new string?[]
             {
@@ -1605,14 +1613,23 @@ public partial class MainWindow : Window
                 ModelsSummary(),
             }.Where(s => !string.IsNullOrEmpty(s)));
 
+        public Visibility PoolBadgeVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility AddBtnVisibility => !IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility RemoveBtnVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+
         string ModelsSummary()
         {
             try
             {
+                if (P.CustomModels != null && P.CustomModels.Count > 0)
+                    return P.CustomModels.Count + " 个模型";
                 if (string.IsNullOrWhiteSpace(P.ModelsJson)) return "未配置模型";
-                if (JsonNode.Parse(P.ModelsJson) is not JsonObject models) return "未配置模型";
-                var count = models.Count;
-                return count == 0 ? "未配置模型" : count + " 个模型";
+                if (JsonNode.Parse(P.ModelsJson) is JsonObject models)
+                {
+                    var count = models.Count;
+                    return count == 0 ? "未配置模型" : count + " 个模型";
+                }
+                return "未配置模型";
             }
             catch
             {
@@ -1623,29 +1640,58 @@ public partial class MainWindow : Window
 
     void RefreshOpencode()
     {
-        _openCodeProviders = OpenCodeCli.LoadProviders();
-        var current = OpenCodeCli.CurrentModel();
+        _openCodeProviders = CliStore.LoadOpencode();
+        var liveIds = new HashSet<string>(OpenCodeCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
 
-        var rows = _openCodeProviders.Select(p => new OpenCodeRow
+        int inPoolCount = _openCodeProviders.Count(p => liveIds.Contains(p.Id));
+        if (OcPoolCountText != null)
+            OcPoolCountText.Text = $"{inPoolCount} / {_openCodeProviders.Count} 个供应商";
+
+        var rows = _openCodeProviders.Select(p =>
         {
-            P = p,
-            IsCurrent = !string.IsNullOrEmpty(current)
-                && (current == p.Id || current.StartsWith(p.Id + "/", StringComparison.Ordinal)),
-        }).ToList();
+            bool inCfg = liveIds.Contains(p.Id);
+            return new OpenCodeRow
+            {
+                P = p,
+                IsInConfig = inCfg,
+            };
+        }).OrderByDescending(r => r.IsInConfig).ThenBy(r => r.Name).ToList();
 
         OcList.ItemsSource = null;
         OcList.ItemsSource = rows;
-        OcCurrentText.Text = string.IsNullOrEmpty(current)
-            ? "未设置默认模型"
-            : current;
         OcEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void OnAddOpencode(object sender, RoutedEventArgs e) => EditOpencode(null);
 
-    void OnRowApplyOc(object sender, RoutedEventArgs e)
+    void OnRowAddOc(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is OpenCodeRow row) ApplyOpencodeRow(row);
+        if ((sender as FrameworkElement)?.DataContext is not OpenCodeRow row) return;
+        try
+        {
+            OpenCodeCli.SaveProvider(row.P);
+            RefreshOpencode();
+            ShowToast($"已将「{row.Name}」加入 OpenCode 配置池");
+        }
+        catch (Exception ex)
+        {
+            ShowToast("添加失败：" + ex.Message, isError: true);
+        }
+    }
+
+    void OnRowRemoveOc(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not OpenCodeRow row) return;
+        try
+        {
+            OpenCodeCli.DeleteProvider(row.P.Id);
+            RefreshOpencode();
+            ShowToast($"已从 OpenCode 配置池移除「{row.Name}」");
+        }
+        catch (Exception ex)
+        {
+            ShowToast("移除失败：" + ex.Message, isError: true);
+        }
     }
 
     void OnCardEditOc(object sender, RoutedEventArgs e)
@@ -1656,18 +1702,21 @@ public partial class MainWindow : Window
     void OnCardDeleteOc(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not OpenCodeRow row) return;
-        if (!Confirm($"从 opencode.json 删除供应商「{row.P.Id}」？（仅此文件，不影响 api key 本体）")) return;
+        if (!Confirm($"彻底删除供应商「{row.Name}」？\n（将从列表及 opencode.json 中移除）")) return;
         try
         {
+            _openCodeProviders.RemoveAll(x => string.Equals(x.Id, row.P.Id, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Name, row.P.Name, StringComparison.OrdinalIgnoreCase));
+            CliStore.SaveOpencode(_openCodeProviders);
             OpenCodeCli.DeleteProvider(row.P.Id);
-            if (OpenCodeCli.CurrentModel()?.StartsWith(row.P.Id + "/") == true)
+            var curr = OpenCodeCli.CurrentModel();
+            if (!string.IsNullOrEmpty(curr) && (string.Equals(curr, row.P.Id, StringComparison.OrdinalIgnoreCase) || curr.StartsWith(row.P.Id + "/", StringComparison.Ordinal)))
             {
-                // cancel by resetting the default model: leaving it alone would result in an uneffective state, directly remove the model key
                 OpenCodeCli.ClearDefaultModel();
             }
+            RefreshOpencode();
+            ShowToast($"已删除供应商「{row.Name}」");
         }
-        catch (Exception ex) { Warn("删除失败：" + ex.Message); return; }
-        RefreshOpencode();
+        catch (Exception ex) { ShowToast("删除失败：" + ex.Message, isError: true); }
     }
 
     void OnCardCopyOc(object sender, RoutedEventArgs e)
@@ -1692,9 +1741,13 @@ public partial class MainWindow : Window
                     UpsertCodex(ProviderConvert.ToCodex(row.P));
                     done.Add("Codex");
                     break;
+                case CopyTarget.Pi:
+                    UpsertPi(ProviderConvert.ToPi(row.P));
+                    done.Add("Pi");
+                    break;
             }
         }
-        RefreshClaude(); RefreshDesktop(); RefreshCodex();
+        RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshPi();
         ShowToast($"已复制「{row.P.Id}」到: {string.Join("、", done)}");
     }
 
@@ -1718,72 +1771,251 @@ public partial class MainWindow : Window
         var p = dlg.ResultOpenCode;
         try
         {
-            if (existing != null && existing.Id != p.Id)
-                OpenCodeCli.DeleteProvider(existing.Id);
-            OpenCodeCli.SaveProvider(p);
-
-            var currentModel = OpenCodeCli.CurrentModel();
-            var isCurrent = !string.IsNullOrEmpty(currentModel) && (
-                (existing != null && (currentModel == existing.Id || currentModel.StartsWith(existing.Id + "/", StringComparison.Ordinal))) ||
-                (currentModel == p.Id || currentModel.StartsWith(p.Id + "/", StringComparison.Ordinal))
-            );
-            if (isCurrent)
+            if (existing != null && !string.Equals(existing.Id, p.Id, StringComparison.OrdinalIgnoreCase))
             {
-                var dummyRow = new OpenCodeRow { P = p };
-                ApplyOpencodeRow(dummyRow);
+                _openCodeProviders.RemoveAll(x => string.Equals(x.Id, existing.Id, StringComparison.OrdinalIgnoreCase));
+                OpenCodeCli.DeleteProvider(existing.Id);
+            }
+
+            UpsertOpencode(p);
+
+            var liveIds = new HashSet<string>(OpenCodeCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
+            if ((existing != null && liveIds.Contains(existing.Id)) || liveIds.Contains(p.Id))
+            {
+                OpenCodeCli.SaveProvider(p);
             }
 
             RefreshOpencode();
-            ShowToast(isCurrent ? $"已保存并同步生效当前配置「{p.Id}」" : $"已保存供应商「{p.Id}」");
+            ShowToast($"已保存供应商「{p.Id}」");
         }
         catch (Exception ex) { ShowToast("保存失败：" + ex.Message, isError: true); }
     }
 
-    void ApplyOpencodeRow(OpenCodeRow row)
+    void OnRefreshOpencode(object sender, RoutedEventArgs e)
     {
-        string? firstModel = null;
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(row.P.ModelsJson) &&
-                JsonNode.Parse(row.P.ModelsJson) is JsonObject models)
-                firstModel = models.Select(kv => kv.Key).FirstOrDefault();
-        }
-        catch { }
-
-        try
-        {
-            OpenCodeCli.SaveProvider(row.P, setDefaultModel: firstModel != null, defaultModelId: firstModel);
-        }
-        catch (Exception ex) { ShowToast("应用失败：" + ex.Message, isError: true); return; }
         RefreshOpencode();
-        ShowToast(firstModel != null
-            ? $"OpenCode 默认模型已设为 {row.P.Id}/{firstModel}"
-            : $"已保存供应商「{row.P.Id}」");
+        ShowToast($"已同步并刷新 OpenCode 配置 (共 {_openCodeProviders.Count} 个供应商)");
     }
-
-    void OnRefreshOpencode(object sender, RoutedEventArgs e) => RefreshOpencode();
 
     void OnOpenOcConfig(object sender, RoutedEventArgs e) => OpenFile(OpenCodeCli.ConfigPath);
 
+    void UpsertOpencode(OpenCodeProvider p)
+    {
+        var i = _openCodeProviders.FindIndex(x => (!string.IsNullOrEmpty(p.Id) && string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase)) || string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
+        if (i >= 0) _openCodeProviders[i] = p; else _openCodeProviders.Add(p);
+        _openCodeProviders = CliStore.DeduplicateOpenCode(_openCodeProviders);
+        CliStore.SaveOpencode(_openCodeProviders);
+    }
+
     // ---------- Pi ----------
+
+    public class PiRow
+    {
+        public PiProvider P { get; init; } = null!;
+        public bool IsInConfig { get; init; }
+        public bool IsDefault { get; init; }
+        public string Name => string.IsNullOrEmpty(P.Name) ? P.Id : P.Name;
+        public string Initial
+        {
+            get
+            {
+                var s = string.IsNullOrWhiteSpace(P.Name) ? P.Id : P.Name;
+                return string.IsNullOrWhiteSpace(s) ? "P" : s.Trim().Substring(0, 1).ToUpperInvariant();
+            }
+        }
+        public string SubText => string.Join("   ·   ",
+            new string?[]
+            {
+                string.IsNullOrEmpty(P.BaseUrl) ? null : P.BaseUrl,
+                P.Api,
+                ModelsSummary(),
+            }.Where(s => !string.IsNullOrEmpty(s)));
+
+        public Visibility PoolBadgeVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility AddBtnVisibility => !IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility RemoveBtnVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+
+        string ModelsSummary()
+        {
+            try
+            {
+                if (P.CustomModels != null && P.CustomModels.Count > 0)
+                    return P.CustomModels.Count + " 个模型";
+                if (string.IsNullOrWhiteSpace(P.ModelsJson)) return "未配置模型";
+                if (JsonNode.Parse(P.ModelsJson) is JsonArray arr)
+                    return arr.Count == 0 ? "未配置模型" : arr.Count + " 个模型";
+                if (JsonNode.Parse(P.ModelsJson) is JsonObject obj)
+                    return obj.Count == 0 ? "未配置模型" : obj.Count + " 个模型";
+                return "未配置模型";
+            }
+            catch
+            {
+                return "未配置模型";
+            }
+        }
+    }
 
     void RefreshPi()
     {
-        _piAccounts = CliStore.LoadPi();
-        if (!PiCli.IsInstalled)
+        _piProviders = CliStore.LoadPiProviders();
+        var liveIds = new HashSet<string>(PiCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
+
+        int inPoolCount = _piProviders.Count(p => liveIds.Contains(p.Id));
+        if (PiPoolCountText != null)
+            PiPoolCountText.Text = $"{inPoolCount} / {_piProviders.Count} 个供应商";
+
+        var rows = _piProviders.Select(p =>
         {
-            PiCurrentText.Text = "未安装（~/.pi/agent 不存在）";
-            PiList.ItemsSource = null;
-            PiEmpty.Visibility = Visibility.Collapsed;
+            bool inCfg = liveIds.Contains(p.Id);
+            return new PiRow
+            {
+                P = p,
+                IsInConfig = inCfg,
+            };
+        }).OrderByDescending(r => r.IsInConfig).ThenBy(r => r.Name).ToList();
+
+        PiList.ItemsSource = null;
+        PiList.ItemsSource = rows;
+        PiEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void OnAddPi(object sender, RoutedEventArgs e) => EditPi(null);
+
+    void OnRowAddPi(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not PiRow row) return;
+        try
+        {
+            PiCli.SaveProvider(row.P);
+            RefreshPi();
+            ShowToast($"已将「{row.Name}」加入 Pi 配置池");
+        }
+        catch (Exception ex)
+        {
+            ShowToast("添加失败：" + ex.Message, isError: true);
+        }
+    }
+
+    void OnRowRemovePi(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not PiRow row) return;
+        try
+        {
+            PiCli.DeleteProvider(row.P.Id);
+            RefreshPi();
+            ShowToast($"已从 Pi 配置池移除「{row.Name}」");
+        }
+        catch (Exception ex)
+        {
+            ShowToast("移除失败：" + ex.Message, isError: true);
+        }
+    }
+
+    void OnCardEditPi(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is PiRow row) EditPi(row.P);
+    }
+
+    void OnCardDeletePi(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not PiRow row) return;
+        if (!Confirm($"彻底删除供应商「{row.Name}」？\n（将从列表及 models.json 中移除）")) return;
+        try
+        {
+            _piProviders.RemoveAll(x => string.Equals(x.Id, row.P.Id, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Name, row.P.Name, StringComparison.OrdinalIgnoreCase));
+            CliStore.SavePiProviders(_piProviders);
+            PiCli.DeleteProvider(row.P.Id);
+            RefreshPi();
+            ShowToast($"已删除供应商「{row.Name}」");
+        }
+        catch (Exception ex) { ShowToast("删除失败：" + ex.Message, isError: true); }
+    }
+
+    void OnCardCopyPi(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not PiRow row) return;
+        var dlg = new CopyTargetsDialog(row.Name, CopyTarget.Pi) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+        var done = new List<string>();
+        foreach (var t in dlg.Targets)
+        {
+            switch (t)
+            {
+                case CopyTarget.ClaudeCli:
+                    UpsertClaude(ProviderConvert.ToClaude(row.P));
+                    done.Add("Claude CLI");
+                    break;
+                case CopyTarget.ClaudeDesktop:
+                    UpsertDesktop(ProviderConvert.ToClaude(row.P));
+                    done.Add("Claude 客户端");
+                    break;
+                case CopyTarget.Codex:
+                    UpsertCodex(ProviderConvert.ToCodex(row.P));
+                    done.Add("Codex");
+                    break;
+                case CopyTarget.OpenCode:
+                    UpsertOpencode(ProviderConvert.ToOpencode(row.P));
+                    done.Add("OpenCode");
+                    break;
+            }
+        }
+        RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode();
+        ShowToast($"已复制「{row.Name}」到: {string.Join("、", done)}");
+    }
+
+    async void EditPi(PiProvider? existing)
+    {
+        if (_activeProviderDialog != null && _activeProviderDialog.IsLoaded)
+        {
+            _activeProviderDialog.Activate();
+            _activeProviderDialog.Focus();
+            ShowToast("已有正在编辑的供应商窗口，请先保存或关闭该窗口");
             return;
         }
-        var (prov, model) = PiCli.CurrentDefaults();
-        PiCurrentText.Text = (prov ?? "未设置") + (string.IsNullOrEmpty(model) ? "" : " = " + model);
 
-        foreach (var a in _piAccounts) a.IsCurrent = PiCli.MatchesCurrent(a);
-        PiList.ItemsSource = null;
-        PiList.ItemsSource = _piAccounts.OrderByDescending(a => a.CapturedAtUtc).ToList();
-        PiEmpty.Visibility = _piAccounts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var dlg = new ProviderDialog(ProviderDialogMode.Pi, existing) { Owner = this };
+        _activeProviderDialog = dlg;
+        dlg.Show();
+        var ok = await dlg.WaitForResultAsync();
+        _activeProviderDialog = null;
+
+        if (!ok || dlg.ResultPi == null) return;
+        var p = dlg.ResultPi;
+        try
+        {
+            if (existing != null && !string.Equals(existing.Id, p.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                _piProviders.RemoveAll(x => string.Equals(x.Id, existing.Id, StringComparison.OrdinalIgnoreCase));
+                PiCli.DeleteProvider(existing.Id);
+            }
+
+            UpsertPi(p);
+
+            var liveIds = new HashSet<string>(PiCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
+            if ((existing != null && liveIds.Contains(existing.Id)) || liveIds.Contains(p.Id))
+            {
+                PiCli.SaveProvider(p);
+            }
+
+            RefreshPi();
+            ShowToast($"已保存供应商「{p.Name ?? p.Id}」");
+        }
+        catch (Exception ex) { ShowToast("保存失败：" + ex.Message, isError: true); }
+    }
+
+    void OnRefreshPi(object sender, RoutedEventArgs e)
+    {
+        RefreshPi();
+        ShowToast($"已同步并刷新 Pi 配置 (共 {_piProviders.Count} 个供应商)");
+    }
+
+    void OnOpenPiModels(object sender, RoutedEventArgs e) => OpenFile(PiCli.ModelsPath);
+
+    void OnOpenPiDir(object sender, RoutedEventArgs e)
+    {
+        var dir = Path.GetDirectoryName(PiCli.AuthPath);
+        if (dir == null || !Directory.Exists(dir)) { ShowToast("未找到 Pi 目录", isError: true); return; }
+        Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
     }
 
     void OnCapturePi(object sender, RoutedEventArgs e)
@@ -1797,37 +2029,17 @@ public partial class MainWindow : Window
             var idx = _piAccounts.FindIndex(a => a.Name == name);
             if (idx >= 0) _piAccounts[idx] = account; else _piAccounts.Add(account);
             CliStore.SavePi(_piAccounts);
+            ShowToast($"已抓取快照 {name}");
         }
-        catch (Exception ex) { ShowToast("抓取失败：" + ex.Message, isError: true); return; }
-        RefreshPi();
-        ShowToast($"已抓取快照 {name}");
+        catch (Exception ex) { ShowToast("抓取失败：" + ex.Message, isError: true); }
     }
 
-    void OnRowApplyPi(object sender, RoutedEventArgs e)
+    void UpsertPi(PiProvider p)
     {
-        if ((sender as FrameworkElement)?.DataContext is not PiAccount acc) return;
-        try { PiCli.Restore(acc); }
-        catch (Exception ex) { ShowToast("还原失败：" + ex.Message, isError: true); return; }
-        RefreshPi();
-        ShowToast($"Pi 已还原到「{acc.Name}」");
-    }
-
-    void OnCardDeletePi(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not PiAccount acc) return;
-        if (!Confirm($"删除快照「{acc.Name}」？（不影响 Pi 当前凭据）")) return;
-        _piAccounts.RemoveAll(x => x.Name == acc.Name);
-        CliStore.SavePi(_piAccounts);
-        RefreshPi();
-    }
-
-    void OnRefreshPi(object sender, RoutedEventArgs e) => RefreshPi();
-
-    void OnOpenPiDir(object sender, RoutedEventArgs e)
-    {
-        var dir = Path.GetDirectoryName(PiCli.AuthPath);
-        if (dir == null || !Directory.Exists(dir)) { ShowToast("未找到 Pi 目录", isError: true); return; }
-        Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+        var i = _piProviders.FindIndex(x => (!string.IsNullOrEmpty(p.Id) && string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase)) || string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
+        if (i >= 0) _piProviders[i] = p; else _piProviders.Add(p);
+        _piProviders = CliStore.DeduplicatePi(_piProviders);
+        CliStore.SavePiProviders(_piProviders);
     }
 
     // ---------- Cross-copy ----------
@@ -1854,9 +2066,17 @@ public partial class MainWindow : Window
                     UpsertCodex(ProviderConvert.ToCodex(src));
                     done.Add("Codex");
                     break;
+                case CopyTarget.OpenCode:
+                    UpsertOpencode(ProviderConvert.ToOpencode(src));
+                    done.Add("OpenCode");
+                    break;
+                case CopyTarget.Pi:
+                    UpsertPi(ProviderConvert.ToPi(src));
+                    done.Add("Pi");
+                    break;
             }
         }
-        RefreshClaude(); RefreshDesktop(); RefreshCodex();
+        RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
         ShowToast($"已复制「{src.Name}」到: {string.Join("、", done)}");
     }
 
@@ -1868,20 +2088,31 @@ public partial class MainWindow : Window
         var done = new List<string>();
         foreach (var t in dlg.Targets)
         {
-            var c = ProviderConvert.ToClaude(src);
             switch (t)
             {
                 case CopyTarget.ClaudeCli:
-                    UpsertClaude(c);
+                    UpsertClaude(ProviderConvert.ToClaude(src));
                     done.Add("Claude CLI");
                     break;
                 case CopyTarget.ClaudeDesktop:
-                    UpsertDesktop(c);
+                    UpsertDesktop(ProviderConvert.ToClaude(src));
                     done.Add("Claude 客户端");
+                    break;
+                case CopyTarget.Codex:
+                    UpsertCodex(src);
+                    done.Add("Codex");
+                    break;
+                case CopyTarget.OpenCode:
+                    UpsertOpencode(ProviderConvert.ToOpencode(src));
+                    done.Add("OpenCode");
+                    break;
+                case CopyTarget.Pi:
+                    UpsertPi(ProviderConvert.ToPi(src));
+                    done.Add("Pi");
                     break;
             }
         }
-        RefreshClaude(); RefreshDesktop(); RefreshCodex();
+        RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
         ShowToast($"已复制「{src.Name}」到: {string.Join("、", done)}");
     }
 
@@ -1923,12 +2154,12 @@ public partial class MainWindow : Window
         {
             if (dlg.ShowDialog() == true)
             {
-                RefreshClaude(); RefreshDesktop(); RefreshCodex();
+                RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
                 ShowToast("已从 cc-switch 导入供应商");
             }
         }
         catch (Exception ex) { ShowToast("读取 cc-switch 数据失败：" + ex.Message, isError: true); return; }
-        RefreshClaude(); RefreshDesktop(); RefreshCodex();
+        RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
     }
 
     // ---------- Window Controls & Toast ----------

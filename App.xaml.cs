@@ -26,6 +26,8 @@ public partial class App : System.Windows.Application
                 var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
                 Directory.CreateDirectory(logDir);
                 File.AppendAllText(Path.Combine(logDir, "crash.log"), $"[{DateTime.Now:O}] DispatcherUnhandledException: {args.Exception}\n");
+                MessageBox.Show($"程序遇到未处理的异常：\n{args.Exception.Message}\n\n详细信息已写入日志：{Path.Combine(logDir, "crash.log")}", "APISwitch 错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                args.Handled = true;
             }
             catch { }
         };
@@ -269,6 +271,22 @@ public partial class App : System.Windows.Application
         sb.AppendLine("pi_changed_current=" + Services.PiCli.MatchesCurrent(acc));
         Services.PiCli.Restore(acc);
         sb.AppendLine("pi_after_restore=" + Services.PiCli.CurrentDefaults().Provider + "/" + Services.PiCli.CurrentDefaults().Model);
+
+        try
+        {
+            var mw = new MainWindow { Visibility = Visibility.Hidden };
+            for (int i = 0; i < mw.Tabs.Items.Count; i++)
+            {
+                mw.Tabs.SelectedIndex = i;
+                mw.UpdateLayout();
+            }
+            mw.Close();
+            sb.AppendLine("ui_tabs_render=ok");
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("ui_tabs_render_err=" + ex);
+        }
 
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "apiswitch-selftest.txt"), sb.ToString());
     }

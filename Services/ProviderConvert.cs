@@ -149,6 +149,114 @@ public static class ProviderConvert
         CustomModels = o.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
     };
 
+    public static PiProvider Clone(PiProvider p) => new()
+    {
+        Id = p.Id,
+        Name = p.Name,
+        Notes = p.Notes,
+        WebsiteUrl = p.WebsiteUrl,
+        BaseUrl = p.BaseUrl,
+        ApiKey = p.ApiKey,
+        Api = p.Api,
+        CustomHeaders = new Dictionary<string, string>(p.CustomHeaders),
+        CustomModels = p.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+        ModelsJson = p.ModelsJson,
+    };
+
+    public static PiProvider ToPi(ClaudeProvider c) => new()
+    {
+        Id = string.IsNullOrWhiteSpace(c.Id) ? MakeId(c.Name) : c.Id,
+        Name = c.Name,
+        Notes = c.Notes,
+        WebsiteUrl = c.WebsiteUrl,
+        BaseUrl = c.BaseUrl,
+        ApiKey = c.AuthToken,
+        Api = "openai-completions",
+        CustomHeaders = new Dictionary<string, string>(c.CustomHeaders),
+        CustomModels = c.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+    };
+
+    public static PiProvider ToPi(CodexProvider x) => new()
+    {
+        Id = x.Id,
+        Name = x.Name,
+        Notes = x.Notes,
+        WebsiteUrl = x.WebsiteUrl,
+        BaseUrl = x.BaseUrl,
+        ApiKey = string.IsNullOrWhiteSpace(x.BearerToken) ? x.ApiKey : x.BearerToken,
+        Api = "openai-completions",
+        CustomHeaders = new Dictionary<string, string>(x.CustomHeaders),
+        CustomModels = x.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+    };
+
+    public static PiProvider ToPi(OpenCodeProvider o) => new()
+    {
+        Id = o.Id,
+        Name = o.Name ?? o.Id,
+        Notes = o.Notes,
+        WebsiteUrl = o.WebsiteUrl,
+        BaseUrl = o.BaseUrl,
+        ApiKey = o.ApiKey,
+        Api = "openai-completions",
+        CustomHeaders = new Dictionary<string, string>(o.CustomHeaders),
+        CustomModels = o.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+        ModelsJson = o.ModelsJson,
+    };
+
+    public static OpenCodeProvider ToOpencode(PiProvider p) => new()
+    {
+        Id = p.Id,
+        Name = p.Name ?? p.Id,
+        Notes = p.Notes,
+        WebsiteUrl = p.WebsiteUrl,
+        Npm = "@ai-sdk/openai-compatible",
+        BaseUrl = p.BaseUrl,
+        ApiKey = p.ApiKey,
+        CustomHeaders = new Dictionary<string, string>(p.CustomHeaders),
+        CustomModels = p.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+        ModelsJson = p.ModelsJson,
+    };
+
+    public static ClaudeProvider ToClaude(PiProvider p)
+    {
+        var c = new ClaudeProvider
+        {
+            Id = p.Id,
+            Name = p.Name ?? p.Id,
+            Notes = p.Notes,
+            WebsiteUrl = p.WebsiteUrl,
+            BaseUrl = p.BaseUrl,
+            AuthToken = p.ApiKey,
+            WireApi = "chat",
+            AccessMode = "mapping",
+            CustomHeaders = new Dictionary<string, string>(p.CustomHeaders),
+            CustomModels = p.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+        };
+        var mName = p.CustomModels.FirstOrDefault()?.Id ?? "";
+        c.ModelMappings = new List<ClaudeModelMapping>
+        {
+            new() { Role = "Sonnet", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Opus", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Fable", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Haiku", DisplayName = mName, Model = mName, Supports1m = true },
+        };
+        return c;
+    }
+
+    public static CodexProvider ToCodex(PiProvider p) => new()
+    {
+        Id = p.Id,
+        Name = p.Name ?? p.Id,
+        Notes = p.Notes,
+        WebsiteUrl = p.WebsiteUrl,
+        BaseUrl = p.BaseUrl,
+        WireApi = "responses",
+        ApiKey = p.ApiKey,
+        BearerToken = p.ApiKey,
+        CustomHeaders = new Dictionary<string, string>(p.CustomHeaders),
+        CustomModels = p.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+    };
+
     static string MakeId(string name)
     {
         var sb = new System.Text.StringBuilder();

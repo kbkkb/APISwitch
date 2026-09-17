@@ -179,15 +179,332 @@ public static class OpenCodeCli
 
 public static class PiCli
 {
+    public static string ModelsPath => Path.Combine(ClaudeCli.HomeDir, ".pi", "agent", "models.json");
     public static string AuthPath => Path.Combine(ClaudeCli.HomeDir, ".pi", "agent", "auth.json");
     public static string SettingsPath => Path.Combine(ClaudeCli.HomeDir, ".pi", "agent", "settings.json");
 
     public static bool IsInstalled => Directory.Exists(Path.GetDirectoryName(AuthPath));
 
+    static readonly JsonDocumentOptions DocOpts = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    static readonly JsonSerializerOptions WriteOpts = new() { WriteIndented = true };
+
     static string ReadOrCreate(string path, string fallback)
     {
         var text = FileUtil.ReadTextIfExists(path);
         return string.IsNullOrWhiteSpace(text) ? fallback : text;
+    }
+
+    public static JsonObject LoadModels()
+    {
+        var text = FileUtil.ReadTextIfExists(ModelsPath);
+        if (string.IsNullOrWhiteSpace(text)) return new JsonObject { ["providers"] = new JsonObject() };
+        try
+        {
+            return JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject() ?? new JsonObject { ["providers"] = new JsonObject() };
+        }
+        catch
+        {
+            return new JsonObject { ["providers"] = new JsonObject() };
+        }
+    }
+
+    public static List<string> ProviderIds()
+    {
+        var list = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var root = LoadModels();
+        if (root["providers"]?.AsObject() is { } providers)
+        {
+            foreach (var kv in providers)
+            {
+                if (!string.IsNullOrWhiteSpace(kv.Key)) list.Add(kv.Key);
+            }
+        }
+        try
+        {
+            var authText = FileUtil.ReadTextIfExists(AuthPath);
+            if (!string.IsNullOrWhiteSpace(authText))
+            {
+                if (JsonNode.Parse(authText, nodeOptions: null, DocOpts)?.AsObject() is { } auth)
+                {
+                    foreach (var kv in auth)
+                    {
+                        if (!string.IsNullOrWhiteSpace(kv.Key)) list.Add(kv.Key);
+                    }
+                }
+            }
+        }
+        catch { }
+        return list.ToList();
+    }
+
+    public static List<PiProvider> LoadProviders()
+    {
+        var result = new List<PiProvider>();
+        var root = LoadModels();
+        var providers = root["providers"]?.AsObject();
+        if (providers != null)
+        {
+            foreach (var kv in providers)
+            {
+                if (kv.Value is not JsonObject node) continue;
+                var p = new PiProvider
+                {
+                    Id = kv.Key,
+                    Name = node["name"]?.GetValue<string>(),
+                    BaseUrl = node["baseUrl"]?.GetValue<string>(),
+                    ApiKey = node["apiKey"]?.GetValue<string>(),
+                    Api = node["api"]?.GetValue<string>() ?? "openai-completions",
+                };
+
+                if (node["headers"] is JsonObject hObj)
+                {
+                    foreach (var h in hObj)
+                        p.CustomHeaders[h.Key] = h.Value?.ToString() ?? "";
+                }
+
+                if (node["models"] is JsonArray mArr)
+                {
+                    p.ModelsJson = mArr.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                    foreach (var m in mArr)
+                    {
+                        if (m is JsonObject mObj)
+                        {
+                            var mId = mObj["id"]?.GetValue<string>() ?? "";
+                            var mName = mObj["name"]?.GetValue<string>() ?? mId;
+                            if (!string.IsNullOrEmpty(mId))
+                                p.CustomModels.Add(new ProviderModelEntry { Id = mId, Name = mName });
+                        }
+                    }
+                }
+                result.Add(p);
+            }
+        }
+
+        // Also check auth.json for any active provider credentials (e.g. openai, openrouter, custom providers)
+        try
+        {
+            var authText = FileUtil.ReadTextIfExists(AuthPath);
+            if (!string.IsNullOrWhiteSpace(authText))
+            {
+                var authObj = JsonNode.Parse(authText, nodeOptions: null, DocOpts)?.AsObject();
+                if (authObj != null)
+                {
+                    var (defProv, defModel) = CurrentDefaults();
+                    foreach (var kv in authObj)
+                    {
+                        var provId = kv.Key;
+                        var existing = result.FirstOrDefault(r => string.Equals(r.Id, provId, StringComparison.OrdinalIgnoreCase));
+                        var keyVal = kv.Value?["key"]?.GetValue<string>() ?? "";
+                        if (existing != null)
+                        {
+                            if (string.IsNullOrWhiteSpace(existing.ApiKey) && !string.IsNullOrWhiteSpace(keyVal))
+                                existing.ApiKey = keyVal;
+                        }
+                        else
+                        {
+                            var p = new PiProvider
+                            {
+                                Id = provId,
+                                Name = provId switch
+                                {
+                                    "openai" => "OpenAI",
+                                    "openrouter" => "OpenRouter",
+                                    "anthropic" => "Anthropic",
+                                    "google" => "Google Gemini",
+                                    _ => provId
+                                },
+                                BaseUrl = provId switch
+                                {
+                                    "openrouter" => "https://openrouter.ai/api/v1",
+                                    "openai" => "https://api.openai.com/v1",
+                                    "anthropic" => "https://api.anthropic.com/v1",
+                                    _ => ""
+                                },
+                                Api = provId switch
+                                {
+                                    "anthropic" => "anthropic-messages",
+                                    "google" => "google-generative-ai",
+                                    _ => "openai-completions"
+                                },
+                                ApiKey = keyVal,
+                            };
+                            if (string.Equals(defProv, provId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(defModel))
+                            {
+                                p.CustomModels.Add(new ProviderModelEntry { Id = defModel, Name = defModel });
+                            }
+                            result.Add(p);
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return result;
+    }
+
+    public static void SaveProvider(PiProvider p, bool setDefaultModel = false, string? defaultModelId = null)
+    {
+        var root = LoadModels();
+        var providers = root["providers"]?.AsObject();
+        if (providers == null)
+        {
+            providers = new JsonObject();
+            root["providers"] = providers;
+        }
+
+        var entry = new JsonObject
+        {
+            ["name"] = string.IsNullOrWhiteSpace(p.Name) ? p.Id : p.Name,
+            ["baseUrl"] = p.BaseUrl ?? "",
+            ["api"] = string.IsNullOrWhiteSpace(p.Api) ? "openai-completions" : p.Api,
+        };
+
+        if (!string.IsNullOrWhiteSpace(p.ApiKey))
+            entry["apiKey"] = p.ApiKey;
+
+        if (p.CustomHeaders != null && p.CustomHeaders.Count > 0)
+        {
+            var hObj = new JsonObject();
+            foreach (var h in p.CustomHeaders)
+                if (!string.IsNullOrWhiteSpace(h.Key))
+                    hObj[h.Key.Trim()] = h.Value ?? "";
+            entry["headers"] = hObj;
+        }
+
+        if (p.CustomModels != null && p.CustomModels.Count > 0)
+        {
+            var mArr = new JsonArray();
+            foreach (var m in p.CustomModels)
+            {
+                if (string.IsNullOrWhiteSpace(m.Id)) continue;
+                mArr.Add(new JsonObject
+                {
+                    ["id"] = m.Id.Trim(),
+                    ["name"] = string.IsNullOrWhiteSpace(m.Name) ? m.Id.Trim() : m.Name.Trim(),
+                });
+            }
+            entry["models"] = mArr;
+        }
+        else if (!string.IsNullOrWhiteSpace(p.ModelsJson))
+        {
+            try
+            {
+                if (JsonNode.Parse(p.ModelsJson) is JsonArray arr && arr.Count > 0)
+                    entry["models"] = arr;
+                else if (JsonNode.Parse(p.ModelsJson) is JsonObject obj && obj.Count > 0)
+                {
+                    var mArr = new JsonArray();
+                    foreach (var kv in obj)
+                    {
+                        var dName = kv.Value?["name"]?.GetValue<string>() ?? kv.Key;
+                        mArr.Add(new JsonObject { ["id"] = kv.Key, ["name"] = dName });
+                    }
+                    entry["models"] = mArr;
+                }
+            }
+            catch { }
+        }
+
+        providers[p.Id] = entry;
+        root["providers"] = providers;
+        Directory.CreateDirectory(Path.GetDirectoryName(ModelsPath)!);
+        FileUtil.AtomicWriteText(ModelsPath, root.ToJsonString(WriteOpts));
+
+        // Sync apiKey to auth.json if present
+        if (!string.IsNullOrWhiteSpace(p.ApiKey))
+        {
+            try
+            {
+                var authText = FileUtil.ReadTextIfExists(AuthPath);
+                var auth = string.IsNullOrWhiteSpace(authText)
+                    ? new JsonObject()
+                    : JsonNode.Parse(authText, nodeOptions: null, DocOpts)?.AsObject() ?? new JsonObject();
+
+                auth[p.Id] = new JsonObject
+                {
+                    ["type"] = "api_key",
+                    ["key"] = p.ApiKey,
+                };
+                Directory.CreateDirectory(Path.GetDirectoryName(AuthPath)!);
+                FileUtil.AtomicWriteText(AuthPath, auth.ToJsonString(WriteOpts));
+            }
+            catch { }
+        }
+
+        if (setDefaultModel)
+        {
+            SetDefaultModel(p.Id, defaultModelId);
+        }
+    }
+
+    public static void DeleteProvider(string id)
+    {
+        var root = LoadModels();
+        if (root["providers"]?.AsObject() is { } providers)
+        {
+            providers.Remove(id);
+            root["providers"] = providers;
+            FileUtil.AtomicWriteText(ModelsPath, root.ToJsonString(WriteOpts));
+        }
+
+        try
+        {
+            var authText = FileUtil.ReadTextIfExists(AuthPath);
+            if (!string.IsNullOrWhiteSpace(authText))
+            {
+                var auth = JsonNode.Parse(authText, nodeOptions: null, DocOpts)?.AsObject();
+                if (auth != null && auth.ContainsKey(id))
+                {
+                    auth.Remove(id);
+                    FileUtil.AtomicWriteText(AuthPath, auth.ToJsonString(WriteOpts));
+                }
+            }
+        }
+        catch { }
+
+        var (currentProv, _) = CurrentDefaults();
+        if (string.Equals(currentProv, id, StringComparison.OrdinalIgnoreCase))
+        {
+            ClearDefaultModel();
+        }
+    }
+
+    public static void SetDefaultModel(string providerId, string? modelId)
+    {
+        var text = FileUtil.ReadTextIfExists(SettingsPath);
+        var settings = string.IsNullOrWhiteSpace(text)
+            ? new JsonObject()
+            : JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject() ?? new JsonObject();
+
+        settings["defaultProvider"] = providerId;
+        if (!string.IsNullOrWhiteSpace(modelId))
+            settings["defaultModel"] = modelId;
+
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        FileUtil.AtomicWriteText(SettingsPath, settings.ToJsonString(WriteOpts));
+    }
+
+    public static void ClearDefaultModel()
+    {
+        var text = FileUtil.ReadTextIfExists(SettingsPath);
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            var settings = JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject();
+            if (settings != null)
+            {
+                settings.Remove("defaultProvider");
+                settings.Remove("defaultModel");
+                FileUtil.AtomicWriteText(SettingsPath, settings.ToJsonString(WriteOpts));
+            }
+        }
+        catch { }
     }
 
     public static (string? Provider, string? Model) CurrentDefaults()
@@ -255,3 +572,4 @@ public static class PiCli
         try { return obj?[key]?.GetValue<string>(); } catch { return null; }
     }
 }
+
