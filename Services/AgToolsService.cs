@@ -203,6 +203,16 @@ public static class AgToolsService
                         }
                     }
                 }
+
+                if (!profile.IsProTier)
+                {
+                    profile.Quota5hFraction = null;
+                    profile.Quota5hResetTime = null;
+                    profile.Quota3p5hFraction = null;
+                    profile.Quota3p5hResetTime = null;
+                    profile.Quota3pWeeklyFraction = null;
+                    profile.Quota3pWeeklyResetTime = null;
+                }
             }
         }
         catch { }
@@ -350,6 +360,140 @@ public static class AgToolsService
                     await File.WriteAllTextAsync(storageJson, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
                 }
             }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// 将从官方拉取到的最新配额信息同步回写到 ~/.antigravity_tools/accounts/*.json，确保与 Antigravity Tools 插件完全一致
+    /// </summary>
+    public static async Task SyncQuotaToToolsAsync(Profile profile, string? quotaSummaryJson, string? availableModelsJson = null)
+    {
+        if (!Directory.Exists(AccountsDetailDir)) return;
+
+        try
+        {
+            string? targetFile = null;
+            JsonObject? targetObj = null;
+
+            foreach (var file in Directory.GetFiles(AccountsDetailDir, "*.json"))
+            {
+                try
+                {
+                    var text = await File.ReadAllTextAsync(file);
+                    var node = JsonNode.Parse(text);
+                    if (node is JsonObject obj &&
+                        obj.TryGetPropertyValue("email", out var emVal) &&
+                        profile.Email.Equals(emVal?.ToString(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetFile = file;
+                        targetObj = obj;
+                        break;
+                    }
+                }
+                catch { }
+            }
+
+            if (targetFile == null || targetObj == null) return;
+
+            if (!targetObj.TryGetPropertyValue("quota", out var quotaNode) || quotaNode is not JsonObject quotaObj)
+            {
+                quotaObj = new JsonObject();
+                targetObj["quota"] = quotaObj;
+            }
+
+            quotaObj["last_updated"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (!string.IsNullOrEmpty(profile.SubscriptionTier))
+            {
+                quotaObj["subscription_tier"] = profile.SubscriptionTier;
+            }
+
+            if (!profile.IsProTier)
+            {
+                // 免费账号：回写时仅写入 Gemini Models 组与 gemini-weekly 桶，绝不写入 5H 或 3P
+                var geminiWeeklyBucket = new JsonObject
+                {
+                    ["bucket_id"] = "gemini-weekly",
+                    ["window"] = "weekly",
+                    ["remaining_fraction"] = profile.QuotaWeeklyFraction ?? 1.0,
+                    ["reset_time"] = profile.QuotaWeeklyResetTime ?? "",
+                    ["display_name"] = "Weekly Limit Remaining",
+                    ["description"] = "You have used some of your weekly limit, it will fully refresh in 6 days."
+                };
+                var geminiGroup = new JsonObject
+                {
+                    ["display_name"] = "Gemini Models",
+                    ["description"] = "Models within this group: Gemini Flash, Gemini Pro",
+                    ["buckets"] = new JsonArray { geminiWeeklyBucket }
+                };
+                quotaObj["quota_groups"] = new JsonArray { geminiGroup };
+            }
+            else if (!string.IsNullOrEmpty(quotaSummaryJson))
+            {
+                using var doc = JsonDocument.Parse(quotaSummaryJson);
+                if (doc.RootElement.TryGetProperty("groups", out var groupsElem))
+                {
+                    var groupsArr = new JsonArray();
+                    foreach (var g in groupsElem.EnumerateArray())
+                    {
+                        var gObj = new JsonObject
+                        {
+                            ["display_name"] = g.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? "" : "",
+                            ["description"] = g.TryGetProperty("description", out var desc) ? desc.GetString() ?? "" : ""
+                        };
+                        var bucketsArr = new JsonArray();
+                        if (g.TryGetProperty("buckets", out var bElem))
+                        {
+                            foreach (var b in bElem.EnumerateArray())
+                            {
+                                var bObj = new JsonObject
+                                {
+                                    ["bucket_id"] = b.TryGetProperty("bucketId", out var bid) ? bid.GetString() ?? "" : "",
+                                    ["window"] = b.TryGetProperty("window", out var w) ? w.GetString() ?? "" : "",
+                                    ["remaining_fraction"] = b.TryGetProperty("remainingFraction", out var rf) && rf.TryGetDouble(out var d) ? d : 1.0,
+                                    ["reset_time"] = b.TryGetProperty("resetTime", out var rt) ? rt.GetString() : "",
+                                    ["display_name"] = b.TryGetProperty("displayName", out var bdn) ? bdn.GetString() ?? "" : "",
+                                    ["description"] = b.TryGetProperty("description", out var bdesc) ? bdesc.GetString() ?? "" : ""
+                                };
+                                bucketsArr.Add(bObj);
+                            }
+                        }
+                        gObj["buckets"] = bucketsArr;
+                        groupsArr.Add(gObj);
+                    }
+                    quotaObj["quota_groups"] = groupsArr;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(availableModelsJson))
+            {
+                using var doc = JsonDocument.Parse(availableModelsJson);
+                if (doc.RootElement.TryGetProperty("models", out var modelsElem))
+                {
+                    if (quotaObj.TryGetPropertyValue("models", out var existModels) && existModels is JsonArray mArr)
+                    {
+                        foreach (var mNode in mArr)
+                        {
+                            if (mNode is JsonObject mObj && mObj.TryGetPropertyValue("name", out var mNameVal))
+                            {
+                                var mName = mNameVal?.ToString();
+                                if (!string.IsNullOrEmpty(mName) && modelsElem.TryGetProperty(mName, out var mProp))
+                                {
+                                    if (mProp.TryGetProperty("quotaInfo", out var qInfo))
+                                    {
+                                        if (qInfo.TryGetProperty("remainingFraction", out var frac) && frac.TryGetDouble(out var fd))
+                                            mObj["percentage"] = (int)Math.Round(fd * 100);
+                                        if (qInfo.TryGetProperty("resetTime", out var rt))
+                                            mObj["reset_time"] = rt.GetString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            await File.WriteAllTextAsync(targetFile, targetObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { }
     }

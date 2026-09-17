@@ -127,25 +127,26 @@ public class Profile
         || (Plan?.Contains("Pro", StringComparison.OrdinalIgnoreCase) ?? false);
 
     [JsonIgnore]
-    public bool Has5hQuota => Quota5hFraction.HasValue;
+    public bool Has5hQuota => IsProTier && Quota5hFraction.HasValue;
 
     [JsonIgnore]
     public double Quota5hPercentValue
     {
-        get => Quota5hFraction.HasValue ? Math.Round(Quota5hFraction.Value * 100.0, 1) : 100.0;
+        get => (IsProTier && Quota5hFraction.HasValue) ? Math.Round(Quota5hFraction.Value * 100.0, 1) : 0.0;
         set { }
     }
 
     [JsonIgnore]
-    public string Quota5hPercentText => Quota5hFraction.HasValue ? $"{Math.Round(Quota5hFraction.Value * 100.0)}%" : "无限制";
+    public string Quota5hPercentText => (IsProTier && Quota5hFraction.HasValue) ? $"{Math.Round(Quota5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
     public string Quota5hCountdown
     {
         get
         {
-            if (!Quota5hFraction.HasValue) return "仅受周限额控制";
-            if (string.IsNullOrEmpty(Quota5hResetTime)) return "";
+            if (!IsProTier) return "免费版无5H限制";
+            if (!Quota5hFraction.HasValue) return "未激活";
+            if (string.IsNullOrEmpty(Quota5hResetTime)) return "满额待命";
             if (DateTime.TryParse(Quota5hResetTime, out var dt))
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
@@ -161,7 +162,7 @@ public class Profile
     [JsonIgnore]
     public double QuotaWeeklyPercentValue
     {
-        get => QuotaWeeklyFraction.HasValue ? Math.Round(QuotaWeeklyFraction.Value * 100.0, 1) : 100.0;
+        get => QuotaWeeklyFraction.HasValue ? Math.Round(QuotaWeeklyFraction.Value * 100.0, 1) : (IsProTier ? 100.0 : 0.0);
         set { }
     }
 
@@ -189,25 +190,26 @@ public class Profile
     }
 
     [JsonIgnore]
-    public bool Has3pQuota => Quota3p5hFraction.HasValue || Quota3pWeeklyFraction.HasValue;
+    public bool Has3pQuota => IsProTier && (Quota3p5hFraction.HasValue || Quota3pWeeklyFraction.HasValue);
 
     [JsonIgnore]
     public double Quota3p5hPercentValue
     {
-        get => Quota3p5hFraction.HasValue ? Math.Round(Quota3p5hFraction.Value * 100.0, 1) : 100.0;
+        get => (IsProTier && Quota3p5hFraction.HasValue) ? Math.Round(Quota3p5hFraction.Value * 100.0, 1) : 0.0;
         set { }
     }
 
     [JsonIgnore]
-    public string Quota3p5hPercentText => Quota3p5hFraction.HasValue ? $"{Math.Round(Quota3p5hFraction.Value * 100.0)}%" : "100%";
+    public string Quota3p5hPercentText => (IsProTier && Quota3p5hFraction.HasValue) ? $"{Math.Round(Quota3p5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
     public string Quota3p5hCountdown
     {
         get
         {
-            if (!Quota3p5hFraction.HasValue) return "";
-            if (string.IsNullOrEmpty(Quota3p5hResetTime)) return "";
+            if (!IsProTier) return "免费版仅限Gemini";
+            if (!Quota3p5hFraction.HasValue) return "未激活";
+            if (string.IsNullOrEmpty(Quota3p5hResetTime)) return "满额待命";
             if (DateTime.TryParse(Quota3p5hResetTime, out var dt))
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
@@ -222,18 +224,19 @@ public class Profile
     [JsonIgnore]
     public double Quota3pWeeklyPercentValue
     {
-        get => Quota3pWeeklyFraction.HasValue ? Math.Round(Quota3pWeeklyFraction.Value * 100.0, 1) : 100.0;
+        get => (IsProTier && Quota3pWeeklyFraction.HasValue) ? Math.Round(Quota3pWeeklyFraction.Value * 100.0, 1) : 0.0;
         set { }
     }
 
     [JsonIgnore]
-    public string Quota3pWeeklyPercentText => Quota3pWeeklyFraction.HasValue ? $"{Math.Round(Quota3pWeeklyFraction.Value * 100.0)}%" : "100%";
+    public string Quota3pWeeklyPercentText => (IsProTier && Quota3pWeeklyFraction.HasValue) ? $"{Math.Round(Quota3pWeeklyFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
     public string Quota3pWeeklyCountdown
     {
         get
         {
+            if (!IsProTier) return "仅Pro订阅可用";
             if (string.IsNullOrEmpty(Quota3pWeeklyResetTime)) return "";
             if (DateTime.TryParse(Quota3pWeeklyResetTime, out var dt))
             {

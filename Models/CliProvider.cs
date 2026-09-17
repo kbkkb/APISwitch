@@ -56,6 +56,54 @@ public class KeyValueItem : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
+public class ClaudeModelMapping : INotifyPropertyChanged
+{
+    private string _role = "";
+    private string _displayName = "";
+    private string _model = "";
+    private bool _supports1m = true;
+
+    public string Role
+    {
+        get => _role;
+        set { if (_role != value) { _role = value; OnPropertyChanged(); } }
+    }
+
+    public string DisplayName
+    {
+        get => _displayName;
+        set { if (_displayName != value) { _displayName = value; OnPropertyChanged(); } }
+    }
+
+    public string Model
+    {
+        get => _model;
+        set
+        {
+            if (_model != value)
+            {
+                var oldModel = _model;
+                _model = value;
+                OnPropertyChanged();
+                if (string.IsNullOrWhiteSpace(_displayName) || _displayName == oldModel)
+                {
+                    DisplayName = _model;
+                }
+            }
+        }
+    }
+
+    public bool Supports1m
+    {
+        get => _supports1m;
+        set { if (_supports1m != value) { _supports1m = value; OnPropertyChanged(); } }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged([CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
 public class ClaudeProvider
 {
     public string Id { get; set; } = "";
@@ -65,6 +113,9 @@ public class ClaudeProvider
     public bool IsOfficial { get; set; }
     public string? BaseUrl { get; set; }
     public string? AuthToken { get; set; }
+    public string WireApi { get; set; } = "anthropic";
+    public string AccessMode { get; set; } = "mapping";
+    public List<ClaudeModelMapping> ModelMappings { get; set; } = new();
     public string? Model { get; set; }
     public string? SmallFastModel { get; set; }
     public Dictionary<string, string> CustomHeaders { get; set; } = new();

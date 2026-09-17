@@ -13,6 +13,15 @@ public static class ProviderConvert
         IsOfficial = c.IsOfficial,
         BaseUrl = c.BaseUrl,
         AuthToken = c.AuthToken,
+        WireApi = c.WireApi,
+        AccessMode = c.AccessMode,
+        ModelMappings = c.ModelMappings.Select(m => new ClaudeModelMapping
+        {
+            Role = m.Role,
+            DisplayName = m.DisplayName,
+            Model = m.Model,
+            Supports1m = m.Supports1m
+        }).ToList(),
         Model = c.Model,
         SmallFastModel = c.SmallFastModel,
         CustomHeaders = new Dictionary<string, string>(c.CustomHeaders),
@@ -29,7 +38,7 @@ public static class ProviderConvert
         WebsiteUrl = c.WebsiteUrl,
         IsOfficial = c.IsOfficial,
         BaseUrl = c.BaseUrl,
-        WireApi = "responses",
+        WireApi = c.WireApi == "chat" ? "chat" : "responses",
         Model = c.Model,
         BearerToken = c.AuthToken,
         ApiKey = c.AuthToken,
@@ -38,20 +47,35 @@ public static class ProviderConvert
         CustomModels = c.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
     };
 
-    public static ClaudeProvider ToClaude(CodexProvider x) => new()
+    public static ClaudeProvider ToClaude(CodexProvider x)
     {
-        Id = x.Id,
-        Name = x.Name,
-        Notes = x.Notes,
-        WebsiteUrl = x.WebsiteUrl,
-        IsOfficial = x.IsOfficial,
-        BaseUrl = x.BaseUrl,
-        Model = x.Model,
-        AuthToken = string.IsNullOrWhiteSpace(x.BearerToken) ? x.ApiKey : x.BearerToken,
-        CustomHeaders = new Dictionary<string, string>(x.CustomHeaders),
-        ExtraOptions = new Dictionary<string, string>(x.ExtraOptions),
-        CustomModels = x.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
-    };
+        var p = new ClaudeProvider
+        {
+            Id = x.Id,
+            Name = x.Name,
+            Notes = x.Notes,
+            WebsiteUrl = x.WebsiteUrl,
+            IsOfficial = x.IsOfficial,
+            BaseUrl = x.BaseUrl,
+            Model = x.Model,
+            WireApi = x.WireApi == "chat" ? "chat" : "anthropic",
+            AccessMode = "mapping",
+            AuthToken = string.IsNullOrWhiteSpace(x.BearerToken) ? x.ApiKey : x.BearerToken,
+            CustomHeaders = new Dictionary<string, string>(x.CustomHeaders),
+            ExtraOptions = new Dictionary<string, string>(x.ExtraOptions),
+            CustomModels = x.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+        };
+
+        var mName = x.Model ?? (x.CustomModels.FirstOrDefault()?.Id ?? "");
+        p.ModelMappings = new List<ClaudeModelMapping>
+        {
+            new() { Role = "Sonnet", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Opus", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Fable", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Haiku", DisplayName = mName, Model = mName, Supports1m = true },
+        };
+        return p;
+    }
 
     public static OpenCodeProvider ToOpencode(ClaudeProvider c) => new()
     {
@@ -82,18 +106,33 @@ public static class ProviderConvert
         CustomModels = x.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
     };
 
-    public static ClaudeProvider ToClaude(OpenCodeProvider o) => new()
+    public static ClaudeProvider ToClaude(OpenCodeProvider o)
     {
-        Id = o.Id,
-        Name = o.Name ?? o.Id,
-        Notes = o.Notes,
-        WebsiteUrl = o.WebsiteUrl,
-        BaseUrl = o.BaseUrl,
-        AuthToken = o.ApiKey,
-        CustomHeaders = new Dictionary<string, string>(o.CustomHeaders),
-        ExtraOptions = new Dictionary<string, string>(o.ExtraOptions),
-        CustomModels = o.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
-    };
+        var p = new ClaudeProvider
+        {
+            Id = o.Id,
+            Name = o.Name ?? o.Id,
+            Notes = o.Notes,
+            WebsiteUrl = o.WebsiteUrl,
+            BaseUrl = o.BaseUrl,
+            AuthToken = o.ApiKey,
+            WireApi = "anthropic",
+            AccessMode = "mapping",
+            CustomHeaders = new Dictionary<string, string>(o.CustomHeaders),
+            ExtraOptions = new Dictionary<string, string>(o.ExtraOptions),
+            CustomModels = o.CustomModels.Select(m => new ProviderModelEntry { Id = m.Id, Name = m.Name, ContextWindow = m.ContextWindow }).ToList(),
+        };
+
+        var mName = o.CustomModels.FirstOrDefault()?.Id ?? "";
+        p.ModelMappings = new List<ClaudeModelMapping>
+        {
+            new() { Role = "Sonnet", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Opus", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Fable", DisplayName = mName, Model = mName, Supports1m = true },
+            new() { Role = "Haiku", DisplayName = mName, Model = mName, Supports1m = true },
+        };
+        return p;
+    }
 
     public static CodexProvider ToCodex(OpenCodeProvider o) => new()
     {

@@ -93,6 +93,77 @@ public static class CcSwitchImport
                     Model = Str(env, "ANTHROPIC_MODEL"),
                     SmallFastModel = Str(env, "ANTHROPIC_SMALL_FAST_MODEL"),
                 };
+                var meta = JsonNode.Parse(metaText ?? "{}")?.AsObject();
+                var apiFormat = meta?["apiFormat"]?.GetValue<string>();
+                p.WireApi = (apiFormat == "openai" || apiFormat == "chat") ? "chat" : "anthropic";
+
+                if (appType == "claude-desktop")
+                {
+                    if (meta?["claudeDesktopModelRoutes"] is JsonObject routes)
+                    {
+                        p.AccessMode = "mapping";
+                        var roles = new (string role, string key)[] {
+                            ("Sonnet", "claude-sonnet-5"),
+                            ("Opus", "claude-opus-5"),
+                            ("Fable", "claude-fable-5"),
+                            ("Haiku", "claude-haiku-4-5")
+                        };
+
+                        foreach (var (rName, rKey) in roles)
+                        {
+                            JsonObject? rObj = routes[rKey]?.AsObject();
+                            if (rObj == null)
+                            {
+                                foreach (var kv in routes)
+                                {
+                                    if (kv.Key.Contains(rName, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        rObj = kv.Value?.AsObject();
+                                        break;
+                                    }
+                                }
+                            }
+
+                            var rModel = rObj?["model"]?.GetValue<string>() ?? "";
+                            var rLabel = rObj?["labelOverride"]?.GetValue<string>() ?? rModel;
+                            var r1m = rObj?["supports1m"]?.GetValue<bool>() ?? true;
+
+                            p.ModelMappings.Add(new ClaudeModelMapping
+                            {
+                                Role = rName,
+                                Model = ClaudeCli.Strip1m(rModel),
+                                DisplayName = ClaudeCli.Strip1m(rLabel),
+                                Supports1m = r1m
+                            });
+                        }
+                    }
+                }
+                else if (appType == "claude")
+                {
+                    p.AccessMode = "mapping";
+                    var roles = new (string role, string envKey, string nameKey)[] {
+                        ("Sonnet", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"),
+                        ("Opus", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"),
+                        ("Fable", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"),
+                        ("Haiku", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME")
+                    };
+
+                    foreach (var (rName, envKey, nameKey) in roles)
+                    {
+                        var raw = Str(env, envKey) ?? p.Model ?? "";
+                        var disp = Str(env, nameKey);
+                        bool s1m = raw.EndsWith("[1M]", StringComparison.OrdinalIgnoreCase);
+                        var clean = ClaudeCli.Strip1m(raw);
+                        p.ModelMappings.Add(new ClaudeModelMapping
+                        {
+                            Role = rName,
+                            Model = clean,
+                            DisplayName = !string.IsNullOrWhiteSpace(disp) ? disp : clean,
+                            Supports1m = s1m || string.IsNullOrEmpty(raw)
+                        });
+                    }
+                }
+
                 if (env != null)
                 {
                     foreach (var kv in env)

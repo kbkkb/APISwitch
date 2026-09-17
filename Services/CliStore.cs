@@ -21,11 +21,17 @@ public static class CliStore
         {
             list = new List<ClaudeProvider> { new() { Name = "Anthropic 官方", IsOfficial = true } };
             SaveClaude(list);
+            return list;
         }
-        return list;
+        var deduped = DeduplicateClaude(list);
+        if (deduped.Count != list.Count)
+        {
+            SaveClaude(deduped);
+        }
+        return deduped;
     }
 
-    public static void SaveClaude(List<ClaudeProvider> list) => Save(ClaudeFile, list);
+    public static void SaveClaude(List<ClaudeProvider> list) => Save(ClaudeFile, DeduplicateClaude(list));
 
     public static List<ClaudeProvider> LoadClaudeDesktop()
     {
@@ -34,11 +40,17 @@ public static class CliStore
         {
             list = new List<ClaudeProvider> { new() { Name = "Claude 官方", IsOfficial = true } };
             SaveClaudeDesktop(list);
+            return list;
         }
-        return list;
+        var deduped = DeduplicateClaude(list);
+        if (deduped.Count != list.Count)
+        {
+            SaveClaudeDesktop(deduped);
+        }
+        return deduped;
     }
 
-    public static void SaveClaudeDesktop(List<ClaudeProvider> list) => Save(ClaudeDesktopFile, list);
+    public static void SaveClaudeDesktop(List<ClaudeProvider> list) => Save(ClaudeDesktopFile, DeduplicateClaude(list));
 
     public static List<CodexProvider> LoadCodex()
     {
@@ -47,11 +59,73 @@ public static class CliStore
         {
             list = new List<CodexProvider> { new() { Name = "OpenAI 官方", IsOfficial = true } };
             SaveCodex(list);
+            return list;
         }
-        return list;
+        var deduped = DeduplicateCodex(list);
+        if (deduped.Count != list.Count)
+        {
+            SaveCodex(deduped);
+        }
+        return deduped;
     }
 
-    public static void SaveCodex(List<CodexProvider> list) => Save(CodexFile, list);
+    public static void SaveCodex(List<CodexProvider> list) => Save(CodexFile, DeduplicateCodex(list));
+
+    public static List<ClaudeProvider> DeduplicateClaude(List<ClaudeProvider> list)
+    {
+        if (list == null) return new List<ClaudeProvider>();
+        var result = new List<ClaudeProvider>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var official = list.FirstOrDefault(x => x.IsOfficial);
+        if (official != null)
+        {
+            result.Add(official);
+            seenNames.Add(official.Name);
+            if (!string.IsNullOrEmpty(official.Id)) seenIds.Add(official.Id);
+        }
+
+        foreach (var item in list)
+        {
+            if (item.IsOfficial) continue;
+            if (seenNames.Contains(item.Name)) continue;
+            if (!string.IsNullOrEmpty(item.Id) && seenIds.Contains(item.Id)) continue;
+
+            seenNames.Add(item.Name);
+            if (!string.IsNullOrEmpty(item.Id)) seenIds.Add(item.Id);
+            result.Add(item);
+        }
+        return result;
+    }
+
+    public static List<CodexProvider> DeduplicateCodex(List<CodexProvider> list)
+    {
+        if (list == null) return new List<CodexProvider>();
+        var result = new List<CodexProvider>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var official = list.FirstOrDefault(x => x.IsOfficial);
+        if (official != null)
+        {
+            result.Add(official);
+            seenNames.Add(official.Name);
+            if (!string.IsNullOrEmpty(official.Id)) seenIds.Add(official.Id);
+        }
+
+        foreach (var item in list)
+        {
+            if (item.IsOfficial) continue;
+            if (seenNames.Contains(item.Name)) continue;
+            if (!string.IsNullOrEmpty(item.Id) && seenIds.Contains(item.Id)) continue;
+
+            seenNames.Add(item.Name);
+            if (!string.IsNullOrEmpty(item.Id)) seenIds.Add(item.Id);
+            result.Add(item);
+        }
+        return result;
+    }
 
     public static List<OpenCodeProvider> LoadOpencode() =>
         Load<List<OpenCodeProvider>>(OpenCodeFile) ?? new List<OpenCodeProvider>();

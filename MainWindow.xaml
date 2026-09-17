@@ -420,16 +420,16 @@
 
                                                 <!-- Action Buttons -->
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                    <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowSwitchAntigravity" ToolTip="切换 Antigravity IDE 到此账号并执行激活">
+                                                    <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowSwitchAntigravity" ToolTip="切换 Antigravity IDE 到此账号">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="激活切换" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="切换账户" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateAntigravity" ToolTip="向 Google 执行官方协议握手并测试连接延迟">
+                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateQuota" ToolTip="向 Google 发送消息以激活该账号的限额周期并同步刷新配额">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="测通" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="激活限额" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
                                                     <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="在线查询并刷新此账号的最新配额">
@@ -816,12 +816,6 @@
                             <TextBlock x:Name="ClaudeToolbarRouterText" Text="本地路由：已停用" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshClaude">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenClaudeSettings">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
@@ -1004,10 +998,10 @@
                             <TextBlock x:Name="DesktopToolbarRouterText" Text="本地路由：已停用" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshDesktop">
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRestartClaudeDesktop" ToolTip="一键重启 Claude 桌面客户端以加载最新配置">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="重启 Claude" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenDesktopConfig">

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -187,27 +188,43 @@ public static class AgQuotaService
         }
     }
 
-    public static async Task<bool> RefreshQuotaAsync(Profile profile)
+    /// <summary>
+    /// 向 Google 官方端点发送轻量消息以触发并激活该账号的限额周期，并自动拉取最新配额
+    /// </summary>
+    public static async Task<(bool ok, long latencyMs, string message)> ActivateAccountQuotaAsync(Profile profile)
     {
-        if (string.IsNullOrEmpty(profile.RefreshToken) && string.IsNullOrEmpty(profile.AccessToken))
-            return false;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
+        if (string.IsNullOrEmpty(profile.RefreshToken) && string.IsNullOrEmpty(profile.AccessToken))
+        {
+            profile.IsActivated = false;
+            profile.ActivationError = "凭据缺失，请重新登录";
+            ProfileStore.Save(profile);
+            return (false, 0, profile.ActivationError);
+        }
+
+        // 1. 确保 Token 处于最新状态
         var tokenOk = await EnsureFreshTokenAsync(profile);
         if (!tokenOk || string.IsNullOrEmpty(profile.AccessToken))
-            return false;
+        {
+            profile.IsActivated = false;
+            profile.ActivationError = "Token 刷新失败，请重新登录";
+            ProfileStore.Save(profile);
+            return (false, 0, profile.ActivationError);
+        }
 
         var token = profile.AccessToken;
 
-        // 1. Query Quota Summary (for Paid/Pro users)
-        var quotaUrls = new[]
+        // 2. loadCodeAssist 获取关联 companion project
+        string? companionProject = null;
+        var loadUrls = new[]
         {
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-            "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
+            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
         };
 
-        bool quotaGot = false;
-        foreach (var url in quotaUrls)
+        foreach (var url in loadUrls)
         {
             try
             {
@@ -220,49 +237,129 @@ public static class AgQuotaService
                 if (resp.IsSuccessStatusCode)
                 {
                     var json = await resp.Content.ReadAsStringAsync();
-                    ParseQuotaSummary(profile, json);
-                    quotaGot = true;
+                    ParseTier(profile, json);
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("cloudaicompanionProject", out var cp))
+                    {
+                        companionProject = cp.GetString();
+                    }
                     break;
                 }
             }
             catch { }
         }
 
-        // 1.5. Fallback: Query fetchAvailableModels (for Free/Starter accounts where retrieveUserQuotaSummary returns 403)
-        if (!quotaGot)
+        // 3. 发送轻量握手激活限额周期：
+        // 免费账号：只向 Gemini 发送轻量请求激活 Gemini 周限额，绝不请求 GPT/Claude！
+        // Pro 账号：并发向 Gemini 与 GPT/Claude 发送轻量握手，同时激活双边 5H 限额！
+        bool msgSuccess = false;
+        if (!profile.IsProTier)
         {
-            var modelUrls = new[]
-            {
-                "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
-                "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-                "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
-            };
-
-            foreach (var url in modelUrls)
-            {
-                try
-                {
-                    using var req = new HttpRequestMessage(HttpMethod.Post, url);
-                    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                    req.Headers.UserAgent.ParseAdd("antigravity/2.13.0");
-                    req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
-
-                    var resp = await Http.SendAsync(req);
-                    if (resp.IsSuccessStatusCode)
-                    {
-                        var json = await resp.Content.ReadAsStringAsync();
-                        if (ParseAvailableModels(profile, json))
-                        {
-                            quotaGot = true;
-                            break;
-                        }
-                    }
-                }
-                catch { }
-            }
+            msgSuccess = await SendStreamPingAsync(token, companionProject, "gemini-2.5-flash");
+        }
+        else
+        {
+            var pingGeminiTask = SendStreamPingAsync(token, companionProject, "gemini-2.5-flash");
+            var pingClaudeTask = SendStreamPingAsync(token, companionProject, "claude-sonnet-4-6");
+            await Task.WhenAll(pingGeminiTask, pingClaudeTask);
+            msgSuccess = pingGeminiTask.Result || pingClaudeTask.Result;
         }
 
-        // 2. Query Subscription Tier (loadCodeAssist)
+        // 4. 同步刷新最新配额并回写 Antigravity Tools
+        bool quotaOk = await RefreshQuotaAsync(profile);
+        sw.Stop();
+
+        if (msgSuccess || quotaOk)
+        {
+            profile.IsActivated = true;
+            profile.ActivatedAt = DateTime.UtcNow;
+            profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
+            profile.ActivationError = null;
+            ProfileStore.Save(profile);
+            var modeDesc = profile.IsProTier ? "Gemini与GPT/Claude限额已同步激活" : "免费版Gemini周限额已激活刷新";
+            return (true, sw.ElapsedMilliseconds, $"限额激活成功（{modeDesc} · {profile.TierDisplay} · 耗时 {sw.ElapsedMilliseconds}ms）");
+        }
+        else
+        {
+            profile.IsActivated = false;
+            profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
+            profile.ActivationError = "激活请求超时或端点不可达";
+            ProfileStore.Save(profile);
+            return (false, sw.ElapsedMilliseconds, profile.ActivationError);
+        }
+    }
+
+    private static async Task<bool> SendStreamPingAsync(string token, string? project, string model)
+    {
+        var streamUrls = new[]
+        {
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse",
+            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse",
+            "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse"
+        };
+
+        var payload = new
+        {
+            project = project ?? "aicode-consumers",
+            model = model,
+            request = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        parts = new[] { new { text = "hi" } }
+                    }
+                }
+            }
+        };
+        var jsonBody = JsonSerializer.Serialize(payload);
+
+        foreach (var url in streamUrls)
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                using var postReq = new HttpRequestMessage(HttpMethod.Post, url);
+                postReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                postReq.Headers.UserAgent.ParseAdd("antigravity/2.13.0");
+                postReq.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+                using var postResp = await Http.SendAsync(postReq, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                if (postResp.IsSuccessStatusCode)
+                {
+                    try
+                    {
+                        using var stream = await postResp.Content.ReadAsStreamAsync(cts.Token);
+                        using var reader = new StreamReader(stream);
+                        await reader.ReadLineAsync(cts.Token);
+                    }
+                    catch { }
+                    return true;
+                }
+                else if ((int)postResp.StatusCode == 429)
+                {
+                    return true;
+                }
+            }
+            catch { }
+        }
+        return false;
+    }
+
+    public static async Task<bool> RefreshQuotaAsync(Profile profile)
+    {
+        if (string.IsNullOrEmpty(profile.RefreshToken) && string.IsNullOrEmpty(profile.AccessToken))
+            return false;
+
+        var tokenOk = await EnsureFreshTokenAsync(profile);
+        if (!tokenOk || string.IsNullOrEmpty(profile.AccessToken))
+            return false;
+
+        var token = profile.AccessToken;
+
+        // 1. 优先调用 loadCodeAssist 确定订阅阶梯 (Starter / Pro / Ultra)
         var tierUrls = new[]
         {
             "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
@@ -288,6 +385,77 @@ public static class AgQuotaService
                 }
             }
             catch { }
+        }
+
+        bool isFree = !profile.IsProTier;
+        bool quotaGot = false;
+
+        // 2. Pro 账号优先调用 retrieveUserQuotaSummary 查询完整 Gemini 与 GPT/Claude 配额组
+        if (!isFree)
+        {
+            var quotaUrls = new[]
+            {
+                "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
+                "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+                "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+            };
+
+            foreach (var url in quotaUrls)
+            {
+                try
+                {
+                    using var req = new HttpRequestMessage(HttpMethod.Post, url);
+                    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                    req.Headers.UserAgent.ParseAdd("antigravity/2.13.0");
+                    req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+                    var resp = await Http.SendAsync(req);
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        var json = await resp.Content.ReadAsStringAsync();
+                        ParseQuotaSummary(profile, json);
+                        quotaGot = true;
+                        _ = AgToolsService.SyncQuotaToToolsAsync(profile, json, null);
+                        break;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // 3. 免费账号或 Pro 账号 Fallback：调用 fetchAvailableModels
+        if (!quotaGot)
+        {
+            var modelUrls = new[]
+            {
+                "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
+                "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+                "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+            };
+
+            foreach (var url in modelUrls)
+            {
+                try
+                {
+                    using var req = new HttpRequestMessage(HttpMethod.Post, url);
+                    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                    req.Headers.UserAgent.ParseAdd("antigravity/2.13.0");
+                    req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+                    var resp = await Http.SendAsync(req);
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        var json = await resp.Content.ReadAsStringAsync();
+                        if (ParseAvailableModels(profile, json))
+                        {
+                            quotaGot = true;
+                            _ = AgToolsService.SyncQuotaToToolsAsync(profile, null, json);
+                            break;
+                        }
+                    }
+                }
+                catch { }
+            }
         }
 
         if (quotaGot)
@@ -316,6 +484,8 @@ public static class AgQuotaService
             profile.Quota3pWeeklyFraction = null;
             profile.Quota3pWeeklyResetTime = null;
 
+            bool isFree = !profile.IsProTier;
+
             foreach (var group in groups.EnumerateArray())
             {
                 var groupName = group.TryGetProperty("displayName", out var gn) ? gn.GetString() ?? "" : "";
@@ -334,30 +504,43 @@ public static class AgQuotaService
                     bool is5h = bucketId.Contains("5h", StringComparison.OrdinalIgnoreCase) || window.Equals("5h", StringComparison.OrdinalIgnoreCase);
                     bool isWeekly = bucketId.Contains("weekly", StringComparison.OrdinalIgnoreCase) || window.Equals("weekly", StringComparison.OrdinalIgnoreCase);
 
-                    if (bucketId.StartsWith("3p", StringComparison.OrdinalIgnoreCase) || is3pGroup)
+                    if (isFree)
                     {
-                        if (is5h)
+                        // 免费账号：严格只解析 Gemini 周限额！绝不赋值 5H 与 3P GPT/Claude！
+                        if ((isGeminiGroup || bucketId.Contains("gemini", StringComparison.OrdinalIgnoreCase)) && isWeekly)
                         {
-                            profile.Quota3p5hFraction = fraction;
-                            profile.Quota3p5hResetTime = resetTime;
-                        }
-                        else if (isWeekly)
-                        {
-                            profile.Quota3pWeeklyFraction = fraction;
-                            profile.Quota3pWeeklyResetTime = resetTime;
+                            profile.QuotaWeeklyFraction = fraction;
+                            profile.QuotaWeeklyResetTime = resetTime;
                         }
                     }
                     else
                     {
-                        if (is5h)
+                        // Pro 账号：同时刷新 Gemini（5H + 周）和 Claude/GPT（5H + 周）
+                        if (bucketId.StartsWith("3p", StringComparison.OrdinalIgnoreCase) || is3pGroup)
                         {
-                            profile.Quota5hFraction = fraction;
-                            profile.Quota5hResetTime = resetTime;
+                            if (is5h)
+                            {
+                                profile.Quota3p5hFraction = fraction;
+                                profile.Quota3p5hResetTime = resetTime;
+                            }
+                            else if (isWeekly)
+                            {
+                                profile.Quota3pWeeklyFraction = fraction;
+                                profile.Quota3pWeeklyResetTime = resetTime;
+                            }
                         }
-                        else if (isWeekly)
+                        else
                         {
-                            profile.QuotaWeeklyFraction = fraction;
-                            profile.QuotaWeeklyResetTime = resetTime;
+                            if (is5h)
+                            {
+                                profile.Quota5hFraction = fraction;
+                                profile.Quota5hResetTime = resetTime;
+                            }
+                            else if (isWeekly)
+                            {
+                                profile.QuotaWeeklyFraction = fraction;
+                                profile.QuotaWeeklyResetTime = resetTime;
+                            }
                         }
                     }
                 }
@@ -374,6 +557,7 @@ public static class AgQuotaService
             var root = doc.RootElement;
             if (!root.TryGetProperty("models", out var modelsElem)) return false;
 
+            bool isFree = !profile.IsProTier;
             bool foundAny = false;
 
             profile.Quota5hFraction = null;
@@ -385,6 +569,66 @@ public static class AgQuotaService
             profile.Quota3pWeeklyFraction = null;
             profile.Quota3pWeeklyResetTime = null;
 
+            if (isFree)
+            {
+                // 免费账号：严格只刷新 Gemini 的周限额，绝不刷新 5H，绝不刷新 Claude/GPT！
+                foreach (var prop in modelsElem.EnumerateObject())
+                {
+                    var modelId = prop.Name;
+                    if (!modelId.Contains("gemini", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!prop.Value.TryGetProperty("quotaInfo", out var qInfo)) continue;
+
+                    double frac = qInfo.TryGetProperty("remainingFraction", out var rf) && rf.TryGetDouble(out var d) ? d : 1.0;
+                    string? resetTime = qInfo.TryGetProperty("resetTime", out var rt) ? rt.GetString() : null;
+
+                    bool isWeekly = false;
+                    if (!string.IsNullOrEmpty(resetTime) && DateTime.TryParse(resetTime, out var dt))
+                    {
+                        var diff = dt.ToUniversalTime() - DateTime.UtcNow;
+                        if (diff.TotalHours > 24) isWeekly = true;
+                    }
+                    else if (modelId.Contains("agent", StringComparison.OrdinalIgnoreCase) ||
+                             modelId.Contains("flash-high", StringComparison.OrdinalIgnoreCase) ||
+                             modelId.Contains("flash-low", StringComparison.OrdinalIgnoreCase) ||
+                             modelId.Contains("pro", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isWeekly = true;
+                    }
+
+                    if (isWeekly)
+                    {
+                        if (profile.QuotaWeeklyFraction == null || modelId.Contains("flash", StringComparison.OrdinalIgnoreCase))
+                        {
+                            profile.QuotaWeeklyFraction = frac;
+                            profile.QuotaWeeklyResetTime = resetTime;
+                            foundAny = true;
+                        }
+                    }
+                }
+
+                // 兜底：如果没匹配到大于24小时的，只要有 gemini 模型配额，就作为周限额
+                if (!foundAny)
+                {
+                    foreach (var prop in modelsElem.EnumerateObject())
+                    {
+                        var modelId = prop.Name;
+                        if (!modelId.Contains("gemini", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (!prop.Value.TryGetProperty("quotaInfo", out var qInfo)) continue;
+
+                        double frac = qInfo.TryGetProperty("remainingFraction", out var rf) && rf.TryGetDouble(out var d) ? d : 1.0;
+                        string? resetTime = qInfo.TryGetProperty("resetTime", out var rt) ? rt.GetString() : null;
+
+                        profile.QuotaWeeklyFraction = frac;
+                        profile.QuotaWeeklyResetTime = resetTime;
+                        foundAny = true;
+                        break;
+                    }
+                }
+
+                return foundAny;
+            }
+
+            // Pro 账号：同时刷新 Gemini 与 Claude/GPT 模型的 5H 与周配额
             foreach (var prop in modelsElem.EnumerateObject())
             {
                 var modelId = prop.Name;

@@ -1072,8 +1072,79 @@ public static class LocalProxyServer
         return $"{baseStr}/{endpoint}";
     }
 
+    private static string RewriteClaudeModel(string originalModel, ClaudeProvider provider)
+    {
+        if (provider.ModelMappings == null || provider.ModelMappings.Count == 0)
+            return ClaudeCli.Strip1m(originalModel);
+
+        var clean = ClaudeCli.Strip1m(originalModel).ToLowerInvariant();
+
+        ClaudeModelMapping? matched = null;
+        if (clean.Contains("sonnet") || clean == "claude-sonnet-5" || clean == "claude-sonnet-4-5")
+            matched = provider.ModelMappings.FirstOrDefault(m => string.Equals(m.Role, "Sonnet", StringComparison.OrdinalIgnoreCase));
+        else if (clean.Contains("opus") || clean == "claude-opus-5" || clean == "claude-opus-4-8")
+            matched = provider.ModelMappings.FirstOrDefault(m => string.Equals(m.Role, "Opus", StringComparison.OrdinalIgnoreCase));
+        else if (clean.Contains("fable") || clean == "claude-fable-5")
+            matched = provider.ModelMappings.FirstOrDefault(m => string.Equals(m.Role, "Fable", StringComparison.OrdinalIgnoreCase));
+        else if (clean.Contains("haiku") || clean == "claude-haiku-4-5" || clean == "claude-3-5-haiku")
+            matched = provider.ModelMappings.FirstOrDefault(m => string.Equals(m.Role, "Haiku", StringComparison.OrdinalIgnoreCase));
+        else
+            matched = provider.ModelMappings.FirstOrDefault(m => string.Equals(m.Role, clean, StringComparison.OrdinalIgnoreCase) ||
+                                                                string.Equals(ClaudeCli.Strip1m(m.Model), clean, StringComparison.OrdinalIgnoreCase) ||
+                                                                string.Equals(m.DisplayName, clean, StringComparison.OrdinalIgnoreCase));
+
+        if (matched != null && !string.IsNullOrWhiteSpace(matched.Model))
+            return ClaudeCli.Strip1m(matched.Model);
+
+        var fallback = provider.ModelMappings.FirstOrDefault(m => string.Equals(m.Role, "Sonnet", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(m.Model))
+                    ?? provider.ModelMappings.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.Model));
+
+        if (fallback != null && !string.IsNullOrWhiteSpace(fallback.Model))
+            return ClaudeCli.Strip1m(fallback.Model);
+
+        return ClaudeCli.Strip1m(originalModel);
+    }
+
     private static async Task HandleClaudeForwardAsync(HttpListenerContext ctx, ClaudeProvider provider, string subpath, string? reqBody)
     {
+        // 1. Rewrite model in JSON request body if mapping exists
+        if (!string.IsNullOrEmpty(reqBody))
+        {
+            try
+            {
+                var jsonNode = JsonNode.Parse(reqBody);
+                if (jsonNode is JsonObject reqObj && reqObj.ContainsKey("model"))
+                {
+                    var origModel = reqObj["model"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(origModel))
+                    {
+                        var rewritten = RewriteClaudeModel(origModel, provider);
+                        if (!string.IsNullOrEmpty(rewritten) && rewritten != origModel)
+                        {
+                            reqObj["model"] = rewritten;
+                            reqBody = reqObj.ToJsonString();
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // 2. If provider.WireApi == "chat" or "responses" and subpath indicates messages endpoint
+        if (string.Equals(provider.WireApi, "chat", StringComparison.OrdinalIgnoreCase) &&
+            (subpath.EndsWith("/messages", StringComparison.OrdinalIgnoreCase) || subpath.EndsWith("/messages/", StringComparison.OrdinalIgnoreCase)))
+        {
+            await HandleClaudeMessagesToChatAsync(ctx, provider, reqBody);
+            return;
+        }
+
+        if (string.Equals(provider.WireApi, "responses", StringComparison.OrdinalIgnoreCase) &&
+            (subpath.EndsWith("/messages", StringComparison.OrdinalIgnoreCase) || subpath.EndsWith("/messages/", StringComparison.OrdinalIgnoreCase)))
+        {
+            await HandleClaudeMessagesToResponsesAsync(ctx, provider, reqBody);
+            return;
+        }
+
         var query = ctx.Request.Url?.Query;
         var targetUrl = BuildUpstreamUrl(provider.BaseUrl, subpath, query);
 
@@ -1237,5 +1308,553 @@ public static class LocalProxyServer
             }
         };
         await WriteJsonAsync(ctx, statusCode, errObj);
+    }
+
+    private static async Task HandleClaudeMessagesToChatAsync(HttpListenerContext ctx, ClaudeProvider provider, string? reqBody)
+    {
+        if (string.IsNullOrEmpty(reqBody))
+        {
+            await WriteErrorAsync(ctx, 400, "Request body is empty");
+            return;
+        }
+
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(reqBody);
+        }
+        catch (Exception ex)
+        {
+            await WriteErrorAsync(ctx, 400, "Invalid JSON in request: " + ex.Message);
+            return;
+        }
+
+        if (root is not JsonObject reqObj)
+        {
+            await WriteErrorAsync(ctx, 400, "Request body must be a JSON object");
+            return;
+        }
+
+        var origModel = reqObj["model"]?.GetValue<string>() ?? provider.Model ?? "gpt-4o";
+        var model = RewriteClaudeModel(origModel, provider);
+
+        var messages = new JsonArray();
+
+        // Extract system prompt
+        if (reqObj.ContainsKey("system") && reqObj["system"] != null)
+        {
+            var sysNode = reqObj["system"];
+            string sysContent = "";
+            if (sysNode is JsonValue)
+            {
+                sysContent = sysNode.GetValue<string>() ?? "";
+            }
+            else if (sysNode is JsonArray sysArr)
+            {
+                var sb = new StringBuilder();
+                foreach (var part in sysArr)
+                {
+                    if (part is JsonObject partObj && partObj.ContainsKey("text"))
+                        sb.Append(partObj["text"]?.GetValue<string>());
+                    else if (part != null)
+                        sb.Append(part.ToString());
+                }
+                sysContent = sb.ToString();
+            }
+            if (!string.IsNullOrWhiteSpace(sysContent))
+            {
+                messages.Add(new JsonObject
+                {
+                    ["role"] = "system",
+                    ["content"] = sysContent
+                });
+            }
+        }
+
+        // Extract messages
+        if (reqObj["messages"] is JsonArray msgsArr)
+        {
+            foreach (var mNode in msgsArr)
+            {
+                if (mNode is not JsonObject mObj) continue;
+                var role = mObj["role"]?.GetValue<string>() ?? "user";
+                var contentNode = mObj["content"];
+                string contentText = "";
+
+                if (contentNode is JsonValue)
+                {
+                    contentText = contentNode.GetValue<string>() ?? "";
+                }
+                else if (contentNode is JsonArray cArr)
+                {
+                    var sb = new StringBuilder();
+                    foreach (var part in cArr)
+                    {
+                        if (part is JsonObject partObj && partObj.ContainsKey("text"))
+                            sb.Append(partObj["text"]?.GetValue<string>());
+                        else if (part != null)
+                            sb.Append(part.ToString());
+                    }
+                    contentText = sb.ToString();
+                }
+
+                messages.Add(new JsonObject
+                {
+                    ["role"] = role,
+                    ["content"] = contentText
+                });
+            }
+        }
+
+        bool stream = reqObj["stream"]?.GetValue<bool>() ?? false;
+
+        var chatPayload = new JsonObject
+        {
+            ["model"] = model,
+            ["messages"] = messages,
+            ["stream"] = stream
+        };
+
+        if (reqObj.ContainsKey("temperature") && reqObj["temperature"] != null)
+            chatPayload["temperature"] = reqObj["temperature"]!.DeepClone();
+        if (reqObj.ContainsKey("max_tokens") && reqObj["max_tokens"] != null)
+            chatPayload["max_tokens"] = reqObj["max_tokens"]!.DeepClone();
+
+        var upstreamUrl = GetUpstreamEndpoint(provider.BaseUrl, "chat/completions");
+        var reqMsg = new HttpRequestMessage(HttpMethod.Post, upstreamUrl)
+        {
+            Content = new ByteArrayContent(Encoding.UTF8.GetBytes(chatPayload.ToJsonString()))
+        };
+        reqMsg.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        var ua = ctx.Request.Headers["User-Agent"] ?? "curl/8.4.0";
+        reqMsg.Headers.TryAddWithoutValidation("User-Agent", ua);
+
+        var token = provider.AuthToken;
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            reqMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        if (provider.CustomHeaders != null)
+        {
+            foreach (var (k, v) in provider.CustomHeaders)
+                if (!string.IsNullOrWhiteSpace(k) && !string.Equals(k, "Authorization", StringComparison.OrdinalIgnoreCase))
+                    reqMsg.Headers.TryAddWithoutValidation(k, v);
+        }
+
+        HttpResponseMessage upstreamResp;
+        try
+        {
+            upstreamResp = await s_httpClient.SendAsync(reqMsg, HttpCompletionOption.ResponseHeadersRead);
+        }
+        catch (Exception ex)
+        {
+            await WriteErrorAsync(ctx, 502, $"无法连接上游中转站 {provider.Name} ({upstreamUrl}): {ex.Message}");
+            return;
+        }
+
+        if (!upstreamResp.IsSuccessStatusCode)
+        {
+            ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
+            var errBytes = await upstreamResp.Content.ReadAsByteArrayAsync();
+            await using var outS = ctx.Response.OutputStream;
+            await outS.WriteAsync(errBytes);
+            await outS.FlushAsync();
+            return;
+        }
+
+        if (stream)
+        {
+            ctx.Response.StatusCode = 200;
+            ctx.Response.ContentType = "text/event-stream; charset=utf-8";
+            ctx.Response.Headers["Cache-Control"] = "no-cache";
+            ctx.Response.Headers["Connection"] = "keep-alive";
+
+            await using var outStream = ctx.Response.OutputStream;
+            using var inStream = await upstreamResp.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(inStream, Encoding.UTF8);
+
+            var msgId = "msg_" + Guid.NewGuid().ToString("N");
+
+            // 1. message_start
+            var msgStartJson = new JsonObject
+            {
+                ["type"] = "message_start",
+                ["message"] = new JsonObject
+                {
+                    ["id"] = msgId,
+                    ["type"] = "message",
+                    ["role"] = "assistant",
+                    ["model"] = model,
+                    ["content"] = new JsonArray(),
+                    ["stop_reason"] = null,
+                    ["stop_sequence"] = null,
+                    ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+                }
+            }.ToJsonString();
+            await WriteRawSseAsync(outStream, "message_start", msgStartJson);
+
+            // 2. content_block_start
+            var blockStartJson = new JsonObject
+            {
+                ["type"] = "content_block_start",
+                ["index"] = 0,
+                ["content_block"] = new JsonObject { ["type"] = "text", ["text"] = "" }
+            }.ToJsonString();
+            await WriteRawSseAsync(outStream, "content_block_start", blockStartJson);
+
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (!line.StartsWith("data: ")) continue;
+
+                var dataStr = line.Substring(6).Trim();
+                if (dataStr == "[DONE]") break;
+
+                try
+                {
+                    var chunkNode = JsonNode.Parse(dataStr);
+                    var deltaNode = chunkNode?["choices"]?[0]?["delta"];
+                    var textChunk = deltaNode?["content"]?.GetValue<string>();
+                    if (string.IsNullOrEmpty(textChunk))
+                    {
+                        textChunk = deltaNode?["reasoning_content"]?.GetValue<string>();
+                    }
+
+                    if (!string.IsNullOrEmpty(textChunk))
+                    {
+                        var deltaJson = new JsonObject
+                        {
+                            ["type"] = "content_block_delta",
+                            ["index"] = 0,
+                            ["delta"] = new JsonObject
+                            {
+                                ["type"] = "text_delta",
+                                ["text"] = textChunk
+                            }
+                        }.ToJsonString();
+                        await WriteRawSseAsync(outStream, "content_block_delta", deltaJson);
+                    }
+                }
+                catch { }
+            }
+
+            // 3. content_block_stop
+            var blockStopJson = new JsonObject
+            {
+                ["type"] = "content_block_stop",
+                ["index"] = 0
+            }.ToJsonString();
+            await WriteRawSseAsync(outStream, "content_block_stop", blockStopJson);
+
+            // 4. message_delta
+            var msgDeltaJson = new JsonObject
+            {
+                ["type"] = "message_delta",
+                ["delta"] = new JsonObject { ["stop_reason"] = "end_turn", ["stop_sequence"] = null },
+                ["usage"] = new JsonObject { ["output_tokens"] = 10 }
+            }.ToJsonString();
+            await WriteRawSseAsync(outStream, "message_delta", msgDeltaJson);
+
+            // 5. message_stop
+            var msgStopJson = new JsonObject { ["type"] = "message_stop" }.ToJsonString();
+            await WriteRawSseAsync(outStream, "message_stop", msgStopJson);
+            await outStream.FlushAsync();
+        }
+        else
+        {
+            var respStr = await upstreamResp.Content.ReadAsStringAsync();
+            var respNode = JsonNode.Parse(respStr);
+            var content = respNode?["choices"]?[0]?["message"]?["content"]?.GetValue<string>() ?? "";
+
+            var anthropicResp = new JsonObject
+            {
+                ["id"] = "msg_" + Guid.NewGuid().ToString("N"),
+                ["type"] = "message",
+                ["role"] = "assistant",
+                ["model"] = model,
+                ["content"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["type"] = "text",
+                        ["text"] = content
+                    }
+                },
+                ["stop_reason"] = "end_turn",
+                ["stop_sequence"] = null,
+                ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+            };
+            await WriteJsonAsync(ctx, 200, anthropicResp);
+        }
+    }
+
+    private static async Task HandleClaudeMessagesToResponsesAsync(HttpListenerContext ctx, ClaudeProvider provider, string? reqBody)
+    {
+        if (string.IsNullOrEmpty(reqBody))
+        {
+            await WriteErrorAsync(ctx, 400, "Request body is empty");
+            return;
+        }
+
+        JsonNode? root;
+        try { root = JsonNode.Parse(reqBody); }
+        catch (Exception ex)
+        {
+            await WriteErrorAsync(ctx, 400, "Invalid JSON in request: " + ex.Message);
+            return;
+        }
+
+        if (root is not JsonObject reqObj)
+        {
+            await WriteErrorAsync(ctx, 400, "Request body must be a JSON object");
+            return;
+        }
+
+        var origModel = reqObj["model"]?.GetValue<string>() ?? provider.Model ?? "gpt-4o";
+        var model = RewriteClaudeModel(origModel, provider);
+
+        var inputArr = new JsonArray();
+
+        // Extract system prompt
+        if (reqObj.ContainsKey("system") && reqObj["system"] != null)
+        {
+            var sysNode = reqObj["system"];
+            string sysContent = "";
+            if (sysNode is JsonValue)
+                sysContent = sysNode.GetValue<string>() ?? "";
+            else if (sysNode is JsonArray sysArr)
+            {
+                var sb = new StringBuilder();
+                foreach (var part in sysArr)
+                {
+                    if (part is JsonObject partObj && partObj.ContainsKey("text"))
+                        sb.Append(partObj["text"]?.GetValue<string>());
+                    else if (part != null)
+                        sb.Append(part.ToString());
+                }
+                sysContent = sb.ToString();
+            }
+            if (!string.IsNullOrWhiteSpace(sysContent))
+            {
+                inputArr.Add(new JsonObject
+                {
+                    ["role"] = "system",
+                    ["content"] = sysContent
+                });
+            }
+        }
+
+        // Extract messages
+        if (reqObj["messages"] is JsonArray msgsArr)
+        {
+            foreach (var mNode in msgsArr)
+            {
+                if (mNode is not JsonObject mObj) continue;
+                var role = mObj["role"]?.GetValue<string>() ?? "user";
+                var contentNode = mObj["content"];
+                string contentText = "";
+
+                if (contentNode is JsonValue)
+                    contentText = contentNode.GetValue<string>() ?? "";
+                else if (contentNode is JsonArray cArr)
+                {
+                    var sb = new StringBuilder();
+                    foreach (var part in cArr)
+                    {
+                        if (part is JsonObject partObj && partObj.ContainsKey("text"))
+                            sb.Append(partObj["text"]?.GetValue<string>());
+                        else if (part != null)
+                            sb.Append(part.ToString());
+                    }
+                    contentText = sb.ToString();
+                }
+
+                inputArr.Add(new JsonObject
+                {
+                    ["role"] = role,
+                    ["content"] = contentText
+                });
+            }
+        }
+
+        bool stream = reqObj["stream"]?.GetValue<bool>() ?? false;
+
+        var responsesPayload = new JsonObject
+        {
+            ["model"] = model,
+            ["input"] = inputArr,
+            ["stream"] = stream
+        };
+
+        var upstreamUrl = GetUpstreamEndpoint(provider.BaseUrl, "responses");
+        var reqMsg = new HttpRequestMessage(HttpMethod.Post, upstreamUrl)
+        {
+            Content = new ByteArrayContent(Encoding.UTF8.GetBytes(responsesPayload.ToJsonString()))
+        };
+        reqMsg.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        var ua = ctx.Request.Headers["User-Agent"] ?? "curl/8.4.0";
+        reqMsg.Headers.TryAddWithoutValidation("User-Agent", ua);
+
+        var token = provider.AuthToken;
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            reqMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        if (provider.CustomHeaders != null)
+        {
+            foreach (var (k, v) in provider.CustomHeaders)
+                if (!string.IsNullOrWhiteSpace(k) && !string.Equals(k, "Authorization", StringComparison.OrdinalIgnoreCase))
+                    reqMsg.Headers.TryAddWithoutValidation(k, v);
+        }
+
+        HttpResponseMessage upstreamResp;
+        try
+        {
+            upstreamResp = await s_httpClient.SendAsync(reqMsg, HttpCompletionOption.ResponseHeadersRead);
+        }
+        catch (Exception ex)
+        {
+            await WriteErrorAsync(ctx, 502, $"无法连接上游 Responses 端点 {provider.Name} ({upstreamUrl}): {ex.Message}");
+            return;
+        }
+
+        if (!upstreamResp.IsSuccessStatusCode)
+        {
+            ctx.Response.StatusCode = (int)upstreamResp.StatusCode;
+            var errBytes = await upstreamResp.Content.ReadAsByteArrayAsync();
+            await using var outS = ctx.Response.OutputStream;
+            await outS.WriteAsync(errBytes);
+            await outS.FlushAsync();
+            return;
+        }
+
+        if (stream)
+        {
+            ctx.Response.StatusCode = 200;
+            ctx.Response.ContentType = "text/event-stream; charset=utf-8";
+            ctx.Response.Headers["Cache-Control"] = "no-cache";
+            ctx.Response.Headers["Connection"] = "keep-alive";
+
+            await using var outStream = ctx.Response.OutputStream;
+            using var inStream = await upstreamResp.Content.ReadAsStreamAsync();
+            using var reader = new StreamReader(inStream, Encoding.UTF8);
+
+            var msgId = "msg_" + Guid.NewGuid().ToString("N");
+
+            // message_start
+            var msgStartJson = new JsonObject
+            {
+                ["type"] = "message_start",
+                ["message"] = new JsonObject
+                {
+                    ["id"] = msgId,
+                    ["type"] = "message",
+                    ["role"] = "assistant",
+                    ["model"] = model,
+                    ["content"] = new JsonArray(),
+                    ["stop_reason"] = null,
+                    ["stop_sequence"] = null,
+                    ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+                }
+            }.ToJsonString();
+            await WriteRawSseAsync(outStream, "message_start", msgStartJson);
+
+            // content_block_start
+            var blockStartJson = new JsonObject
+            {
+                ["type"] = "content_block_start",
+                ["index"] = 0,
+                ["content_block"] = new JsonObject { ["type"] = "text", ["text"] = "" }
+            }.ToJsonString();
+            await WriteRawSseAsync(outStream, "content_block_start", blockStartJson);
+
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (!line.StartsWith("data: ")) continue;
+
+                var dataStr = line.Substring(6).Trim();
+                if (dataStr == "[DONE]") break;
+
+                try
+                {
+                    var chunkNode = JsonNode.Parse(dataStr);
+                    string? textChunk = chunkNode?["delta"]?.GetValue<string>()
+                        ?? chunkNode?["text"]?.GetValue<string>()
+                        ?? chunkNode?["output_text"]?.GetValue<string>();
+
+                    if (!string.IsNullOrEmpty(textChunk))
+                    {
+                        var deltaJson = new JsonObject
+                        {
+                            ["type"] = "content_block_delta",
+                            ["index"] = 0,
+                            ["delta"] = new JsonObject
+                            {
+                                ["type"] = "text",
+                                ["text"] = textChunk
+                            }
+                        }.ToJsonString();
+                        await WriteRawSseAsync(outStream, "content_block_delta", deltaJson);
+                    }
+                }
+                catch { }
+            }
+
+            // content_block_stop
+            var blockStopJson = new JsonObject { ["type"] = "content_block_stop", ["index"] = 0 }.ToJsonString();
+            await WriteRawSseAsync(outStream, "content_block_stop", blockStopJson);
+
+            // message_delta
+            var msgDeltaJson = new JsonObject
+            {
+                ["type"] = "message_delta",
+                ["delta"] = new JsonObject { ["stop_reason"] = "end_turn", ["stop_sequence"] = null },
+                ["usage"] = new JsonObject { ["output_tokens"] = 10 }
+            }.ToJsonString();
+            await WriteRawSseAsync(outStream, "message_delta", msgDeltaJson);
+
+            // message_stop
+            var msgStopJson = new JsonObject { ["type"] = "message_stop" }.ToJsonString();
+            await WriteRawSseAsync(outStream, "message_stop", msgStopJson);
+            await outStream.FlushAsync();
+        }
+        else
+        {
+            var respStr = await upstreamResp.Content.ReadAsStringAsync();
+            var respNode = JsonNode.Parse(respStr);
+            var content = respNode?["output_text"]?.GetValue<string>()
+                ?? respNode?["output"]?[0]?["content"]?[0]?["text"]?.GetValue<string>()
+                ?? "";
+
+            var anthropicResp = new JsonObject
+            {
+                ["id"] = "msg_" + Guid.NewGuid().ToString("N"),
+                ["type"] = "message",
+                ["role"] = "assistant",
+                ["model"] = model,
+                ["content"] = new JsonArray
+                {
+                    new JsonObject { ["type"] = "text", ["text"] = content }
+                },
+                ["stop_reason"] = "end_turn",
+                ["stop_sequence"] = null,
+                ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+            };
+            await WriteJsonAsync(ctx, 200, anthropicResp);
+        }
+    }
+
+    private static async Task WriteRawSseAsync(Stream stream, string eventName, string data)
+    {
+        var bytes = Encoding.UTF8.GetBytes($"event: {eventName}\ndata: {data}\n\n");
+        await stream.WriteAsync(bytes);
+        await stream.FlushAsync();
     }
 }

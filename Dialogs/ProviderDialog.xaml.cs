@@ -29,6 +29,7 @@ public partial class ProviderDialog : Window
     public ObservableCollection<KeyValueItem> HeadersList { get; } = new();
     public ObservableCollection<KeyValueItem> OptionsList { get; } = new();
     public ObservableCollection<ProviderModelEntry> ModelsList { get; } = new();
+    public ObservableCollection<ClaudeModelMapping> ClaudeMappings { get; } = new();
     public ObservableCollection<string> FetchedModels { get; } = new();
 
     public Task<bool> WaitForResultAsync() => _tcs.Task;
@@ -42,16 +43,72 @@ public partial class ProviderDialog : Window
         HeadersItemsControl.ItemsSource = HeadersList;
         OptionsItemsControl.ItemsSource = OptionsList;
         ModelsItemsControl.ItemsSource = ModelsList;
+        ClaudeMappingItemsControl.ItemsSource = ClaudeMappings;
 
         HeadersList.CollectionChanged += OnListChanged;
         OptionsList.CollectionChanged += OnListChanged;
         ModelsList.CollectionChanged += OnListChanged;
+        ClaudeMappings.CollectionChanged += OnListChanged;
 
+        InitDefaultClaudeMappings();
         ConfigureMode(mode, existing);
         LoadExisting(existing);
 
         _isLoaded = true;
         UpdateEmptyStates();
+        UpdatePreview();
+    }
+
+    private void InitDefaultClaudeMappings()
+    {
+        ClaudeMappings.Clear();
+        var roles = new[] { "Sonnet", "Opus", "Fable", "Haiku" };
+        foreach (var r in roles)
+        {
+            var item = new ClaudeModelMapping { Role = r, DisplayName = "", Model = "", Supports1m = true };
+            item.PropertyChanged += (s, e) =>
+            {
+                UpdatePreview();
+            };
+            ClaudeMappings.Add(item);
+        }
+    }
+
+    private void ClaudeModelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isLoaded) return;
+        if (sender is System.Windows.Controls.ComboBox cb && cb.DataContext is ClaudeModelMapping mapping)
+        {
+            if (cb.SelectedItem is string selectedModel && !string.IsNullOrWhiteSpace(selectedModel))
+            {
+                mapping.Model = selectedModel;
+                mapping.DisplayName = selectedModel;
+            }
+        }
+    }
+
+    private void ClaudeAccessMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isLoaded || ClaudeAccessModeCombo == null) return;
+        var mode = (ClaudeAccessModeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        if (mode == "direct")
+        {
+            DirectModelPanel.Visibility = Visibility.Visible;
+            ClaudeModelMappingSection.Visibility = Visibility.Collapsed;
+            CodexModelsSection.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            DirectModelPanel.Visibility = Visibility.Collapsed;
+            ClaudeModelMappingSection.Visibility = Visibility.Visible;
+            CodexModelsSection.Visibility = Visibility.Collapsed;
+        }
+        UpdatePreview();
+    }
+
+    private void ClaudeWireCombo_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isLoaded) return;
         UpdatePreview();
     }
 
@@ -75,7 +132,14 @@ public partial class ProviderDialog : Window
                 CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
                 KeyLabel.Text = "Auth Token (写入 ANTHROPIC_AUTH_TOKEN) *";
                 KeyHintText.Text = "系统将写入 ~/.claude/settings.json 中的 env 配置";
-                FormatPanel.Visibility = Visibility.Collapsed;
+                FormatPanel.Visibility = Visibility.Visible;
+                ClaudeConfigPanel.Visibility = Visibility.Visible;
+                ClaudeConfigDescText.Text = "为 Claude Code CLI 配置模型映射与上游格式。留空的档会自动沿用 Sonnet 模型，确保子 agent 调用的 Haiku 始终可用。";
+                CodexWirePanel.Visibility = Visibility.Collapsed;
+                OpenCodeFormatPanel.Visibility = Visibility.Collapsed;
+                DirectModelPanel.Visibility = Visibility.Collapsed;
+                ClaudeModelMappingSection.Visibility = Visibility.Visible;
+                CodexModelsSection.Visibility = Visibility.Collapsed;
                 SmallFastPanel.Visibility = Visibility.Visible;
                 SmallFastCol.Width = new GridLength(1, GridUnitType.Star);
                 SmallFastColSpace.Width = new GridLength(16);
@@ -88,7 +152,14 @@ public partial class ProviderDialog : Window
                 CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
                 KeyLabel.Text = "Auth Token (写入 inferenceGatewayApiKey) *";
                 KeyHintText.Text = "系统将写入 Claude Desktop 网关凭据与模型列表";
-                FormatPanel.Visibility = Visibility.Collapsed;
+                FormatPanel.Visibility = Visibility.Visible;
+                ClaudeConfigPanel.Visibility = Visibility.Visible;
+                ClaudeConfigDescText.Text = "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 三档角色 ID。选择模型映射后，CC Switch 会把这三档映射到供应商的实际模型，并在使用期间保持本地路由开启。";
+                CodexWirePanel.Visibility = Visibility.Collapsed;
+                OpenCodeFormatPanel.Visibility = Visibility.Collapsed;
+                DirectModelPanel.Visibility = Visibility.Collapsed;
+                ClaudeModelMappingSection.Visibility = Visibility.Visible;
+                CodexModelsSection.Visibility = Visibility.Collapsed;
                 SmallFastPanel.Visibility = Visibility.Visible;
                 SmallFastCol.Width = new GridLength(1, GridUnitType.Star);
                 SmallFastColSpace.Width = new GridLength(16);
@@ -102,8 +173,12 @@ public partial class ProviderDialog : Window
                 KeyLabel.Text = "API Key / 访问令牌 (Token) *";
                 KeyHintText.Text = "系统将自动写入 auth.json 与 config.toml（双轨鉴权），并配置 disable_response_storage";
                 FormatPanel.Visibility = Visibility.Visible;
+                ClaudeConfigPanel.Visibility = Visibility.Collapsed;
                 CodexWirePanel.Visibility = Visibility.Visible;
                 OpenCodeFormatPanel.Visibility = Visibility.Collapsed;
+                DirectModelPanel.Visibility = Visibility.Visible;
+                ClaudeModelMappingSection.Visibility = Visibility.Collapsed;
+                CodexModelsSection.Visibility = Visibility.Visible;
                 SmallFastPanel.Visibility = Visibility.Collapsed;
                 SmallFastCol.Width = new GridLength(0);
                 SmallFastColSpace.Width = new GridLength(0);
@@ -118,8 +193,12 @@ public partial class ProviderDialog : Window
                 KeyLabel.Text = "apiKey *";
                 KeyHintText.Text = "系统将写入 ~/.config/opencode/opencode.json 的 options 配置";
                 FormatPanel.Visibility = Visibility.Visible;
+                ClaudeConfigPanel.Visibility = Visibility.Collapsed;
                 CodexWirePanel.Visibility = Visibility.Collapsed;
                 OpenCodeFormatPanel.Visibility = Visibility.Visible;
+                DirectModelPanel.Visibility = Visibility.Visible;
+                ClaudeModelMappingSection.Visibility = Visibility.Collapsed;
+                CodexModelsSection.Visibility = Visibility.Visible;
                 SmallFastPanel.Visibility = Visibility.Collapsed;
                 SmallFastCol.Width = new GridLength(0);
                 SmallFastColSpace.Width = new GridLength(0);
@@ -147,6 +226,27 @@ public partial class ProviderDialog : Window
             ModelCombo.Text = c.Model ?? "";
             SmallFastCombo.Text = c.SmallFastModel ?? "";
 
+            SetClaudeAccessMode(c.AccessMode);
+            SetClaudeWireApi(c.WireApi);
+
+            if (c.ModelMappings != null && c.ModelMappings.Count > 0)
+            {
+                foreach (var mapping in ClaudeMappings)
+                {
+                    var found = c.ModelMappings.FirstOrDefault(m => string.Equals(m.Role, mapping.Role, StringComparison.OrdinalIgnoreCase));
+                    if (found != null)
+                    {
+                        mapping.Model = found.Model ?? "";
+                        mapping.DisplayName = string.IsNullOrWhiteSpace(found.DisplayName) ? mapping.Model : found.DisplayName;
+                        mapping.Supports1m = found.Supports1m;
+                    }
+                }
+            }
+            else
+            {
+                PopulateMappingsFromLegacy(c);
+            }
+
             if (c.CustomHeaders != null)
                 foreach (var kv in c.CustomHeaders)
                     HeadersList.Add(new KeyValueItem { Key = kv.Key, Value = kv.Value });
@@ -157,7 +257,7 @@ public partial class ProviderDialog : Window
 
             if (c.ExtraEnv != null)
                 foreach (var kv in c.ExtraEnv)
-                    if (!OptionsList.Any(o => o.Key == kv.Key))
+                    if (!OptionsList.Any(o => o.Key == kv.Key) && !kv.Key.StartsWith("ANTHROPIC_DEFAULT_") && kv.Key != "ANTHROPIC_MODEL" && kv.Key != "ANTHROPIC_SMALL_FAST_MODEL")
                         OptionsList.Add(new KeyValueItem { Key = kv.Key, Value = kv.Value });
 
             if (c.CustomModels != null)
@@ -301,6 +401,59 @@ public partial class ProviderDialog : Window
         return (CodexWireCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "responses";
     }
 
+    private void SetClaudeAccessMode(string? mode)
+    {
+        if (ClaudeAccessModeCombo == null) return;
+        ClaudeAccessModeCombo.SelectedIndex = string.Equals(mode, "direct", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+    }
+
+    private void SetClaudeWireApi(string? wireApi)
+    {
+        if (ClaudeWireCombo == null) return;
+        var target = (wireApi ?? "").Trim().ToLowerInvariant();
+        int idx = target switch
+        {
+            "chat" => 1,
+            "responses" => 2,
+            _ => 0
+        };
+        ClaudeWireCombo.SelectedIndex = idx;
+    }
+
+    private void PopulateMappingsFromLegacy(ClaudeProvider c)
+    {
+        var sonnet = ClaudeMappings.FirstOrDefault(m => m.Role == "Sonnet");
+        var opus = ClaudeMappings.FirstOrDefault(m => m.Role == "Opus");
+        var fable = ClaudeMappings.FirstOrDefault(m => m.Role == "Fable");
+        var haiku = ClaudeMappings.FirstOrDefault(m => m.Role == "Haiku");
+
+        void SetRole(ClaudeModelMapping? target, string? modelVal, string? nameVal, string? fallback)
+        {
+            if (target == null) return;
+            var raw = !string.IsNullOrWhiteSpace(modelVal) ? modelVal : fallback;
+            if (string.IsNullOrWhiteSpace(raw)) return;
+            raw = raw.Trim();
+            if (raw.EndsWith("[1M]", StringComparison.OrdinalIgnoreCase))
+            {
+                target.Model = raw.Substring(0, raw.Length - 4).Trim();
+                target.Supports1m = true;
+            }
+            else
+            {
+                target.Model = raw;
+                target.Supports1m = true;
+            }
+            target.DisplayName = !string.IsNullOrWhiteSpace(nameVal) ? nameVal.Trim() : target.Model;
+        }
+
+        string? GetEnv(string key) => c.ExtraEnv != null && c.ExtraEnv.TryGetValue(key, out var v) ? v : null;
+
+        SetRole(sonnet, GetEnv("ANTHROPIC_DEFAULT_SONNET_MODEL"), GetEnv("ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"), c.Model);
+        SetRole(opus, GetEnv("ANTHROPIC_DEFAULT_OPUS_MODEL"), GetEnv("ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"), c.Model);
+        SetRole(fable, GetEnv("ANTHROPIC_DEFAULT_FABLE_MODEL"), GetEnv("ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"), c.Model);
+        SetRole(haiku, GetEnv("ANTHROPIC_DEFAULT_HAIKU_MODEL"), GetEnv("ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"), c.SmallFastModel ?? c.Model);
+    }
+
     private void ToggleKeyVisibility_Click(object sender, RoutedEventArgs e)
     {
         _isKeyVisible = !_isKeyVisible;
@@ -395,6 +548,7 @@ public partial class ProviderDialog : Window
         var apiKey = GetKey().Trim();
         FetchModelsBtn.IsEnabled = false;
         FetchModelsBtnText.Text = "获取中...";
+        if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = "获取中...";
         SetStatus("正在从服务器获取可用模型列表...");
 
         try
@@ -413,7 +567,10 @@ public partial class ProviderDialog : Window
 
             if (models.Count > 0)
             {
-                FetchedModelsBar.Visibility = Visibility.Visible;
+                bool isClaudeMapping = _mode is ProviderDialogMode.Claude or ProviderDialogMode.ClaudeDesktop &&
+                                       (ClaudeAccessModeCombo?.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "direct";
+
+                FetchedModelsBar.Visibility = isClaudeMapping ? Visibility.Collapsed : Visibility.Visible;
                 FetchedModelsTitleText.Text = $"已从端点暂存 {models.Count} 个可用模型";
                 AddAllFetchedBtn.Content = $"一键全部添加 ({models.Count})";
 
@@ -427,7 +584,17 @@ public partial class ProviderDialog : Window
                     ModelCombo.Text = models[0];
                 }
 
-                SetStatus($"成功获取 {models.Count} 个模型（已暂存），可下拉选为默认模型或添加到列表", isError: false);
+                if (isClaudeMapping)
+                {
+                    var sonnet = ClaudeMappings.FirstOrDefault(m => m.Role == "Sonnet");
+                    if (sonnet != null && string.IsNullOrWhiteSpace(sonnet.Model))
+                    {
+                        sonnet.Model = models[0];
+                        if (string.IsNullOrWhiteSpace(sonnet.DisplayName)) sonnet.DisplayName = models[0];
+                    }
+                }
+
+                SetStatus($"成功获取 {models.Count} 个模型，可直接在各档模型下拉选择", isError: false);
             }
             else
             {
@@ -445,6 +612,7 @@ public partial class ProviderDialog : Window
         {
             FetchModelsBtn.IsEnabled = true;
             FetchModelsBtnText.Text = "获取模型列表";
+            if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = "获取模型列表";
         }
     }
 
@@ -597,16 +765,53 @@ public partial class ProviderDialog : Window
             }
             else
             {
+                var wireApi = (ClaudeWireCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "anthropic";
+                var accessMode = (ClaudeAccessModeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "mapping";
+
                 var root = new JsonObject
                 {
                     ["id"] = id,
                     ["name"] = name,
+                    ["wire_api"] = wireApi,
+                    ["access_mode"] = accessMode,
                 };
 
                 if (!string.IsNullOrWhiteSpace(baseUrl)) root["base_url"] = baseUrl;
                 if (!string.IsNullOrWhiteSpace(key)) root["auth_token"] = key;
-                if (!string.IsNullOrWhiteSpace(ModelCombo.Text)) root["model"] = ModelCombo.Text.Trim();
-                if (!string.IsNullOrWhiteSpace(SmallFastCombo.Text)) root["small_fast_model"] = SmallFastCombo.Text.Trim();
+
+                if (accessMode == "mapping")
+                {
+                    var mappingsObj = new JsonObject();
+                    foreach (var m in ClaudeMappings)
+                    {
+                        var rKey = m.Role.ToLowerInvariant();
+                        mappingsObj[rKey] = new JsonObject
+                        {
+                            ["model"] = m.Model ?? "",
+                            ["display_name"] = string.IsNullOrWhiteSpace(m.DisplayName) ? (m.Model ?? "") : m.DisplayName,
+                            ["supports_1m"] = m.Supports1m
+                        };
+                    }
+                    root["model_mappings"] = mappingsObj;
+                }
+                else
+                {
+                    if (!string.IsNullOrWhiteSpace(ModelCombo.Text)) root["model"] = ModelCombo.Text.Trim();
+                    if (!string.IsNullOrWhiteSpace(SmallFastCombo.Text)) root["small_fast_model"] = SmallFastCombo.Text.Trim();
+
+                    if (ModelsList.Any(m => !string.IsNullOrWhiteSpace(m.Id)))
+                    {
+                        var mArr = new JsonArray();
+                        foreach (var m in ModelsList.Where(m => !string.IsNullOrWhiteSpace(m.Id)))
+                            mArr.Add(new JsonObject
+                            {
+                                ["id"] = m.Id.Trim(),
+                                ["name"] = m.Name ?? "",
+                                ["context_window"] = string.IsNullOrWhiteSpace(m.ContextWindow) ? "1m" : m.ContextWindow.Trim()
+                            });
+                        root["models"] = mArr;
+                    }
+                }
 
                 if (HeadersList.Any(h => !string.IsNullOrWhiteSpace(h.Key)))
                 {
@@ -622,18 +827,6 @@ public partial class ProviderDialog : Window
                     foreach (var o in OptionsList.Where(o => !string.IsNullOrWhiteSpace(o.Key)))
                         oObj[o.Key.Trim()] = o.Value ?? "";
                     root["extra_env"] = oObj;
-                }
-
-                if (ModelsList.Any(m => !string.IsNullOrWhiteSpace(m.Id)))
-                {
-                    var mArr = new JsonArray();
-                    foreach (var m in ModelsList.Where(m => !string.IsNullOrWhiteSpace(m.Id)))
-                        mArr.Add(new JsonObject { 
-                            ["id"] = m.Id.Trim(), 
-                            ["name"] = m.Name ?? "",
-                            ["context_window"] = string.IsNullOrWhiteSpace(m.ContextWindow) ? "1m" : m.ContextWindow.Trim()
-                        });
-                    root["models"] = mArr;
                 }
 
                 JsonPreviewBox.Text = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
@@ -690,8 +883,9 @@ public partial class ProviderDialog : Window
 
         var modelsList = ModelsList
             .Where(m => !string.IsNullOrWhiteSpace(m.Id))
-            .Select(m => new ProviderModelEntry { 
-                Id = m.Id.Trim(), 
+            .Select(m => new ProviderModelEntry
+            {
+                Id = m.Id.Trim(),
                 Name = m.Name?.Trim() ?? "",
                 ContextWindow = string.IsNullOrWhiteSpace(m.ContextWindow) ? "1m" : m.ContextWindow.Trim()
             })
@@ -699,6 +893,28 @@ public partial class ProviderDialog : Window
 
         if (_mode is ProviderDialogMode.Claude or ProviderDialogMode.ClaudeDesktop)
         {
+            var wireApi = (ClaudeWireCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "anthropic";
+            var accessMode = (ClaudeAccessModeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "mapping";
+
+            var claudeMappings = ClaudeMappings.Select(m => new ClaudeModelMapping
+            {
+                Role = m.Role,
+                DisplayName = string.IsNullOrWhiteSpace(m.DisplayName) ? (m.Model ?? "") : m.DisplayName.Trim(),
+                Model = m.Model?.Trim() ?? "",
+                Supports1m = m.Supports1m
+            }).ToList();
+
+            var sonnetModel = claudeMappings.FirstOrDefault(m => m.Role == "Sonnet")?.Model;
+            var haikuModel = claudeMappings.FirstOrDefault(m => m.Role == "Haiku")?.Model;
+
+            var effectiveModel = accessMode == "mapping"
+                ? (TrimOrNull(sonnetModel) ?? model)
+                : model;
+
+            var effectiveSmallFast = accessMode == "mapping"
+                ? (TrimOrNull(haikuModel) ?? smallFast)
+                : smallFast;
+
             ResultClaude = new ClaudeProvider
             {
                 Id = id,
@@ -708,13 +924,28 @@ public partial class ProviderDialog : Window
                 IsOfficial = isOfficial,
                 BaseUrl = baseUrl,
                 AuthToken = key,
-                Model = model,
-                SmallFastModel = smallFast,
+                WireApi = wireApi,
+                AccessMode = accessMode,
+                ModelMappings = claudeMappings,
+                Model = effectiveModel,
+                SmallFastModel = effectiveSmallFast,
                 CustomHeaders = headersDict,
                 ExtraOptions = optionsDict,
                 CustomModels = modelsList,
                 ExtraEnv = optionsDict,
             };
+
+            if (wireApi == "chat")
+            {
+                if (_mode == ProviderDialogMode.ClaudeDesktop && !LocalProxyServer.IsClaudeDesktopEnabled)
+                    LocalProxyServer.SetClaudeDesktopEnabled(true);
+                else if (_mode == ProviderDialogMode.Claude && !LocalProxyServer.IsClaudeCliEnabled)
+                    LocalProxyServer.SetClaudeCliEnabled(true);
+            }
+            else if (_mode == ProviderDialogMode.ClaudeDesktop && accessMode == "mapping" && !LocalProxyServer.IsClaudeDesktopEnabled)
+            {
+                LocalProxyServer.SetClaudeDesktopEnabled(true);
+            }
         }
         else if (_mode == ProviderDialogMode.Codex)
         {

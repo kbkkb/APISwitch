@@ -7,12 +7,76 @@ namespace APISwitch.Services;
 
 public static class ClaudeDesktopCli
 {
-    public static string ConfigPath => Path.Combine(AgPaths.AppData, "Claude", "claude_desktop_config.json");
+    /// <summary>
+    /// 获取当前系统上 Claude 客户端所有可能读写的配置文件路径
+    /// 包含：3P 专用路径 (%LOCALAPPDATA%\Claude-3p)、标准 Roaming 路径、MSIX 虚拟化路径等
+    /// </summary>
+    public static List<string> GetAllCandidateConfigPaths()
+    {
+        var list = new List<string>();
+
+        // 1. Windows 下 Claude 3P 模式的最核心主路径
+        var local3p = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Claude-3p", "claude_desktop_config.json");
+        list.Add(local3p);
+
+        // 2. 标准 Roaming 路径 (普通 EXE 安装版)
+        var roamingStandard = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Claude", "claude_desktop_config.json");
+        list.Add(roamingStandard);
+
+        // 3. Roaming\Claude-3p 路径
+        var roaming3p = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Claude-3p", "claude_desktop_config.json");
+        list.Add(roaming3p);
+
+        // 4. MSIX / Windows 商店包专用虚拟化路径
+        var msixLocalCache = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Packages", "Claude_pzs8sxrjxfjjc", "LocalCache", "Roaming", "Claude", "claude_desktop_config.json");
+        if (File.Exists(msixLocalCache) || Directory.Exists(Path.GetDirectoryName(msixLocalCache)!))
+        {
+            list.Add(msixLocalCache);
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// 当前首选的主配置文件路径（优先返回已存在的 3P 路径或标准路径）
+    /// </summary>
+    public static string ConfigPath
+    {
+        get
+        {
+            foreach (var p in GetAllCandidateConfigPaths())
+            {
+                if (File.Exists(p)) return p;
+            }
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Claude-3p", "claude_desktop_config.json");
+        }
+    }
+
+    public const string ApiSwitchConfigId = "00000000-0000-4000-8000-000000157250";
+    public const string CcSwitchLegacyId = "00000000-0000-4000-8000-000000157210";
+
+    public static string ConfigLibraryDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Claude-3p", "configLibrary");
+
+    public static string MetaPath => Path.Combine(ConfigLibraryDir, "_meta.json");
+
+    public static string ApiSwitchConfigFile => Path.Combine(ConfigLibraryDir, $"{ApiSwitchConfigId}.json");
 
     static readonly string[] GatewayKeys =
     {
         "inferenceProvider", "inferenceGatewayBaseUrl", "inferenceGatewayApiKey",
-        "inferenceGatewayAuthScheme", "inferenceModels", "coworkEgressAllowedHosts",
+        "inferenceGatewayAuthScheme", "modelDiscoveryEnabled", "inferenceModels", "coworkEgressAllowedHosts",
     };
 
     static readonly JsonDocumentOptions DocOpts = new()
@@ -25,22 +89,61 @@ public static class ClaudeDesktopCli
 
     public static JsonObject LoadConfig()
     {
-        var text = FileUtil.ReadTextIfExists(ConfigPath);
-        if (string.IsNullOrWhiteSpace(text)) return new JsonObject();
-        try
+        // 优先读取已存在且包含配置的文件（优先 Local\Claude-3p，其次其它存在路径）
+        foreach (var path in GetAllCandidateConfigPaths())
         {
-            return JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject() ?? new JsonObject();
+            if (File.Exists(path))
+            {
+                try
+                {
+                    var text = FileUtil.ReadTextIfExists(path);
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        var node = JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject();
+                        if (node != null) return node;
+                    }
+                }
+                catch { }
+            }
         }
-        catch
-        {
-            return new JsonObject();
-        }
+        return new JsonObject();
     }
 
     public static string? CurrentGatewayUrl()
     {
         try
         {
+            // 1. 优先读取 Claude 3P managed configLibrary 激活配置
+            if (File.Exists(MetaPath))
+            {
+                var metaText = FileUtil.ReadTextIfExists(MetaPath);
+                if (!string.IsNullOrWhiteSpace(metaText))
+                {
+                    var metaNode = JsonNode.Parse(metaText, nodeOptions: null, DocOpts)?.AsObject();
+                    var appliedId = metaNode?["appliedId"]?.GetValue<string>()?.Trim();
+                    if (!string.IsNullOrEmpty(appliedId))
+                    {
+                        var cfgFile = Path.Combine(ConfigLibraryDir, $"{appliedId}.json");
+                        if (File.Exists(cfgFile))
+                        {
+                            var cfgText = FileUtil.ReadTextIfExists(cfgFile);
+                            if (!string.IsNullOrWhiteSpace(cfgText))
+                            {
+                                var cfgNode = JsonNode.Parse(cfgText, nodeOptions: null, DocOpts)?.AsObject();
+                                var gwUrl = cfgNode?["inferenceGatewayBaseUrl"]?.GetValue<string>()?.Trim();
+                                if (!string.IsNullOrEmpty(gwUrl)) return gwUrl;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // appliedId 为空字符串代表官方模式
+                        return null;
+                    }
+                }
+            }
+
+            // 2. 回退读取标准 claude_desktop_config.json
             return LoadConfig()["inferenceGatewayBaseUrl"]?.GetValue<string>();
         }
         catch
@@ -53,6 +156,69 @@ public static class ClaudeDesktopCli
     {
         try
         {
+            if (LocalProxyServer.ActiveClaudeDesktopProvider != null)
+            {
+                return LocalProxyServer.ActiveClaudeDesktopProvider.Name;
+            }
+
+            // 1. 优先检查 Claude-3p managed configLibrary
+            if (File.Exists(MetaPath))
+            {
+                var metaText = FileUtil.ReadTextIfExists(MetaPath);
+                if (!string.IsNullOrWhiteSpace(metaText))
+                {
+                    var metaNode = JsonNode.Parse(metaText, nodeOptions: null, DocOpts)?.AsObject();
+                    var appliedId = metaNode?["appliedId"]?.GetValue<string>()?.Trim();
+                    if (string.IsNullOrEmpty(appliedId))
+                    {
+                        return null; // 官方模式
+                    }
+
+                    // 检查 entries 中的 name
+                    if (metaNode?["entries"] is JsonArray entries)
+                    {
+                        foreach (var e in entries)
+                        {
+                            if (e is JsonObject eObj && string.Equals(eObj["id"]?.GetValue<string>(), appliedId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                var eName = eObj["name"]?.GetValue<string>()?.Trim();
+                                if (!string.IsNullOrEmpty(eName))
+                                {
+                                    if (eName.StartsWith("APISwitch - ", StringComparison.OrdinalIgnoreCase))
+                                        return eName.Substring(12).Trim();
+                                    return eName;
+                                }
+                            }
+                        }
+                    }
+
+                    // 检查 cfgFile 的 apiKey / gatewayUrl 匹配供应商
+                    var cfgFile = Path.Combine(ConfigLibraryDir, $"{appliedId}.json");
+                    if (File.Exists(cfgFile))
+                    {
+                        var cfgText = FileUtil.ReadTextIfExists(cfgFile);
+                        if (!string.IsNullOrWhiteSpace(cfgText))
+                        {
+                            var cfgNode = JsonNode.Parse(cfgText, nodeOptions: null, DocOpts)?.AsObject();
+                            var key = cfgNode?["inferenceGatewayApiKey"]?.GetValue<string>()?.Trim();
+                            var url = cfgNode?["inferenceGatewayBaseUrl"]?.GetValue<string>()?.Trim().TrimEnd('/');
+                            var all = CliStore.LoadClaudeDesktop();
+                            if (!string.IsNullOrEmpty(key))
+                            {
+                                var matched = all.FirstOrDefault(x => !x.IsOfficial && string.Equals(x.AuthToken?.Trim(), key, StringComparison.Ordinal));
+                                if (matched != null) return matched.Name;
+                            }
+                            if (!string.IsNullOrEmpty(url))
+                            {
+                                var matched = all.FirstOrDefault(x => !x.IsOfficial && string.Equals(x.BaseUrl?.TrimEnd('/'), url, StringComparison.OrdinalIgnoreCase));
+                                if (matched != null) return matched.Name;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. 回退读取标准 claude_desktop_config.json
             var root = LoadConfig();
             if (root.TryGetPropertyValue("apiswitchProviderName", out var n) && n != null)
             {
@@ -60,16 +226,11 @@ public static class ClaudeDesktopCli
                 if (!string.IsNullOrEmpty(name)) return name;
             }
 
-            var url = root["inferenceGatewayBaseUrl"]?.GetValue<string>()?.Trim().TrimEnd('/');
-            if (!string.IsNullOrEmpty(url))
+            var rootUrl = root["inferenceGatewayBaseUrl"]?.GetValue<string>()?.Trim().TrimEnd('/');
+            if (!string.IsNullOrEmpty(rootUrl))
             {
-                if (url.Contains("/claude-desktop", StringComparison.OrdinalIgnoreCase) && LocalProxyServer.ActiveClaudeDesktopProvider != null)
-                {
-                    return LocalProxyServer.ActiveClaudeDesktopProvider.Name;
-                }
-
                 var all = CliStore.LoadClaudeDesktop();
-                var matched = all.FirstOrDefault(x => !x.IsOfficial && string.Equals(x.BaseUrl?.TrimEnd('/'), url, StringComparison.OrdinalIgnoreCase));
+                var matched = all.FirstOrDefault(x => !x.IsOfficial && string.Equals(x.BaseUrl?.TrimEnd('/'), rootUrl, StringComparison.OrdinalIgnoreCase));
                 if (matched != null) return matched.Name;
             }
             return null;
@@ -118,6 +279,8 @@ public static class ClaudeDesktopCli
         if (p.IsOfficial)
         {
             LocalProxyServer.ActiveClaudeDesktopProvider = null;
+            root.Remove("deploymentMode");
+            SyncOfficialToConfigLibrary();
         }
         else
         {
@@ -126,31 +289,218 @@ public static class ClaudeDesktopCli
 
             LocalProxyServer.ActiveClaudeDesktopProvider = p;
 
+            bool isMapping = p.AccessMode != "direct" && p.ModelMappings != null && p.ModelMappings.Count > 0;
+            if (isMapping || p.WireApi == "chat")
+            {
+                if (!LocalProxyServer.IsClaudeDesktopEnabled)
+                {
+                    LocalProxyServer.SetClaudeDesktopEnabled(true);
+                }
+            }
+
             var effectiveBaseUrl = LocalProxyServer.IsClaudeDesktopEnabled
                 ? LocalProxyServer.ProxyClaudeDesktopUrl
                 : p.BaseUrl;
 
+            root["deploymentMode"] = "3p";
             root["inferenceProvider"] = "gateway";
             root["inferenceGatewayBaseUrl"] = effectiveBaseUrl;
             root["inferenceGatewayApiKey"] = p.AuthToken;
             root["inferenceGatewayAuthScheme"] = "bearer";
+            root["modelDiscoveryEnabled"] = false;
             root["apiswitchProviderName"] = p.Name;
             if (!string.IsNullOrEmpty(p.Id)) root["apiswitchProviderId"] = p.Id;
 
             var models = new JsonArray();
-            foreach (var id in CollectModelIds(p))
+            (string role, string defaultModel, string defaultName)[] roles =
             {
-                models.Add(new JsonObject { ["modelId"] = id, ["displayName"] = id });
+                ("Sonnet", "claude-sonnet-5", "Sonnet"),
+                ("Opus", "claude-opus-5", "Opus"),
+                ("Fable", "claude-fable-5", "Fable"),
+                ("Haiku", "claude-haiku-4-5", "Haiku")
+            };
+
+            if (isMapping)
+            {
+                foreach (var (rName, defModel, defDisplay) in roles)
+                {
+                    var m = p.ModelMappings?.FirstOrDefault(x => string.Equals(x.Role, rName, StringComparison.OrdinalIgnoreCase));
+                    var displayName = !string.IsNullOrWhiteSpace(m?.DisplayName) ? m.DisplayName.Trim() : (!string.IsNullOrWhiteSpace(m?.Model) ? m.Model.Trim() : defDisplay);
+                    var cleanDisplay = ClaudeCli.Strip1m(displayName);
+                    bool supports1m = m?.Supports1m == true;
+
+                    models.Add(new JsonObject
+                    {
+                        ["name"] = defModel,
+                        ["modelId"] = defModel,
+                        ["labelOverride"] = cleanDisplay,
+                        ["displayName"] = cleanDisplay,
+                        ["supports1m"] = supports1m
+                    });
+                }
             }
-            if (models.Count == 0)
-                models.Add(new JsonObject { ["modelId"] = "claude-sonnet-4-5", ["displayName"] = "claude-sonnet-4-5" });
+            else
+            {
+                foreach (var id in CollectModelIds(p))
+                {
+                    models.Add(new JsonObject
+                    {
+                        ["name"] = id,
+                        ["modelId"] = id,
+                        ["labelOverride"] = id,
+                        ["displayName"] = id
+                    });
+                }
+                if (models.Count == 0)
+                {
+                    models.Add(new JsonObject
+                    {
+                        ["name"] = "claude-sonnet-4-5",
+                        ["modelId"] = "claude-sonnet-4-5",
+                        ["labelOverride"] = "claude-sonnet-4-5",
+                        ["displayName"] = "claude-sonnet-4-5"
+                    });
+                }
+            }
             root["inferenceModels"] = models;
 
-            if (Uri.TryCreate(effectiveBaseUrl, UriKind.Absolute, out var uri) && !string.IsNullOrEmpty(uri.Host))
-                root["coworkEgressAllowedHosts"] = new JsonArray(uri.Host);
+            var allowedHosts = new JsonArray("*");
+            root["coworkEgressAllowedHosts"] = allowedHosts;
+
+            // 核心：同步写入 Claude 3P 官方托管库 (%LOCALAPPDATA%\Claude-3p\configLibrary)
+            SyncProviderToConfigLibrary(p, effectiveBaseUrl, models);
         }
 
-        FileUtil.AtomicWriteText(ConfigPath, root.ToJsonString(WriteOpts));
+        // 多播原子写入所有候选路径（优先主路径，并同步写入已存在的目录）
+        var targetPaths = GetAllCandidateConfigPaths();
+        var jsonText = root.ToJsonString(WriteOpts);
+        foreach (var path in targetPaths)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    if (!Directory.Exists(dir))
+                    {
+                        // 仅为前两个核心路径自动创建目录
+                        if (path.Contains("Claude-3p") || path.EndsWith("Claude\\claude_desktop_config.json"))
+                        {
+                            Directory.CreateDirectory(dir);
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+                    FileUtil.AtomicWriteText(path, jsonText);
+                }
+            }
+            catch { }
+        }
+    }
+
+    private static void SyncOfficialToConfigLibrary()
+    {
+        try
+        {
+            if (Directory.Exists(ConfigLibraryDir))
+            {
+                if (File.Exists(ApiSwitchConfigFile))
+                {
+                    try { File.Delete(ApiSwitchConfigFile); } catch { }
+                }
+                var legacyCc = Path.Combine(ConfigLibraryDir, $"{CcSwitchLegacyId}.json");
+                if (File.Exists(legacyCc))
+                {
+                    try { File.Delete(legacyCc); } catch { }
+                }
+
+                if (File.Exists(MetaPath))
+                {
+                    var metaObj = new JsonObject
+                    {
+                        ["appliedId"] = "",
+                        ["entries"] = new JsonArray()
+                    };
+                    FileUtil.AtomicWriteText(MetaPath, metaObj.ToJsonString(WriteOpts));
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static void SyncProviderToConfigLibrary(ClaudeProvider p, string effectiveBaseUrl, JsonArray models)
+    {
+        try
+        {
+            Directory.CreateDirectory(ConfigLibraryDir);
+
+            // 1. 清理旧残留的 CC Switch 配置文件
+            var legacyCc = Path.Combine(ConfigLibraryDir, $"{CcSwitchLegacyId}.json");
+            if (File.Exists(legacyCc))
+            {
+                try { File.Delete(legacyCc); } catch { }
+            }
+
+            // 2. 构造 3P Managed Config 对象 (00000000-0000-4000-8000-000000157250.json)
+            var configLibraryModels = new JsonArray();
+            (string role, string defaultModel, string defaultName)[] roles =
+            {
+                ("Sonnet", "claude-sonnet-5", "Sonnet"),
+                ("Opus", "claude-opus-5", "Opus"),
+                ("Fable", "claude-fable-5", "Fable"),
+                ("Haiku", "claude-haiku-4-5", "Haiku")
+            };
+
+            foreach (var (rName, defModel, defDisplay) in roles)
+            {
+                var m = p.ModelMappings?.FirstOrDefault(x => string.Equals(x.Role, rName, StringComparison.OrdinalIgnoreCase));
+                var displayName = !string.IsNullOrWhiteSpace(m?.DisplayName) ? m.DisplayName.Trim() : (!string.IsNullOrWhiteSpace(m?.Model) ? m.Model.Trim() : defDisplay);
+                var cleanDisplay = ClaudeCli.Strip1m(displayName);
+                bool supports1m = m?.Supports1m == true;
+
+                configLibraryModels.Add(new JsonObject
+                {
+                    ["name"] = defModel,
+                    ["labelOverride"] = cleanDisplay,
+                    ["supports1m"] = supports1m
+                });
+            }
+
+            var configObj = new JsonObject
+            {
+                ["coworkEgressAllowedHosts"] = new JsonArray("*"),
+                ["disableDeploymentModeChooser"] = true,
+                ["inferenceGatewayApiKey"] = p.AuthToken ?? "",
+                ["inferenceGatewayAuthScheme"] = "bearer",
+                ["inferenceGatewayBaseUrl"] = effectiveBaseUrl,
+                ["inferenceModels"] = configLibraryModels,
+                ["inferenceProvider"] = "gateway"
+            };
+
+            FileUtil.AtomicWriteText(ApiSwitchConfigFile, configObj.ToJsonString(WriteOpts));
+
+            // 3. 构造或更新 _meta.json
+            var metaObj = new JsonObject
+            {
+                ["appliedId"] = ApiSwitchConfigId,
+                ["entries"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["id"] = ApiSwitchConfigId,
+                        ["name"] = "APISwitch - " + p.Name
+                    }
+                }
+            };
+
+            FileUtil.AtomicWriteText(MetaPath, metaObj.ToJsonString(WriteOpts));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ClaudeDesktopCli] SyncProviderToConfigLibrary error: {ex.Message}");
+        }
     }
 
     static List<string> CollectModelIds(ClaudeProvider p)

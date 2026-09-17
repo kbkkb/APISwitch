@@ -55,6 +55,19 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+        if (e.Args.Length >= 2 && e.Args[0] == "--apply-desktop")
+        {
+            var targetName = e.Args[1];
+            var all = CliStore.LoadClaudeDesktop();
+            var target = all.FirstOrDefault(x => string.Equals(x.Name, targetName, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Id, targetName, StringComparison.OrdinalIgnoreCase));
+            if (target != null)
+            {
+                LocalProxyServer.SetClaudeDesktopEnabled(true);
+                ClaudeDesktopCli.Apply(target);
+            }
+            Shutdown();
+            return;
+        }
 
         const string mutexName = "APISwitch_Desktop_App_Mutex_6723c035";
         const string eventName = "APISwitch_Desktop_Wakeup_Event_6723c035";
@@ -148,7 +161,7 @@ public partial class App : System.Windows.Application
 
         try
         {
-            LocalProxyServer.Stop();
+            LocalProxyServer.Stop(restoreDirectConfig: false);
         }
         catch { }
         base.OnExit(e);

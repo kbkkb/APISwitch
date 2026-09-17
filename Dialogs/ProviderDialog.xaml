@@ -105,6 +105,36 @@
 
                         <!-- API Format / Wire API Panel -->
                         <StackPanel x:Name="FormatPanel" Margin="0,0,0,12">
+                            <!-- Claude Model Config & Wire API Panel -->
+                            <StackPanel x:Name="ClaudeConfigPanel" Visibility="Collapsed" Margin="0,0,0,4">
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <TextBlock Text="模型配置" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock x:Name="ClaudeConfigDescText" Text="Claude 客户端只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 角色 ID。选择模型映射后，将自动映射到供应商的实际模型，并保持本地路由开启。" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="接入方式" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <ComboBox x:Name="ClaudeAccessModeCombo" Width="120" Height="32" SelectionChanged="ClaudeAccessMode_Changed">
+                                            <ComboBoxItem Tag="mapping" Content="模型映射" IsSelected="True"/>
+                                            <ComboBoxItem Tag="direct" Content="直接指定"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="上游格式" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="ClaudeWireCombo" Height="34" SelectionChanged="ClaudeWireCombo_Changed">
+                                        <ComboBoxItem Tag="anthropic" Content="Anthropic Messages（原生）" IsSelected="True"/>
+                                        <ComboBoxItem Tag="chat" Content="Chat Completions（需开启路由）"/>
+                                        <ComboBoxItem Tag="responses" Content="OpenAI Responses（需开启路由）"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+
                             <!-- Codex Wire API -->
                             <StackPanel x:Name="CodexWirePanel">
                                 <TextBlock Text="上游格式 (Wire API)" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
@@ -149,10 +179,10 @@
                         <!-- Base URL -->
                         <TextBlock x:Name="BaseUrlLabel" Text="Base URL" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
                         <TextBlock Text="自定义 API 端点地址" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
-                        <TextBox x:Name="BaseUrlBox" Tag="https://api.example.com/v1" Margin="0,0,0,12"/>
+                        <TextBox x:Name="BaseUrlBox" Tag="https://api.example.com/v1" Margin="0,0,0,14"/>
 
                         <!-- Default Model & Small Fast Model -->
-                        <Grid Margin="0,0,0,14">
+                        <Grid x:Name="DirectModelPanel" Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition x:Name="SmallFastColSpace" Width="16"/>
@@ -240,82 +270,160 @@
 
                         <Separator Background="#E2E8F0" Margin="0,4,0,14"/>
 
-                        <!-- Models Configuration Section -->
-                        <Grid Margin="0,0,0,8">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="模型配置" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextBrush}"/>
-                                <TextBlock Text="配置可用的模型及其显示名称" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                                <Button x:Name="FetchModelsBtn" Style="{StaticResource GhostButton}" Margin="0,0,8,0" Click="FetchModels_Click" ToolTip="通过 Base URL 和鉴权自动探测可用模型">
+                        <!-- Claude 4-Role Model Mapping Section -->
+                        <StackPanel x:Name="ClaudeModelMappingSection" Visibility="Collapsed">
+                            <!-- Header -->
+                            <Grid Margin="0,0,0,8">
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="模型映射" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="为 Sonnet、Opus、Fable、Haiku 四档分别填写实际请求模型；菜单显示名可写 DeepSeek、Kimi 等品牌名。留空的档会自动沿用 Sonnet（或第一个已填档）的模型，确保子 agent 调用的 Haiku 始终可用。" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource GhostButton}" Click="FetchModels_Click" ToolTip="通过 Base URL 和鉴权自动探测可用模型">
                                     <StackPanel Orientation="Horizontal">
                                         <Path Data="{StaticResource IconCloud}" Fill="{StaticResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0"/>
-                                        <TextBlock x:Name="FetchModelsBtnText" Text="获取模型列表" FontWeight="Medium"/>
+                                        <TextBlock x:Name="ClaudeFetchModelsBtnText" Text="获取模型列表" FontWeight="Medium"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Content="+ 添加模型" Style="{StaticResource GhostButton}" Click="AddModel_Click"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Fetched Models Temporary Pool Banner & Quick Selector -->
-                        <Border x:Name="FetchedModelsBar" Visibility="Collapsed" Background="#F0FDF4" BorderBrush="#BBF7D0" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
-                                    <Path Data="{StaticResource IconCloud}" Fill="#16A34A" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="FetchedModelsTitleText" Text="已从端点暂存 0 个模型" FontSize="12" FontWeight="SemiBold" Foreground="#15803D" VerticalAlignment="Center"/>
-                                    <TextBlock Text="（可下拉选为默认模型或添加到列表，未自动污染已有配置）" FontSize="11" Foreground="#166534" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <Grid Grid.Row="1">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <ComboBox x:Name="SelectModelToAddCombo" Grid.Column="0" Height="34" IsEditable="True"
-                                              ItemsSource="{Binding FetchedModels, RelativeSource={RelativeSource AncestorType=Window}}"
-                                              Tag="选择或输入要添加的模型..."/>
-                                    <Button Grid.Column="2" Content="+ 添加所选模型" Style="{StaticResource PrimaryButton}" Padding="12,4" Height="34" FontSize="12" Click="AddSelectedFetchedModel_Click"/>
-                                    <Button Grid.Column="4" x:Name="AddAllFetchedBtn" Content="一键全部添加" Style="{StaticResource GhostButton}" Padding="10,4" Height="34" FontSize="12" Click="AddAllFetchedModels_Click"/>
-                                </Grid>
                             </Grid>
-                        </Border>
 
-                        <TextBlock x:Name="EmptyModelsText" Text="暂无模型配置（将使用系统默认模型）" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,4,0,10"/>
-                        <ItemsControl x:Name="ModelsItemsControl" Margin="0,0,0,12">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,0,0,8">
+                            <!-- Table Header -->
+                            <Grid Margin="0,6,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="1.5*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="90"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="模型角色" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                <TextBlock Grid.Column="2" Text="菜单显示名" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                <TextBlock Grid.Column="4" Text="实际请求模型" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                <TextBlock Grid.Column="6" Text="声明支持 1M" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- 4 Fixed Mapping Rows ItemsControl -->
+                            <ItemsControl x:Name="ClaudeMappingItemsControl" Margin="0,0,0,12">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="1.5*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="2*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="90"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Role Badge -->
+                                            <Border Grid.Column="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1"
+                                                    CornerRadius="6" Height="34" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                                                <TextBlock Text="{Binding Role}" FontWeight="SemiBold" FontSize="12" Foreground="#334155"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+
+                                            <!-- Display Name Box -->
+                                            <TextBox Grid.Column="2" Height="34" Text="{Binding DisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Tag="菜单显示名" ToolTip="在客户端/CLI 菜单中显示的友好名称"/>
+
+                                            <!-- Actual Model ComboBox -->
+                                            <ComboBox Grid.Column="4" Height="34" IsEditable="True"
+                                                      Text="{Binding Model, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=FetchedModels}"
+                                                      SelectionChanged="ClaudeModelCombo_SelectionChanged"
+                                                      Tag="输入或下拉选择实际请求模型" ToolTip="实际发送到上游中转站的模型标识"/>
+
+                                            <!-- Supports 1M CheckBox -->
+                                            <CheckBox Grid.Column="6" Content="1M" IsChecked="{Binding Supports1m, Mode=TwoWay}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      ToolTip="勾选后声明该模型支持 1M 扩展上下文窗口（CLI 会添加 [1M] 标识）"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Codex / OpenCode Models Configuration Section -->
+                        <StackPanel x:Name="CodexModelsSection">
+                            <Grid Margin="0,0,0,8">
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="模型配置" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="配置可用的模型及其显示名称" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                    <Button x:Name="FetchModelsBtn" Style="{StaticResource GhostButton}" Margin="0,0,8,0" Click="FetchModels_Click" ToolTip="通过 Base URL 和鉴权自动探测可用模型">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconCloud}" Fill="{StaticResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" Margin="0,0,6,0"/>
+                                            <TextBlock x:Name="FetchModelsBtnText" Text="获取模型列表" FontWeight="Medium"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Content="+ 添加模型" Style="{StaticResource GhostButton}" Click="AddModel_Click"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Fetched Models Temporary Pool Banner & Quick Selector -->
+                            <Border x:Name="FetchedModelsBar" Visibility="Collapsed" Background="#F0FDF4" BorderBrush="#BBF7D0" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                                        <Path Data="{StaticResource IconCloud}" Fill="#16A34A" Width="14" Height="14" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="FetchedModelsTitleText" Text="已从端点暂存 0 个模型" FontSize="12" FontWeight="SemiBold" Foreground="#15803D" VerticalAlignment="Center"/>
+                                        <TextBlock Text="（可下拉选为默认模型或添加到列表，未自动污染已有配置）" FontSize="11" Foreground="#166534" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <Grid Grid.Row="1">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="2*"/>
+                                            <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="1.5*"/>
+                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="110"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="36"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="›" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                        <ComboBox Grid.Column="1" IsEditable="True" Height="34"
-                                                  Text="{Binding Id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=FetchedModels}"
-                                                  Tag="模型 ID，如 moonshotai/kimi-k3" ToolTip="模型 ID（可下拉选择已暂存模型或手动输入）"/>
-                                        <TextBox Grid.Column="3" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="显示名称 (可选)" ToolTip="显示名称（可选）"/>
-                                        <TextBox Grid.Column="5" Text="{Binding ContextWindow, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="上下文 (1m)" ToolTip="上下文窗口（支持 1m, 128k, 200k 或具体数字，默认 1m）"/>
-                                        <Button Grid.Column="7" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteModel_Click" ToolTip="删除模型">
-                                            <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="12" Height="12" Stretch="Uniform"/>
-                                        </Button>
+                                        <ComboBox x:Name="SelectModelToAddCombo" Grid.Column="0" Height="34" IsEditable="True"
+                                                  ItemsSource="{Binding FetchedModels, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Tag="选择或输入要添加的模型..."/>
+                                        <Button Grid.Column="2" Content="+ 添加所选模型" Style="{StaticResource PrimaryButton}" Padding="12,4" Height="34" FontSize="12" Click="AddSelectedFetchedModel_Click"/>
+                                        <Button Grid.Column="4" x:Name="AddAllFetchedBtn" Content="一键全部添加" Style="{StaticResource GhostButton}" Padding="10,4" Height="34" FontSize="12" Click="AddAllFetchedModels_Click"/>
                                     </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock x:Name="EmptyModelsText" Text="暂无模型配置（将使用系统默认模型）" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,4,0,10"/>
+                            <ItemsControl x:Name="ModelsItemsControl" Margin="0,0,0,12">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="2*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="1.5*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="110"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="36"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="›" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <ComboBox Grid.Column="1" IsEditable="True" Height="34"
+                                                      Text="{Binding Id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=Window}, Path=FetchedModels}"
+                                                      Tag="模型 ID，如 moonshotai/kimi-k3" ToolTip="模型 ID（可下拉选择已暂存模型或手动输入）"/>
+                                            <TextBox Grid.Column="3" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="显示名称 (可选)" ToolTip="显示名称（可选）"/>
+                                            <TextBox Grid.Column="5" Text="{Binding ContextWindow, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="上下文 (1m)" ToolTip="上下文窗口（支持 1m, 128k, 200k 或具体数字，默认 1m）"/>
+                                            <Button Grid.Column="7" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteModel_Click" ToolTip="删除模型">
+                                                <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="12" Height="12" Stretch="Uniform"/>
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
 
                         <Separator Background="#E2E8F0" Margin="0,4,0,14"/>
 

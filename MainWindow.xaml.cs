@@ -310,28 +310,28 @@ public partial class MainWindow : Window
         }
     }
 
-    async void OnCardActivateAntigravity(object sender, RoutedEventArgs e)
+    async void OnCardActivateQuota(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Profile target) return;
-        SetBusy($"正在对 {target.Email} 执行官方协议测通握手…");
+        SetBusy($"正在向 Google 发送激活消息并刷新 {target.Email} 的限额…");
         try
         {
-            var (ok, latencyMs, msg) = await AgQuotaService.ActivateProfileAsync(target);
+            var (ok, latencyMs, msg) = await AgQuotaService.ActivateAccountQuotaAsync(target);
             ClearBusy();
             RefreshAntigravity();
             if (ok)
             {
-                ShowToast($"⚡ {target.Email} 官方测通成功 (延迟 {latencyMs}ms)");
+                ShowToast($"⚡ {target.Email} 账号限额已激活并刷新 (延迟 {latencyMs}ms)");
             }
             else
             {
-                ShowToast($"测通失败: {msg}", isError: true);
+                ShowToast($"激活限额失败: {msg}", isError: true);
             }
         }
         catch (Exception ex)
         {
             ClearBusy();
-            ShowToast("测通异常: " + ex.Message, isError: true);
+            ShowToast("激活限额异常: " + ex.Message, isError: true);
         }
     }
 
@@ -350,11 +350,11 @@ public partial class MainWindow : Window
         for (int i = 0; i < _profiles.Count; i++)
         {
             var p = _profiles[i];
-            SetBusy($"正在批量激活 ({i + 1}/{count}): {p.Email}…");
+            SetBusy($"正在批量发送消息激活限额 ({i + 1}/{count}): {p.Email}…");
 
             try
             {
-                var (ok, latencyMs, msg) = await AgQuotaService.ActivateProfileAsync(p);
+                var (ok, latencyMs, msg) = await AgQuotaService.ActivateAccountQuotaAsync(p);
                 if (ok) successCount++;
                 else failCount++;
             }
@@ -378,7 +378,7 @@ public partial class MainWindow : Window
 
         ClearBusy();
         RefreshAntigravity();
-        ShowToast($"⚡ 批量激活完成！成功 {successCount} 个，失败 {failCount} 个");
+        ShowToast($"⚡ 批量限额激活完成！成功 {successCount} 个，失败 {failCount} 个");
     }
 
     async void OnCardRefreshQuota(object sender, RoutedEventArgs e)
@@ -390,10 +390,10 @@ public partial class MainWindow : Window
             Dispatcher.Invoke(() => ProfileList.Items.Refresh());
             if (ok)
             {
-                if (target.Has5hQuota)
-                    ShowToast($"已更新 {target.Email} 的 5H/周配额数据");
+                if (target.IsProTier)
+                    ShowToast($"已同时刷新 {target.Email} 的 Gemini 与 GPT/Claude 配额");
                 else
-                    ShowToast($"已更新 {target.Email} 的周配额数据 (无5H限制)");
+                    ShowToast($"已刷新 {target.Email} 的 Gemini 周配额 (免费版仅限Gemini周额度)");
             }
             else
             {
@@ -413,7 +413,7 @@ public partial class MainWindow : Window
 
     async Task SwitchToProfile(Profile target)
     {
-        SetBusy($"正在激活切换到 {target.Email}…");
+        SetBusy($"正在切换到账号 {target.Email}…");
         try
         {
             var stopped = await Task.Run(AgProcess.StopIdeAsync);
@@ -471,7 +471,7 @@ public partial class MainWindow : Window
 
         ClearBusy();
         RefreshAntigravity();
-        ShowToast($"已成功激活并切换到 {target.Email}" + (AutoRestartCheck.IsChecked == true ? "（已重启 IDE）" : ""));
+        ShowToast($"已成功切换到账号 {target.Email}" + (AutoRestartCheck.IsChecked == true ? "（已重启 IDE）" : ""));
     }
 
     void OnCardDeleteAntigravity(object sender, RoutedEventArgs e)
@@ -721,8 +721,12 @@ public partial class MainWindow : Window
         public string BaseUrl => P.IsOfficial ? "官方登录（无自定义端点）" : (string.IsNullOrEmpty(P.BaseUrl) ? "—" : P.BaseUrl!);
         public string Model => string.IsNullOrEmpty(P.Model) ? "—" : P.Model!;
 
-        public bool RequiresRouter => !P.IsOfficial && P.ExtraOptions != null &&
-            P.ExtraOptions.TryGetValue("require_proxy", out var rp) && bool.TryParse(rp, out var b) && b;
+        public bool RequiresRouter => !P.IsOfficial && (
+            string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(P.WireApi, "responses", StringComparison.OrdinalIgnoreCase) ||
+            (IsDesktop && string.Equals(P.AccessMode, "mapping", StringComparison.OrdinalIgnoreCase)) ||
+            (!IsDesktop && P.ModelMappings != null && P.ModelMappings.Any(m => m.Supports1m)) ||
+            (P.ExtraOptions != null && P.ExtraOptions.TryGetValue("require_proxy", out var rp) && bool.TryParse(rp, out var b) && b));
 
         public Visibility RouterBadgeVisibility => RequiresRouter ? Visibility.Visible : Visibility.Collapsed;
 
@@ -731,8 +735,20 @@ public partial class MainWindow : Window
         public string RouterBadgeText => IsRouterActive ? "⚡ 需开启路由" : "⚠️ 需开启路由 (未开启)";
 
         public string RouterBadgeTooltip => IsRouterActive
-            ? "此供应商配置了需通过本地路由中转（当前本地路由已就绪）"
-            : "此供应商配置了需通过本地路由中转，必须开启本地路由才能正常使用（当前本地路由未开启）";
+            ? (string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase)
+                ? "此供应商上游通信协议为 Chat Completions，必须通过本地路由进行协议转译（当前本地路由已就绪）"
+                : (string.Equals(P.WireApi, "responses", StringComparison.OrdinalIgnoreCase)
+                    ? "此供应商上游通信协议为 OpenAI Responses，必须通过本地路由进行协议转译（当前本地路由已就绪）"
+                    : (IsDesktop && string.Equals(P.AccessMode, "mapping", StringComparison.OrdinalIgnoreCase)
+                        ? "Claude Desktop 采用模型映射机制，必须通过本地路由重写模型请求（当前本地路由已就绪）"
+                        : "此供应商配置了 1M 长上下文，已通过本地路由自动剥离 [1M] 转发上游（当前本地路由已就绪）")))
+            : (string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase)
+                ? "此供应商上游通信协议为 Chat Completions，必须开启本地路由进行协议转译才能正常使用（当前本地路由未开启）"
+                : (string.Equals(P.WireApi, "responses", StringComparison.OrdinalIgnoreCase)
+                    ? "此供应商上游通信协议为 OpenAI Responses，必须开启本地路由进行协议转译才能正常使用（当前本地路由未开启）"
+                    : (IsDesktop && string.Equals(P.AccessMode, "mapping", StringComparison.OrdinalIgnoreCase)
+                        ? "Claude Desktop 采用模型映射机制，必须开启本地路由才能将标准模型重写映射到目标模型（当前本地路由未开启）"
+                        : "此供应商配置了 1M 长上下文，建议开启本地路由以自动剥离 [1M] 并转发上游；当前未开启本地路由，将以纯净模型名直连上游")));
 
         public System.Windows.Media.Brush RouterBadgeBackground => IsRouterActive
             ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEE, 0xF2, 0xFF))
@@ -746,8 +762,46 @@ public partial class MainWindow : Window
             ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0x46, 0xE5))
             : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
 
-        public string SubText => P.IsOfficial ? BaseUrl : string.Join("   ·   ",
-            new[] { BaseUrl, string.IsNullOrEmpty(P.Model) ? null : "模型 " + P.Model }.Where(s => s != null));
+        public string SubText
+        {
+            get
+            {
+                if (P.IsOfficial) return "官方登录（无自定义端点）";
+
+                var parts = new List<string?> { string.IsNullOrEmpty(P.BaseUrl) ? "—" : P.BaseUrl };
+
+                if (string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase))
+                {
+                    parts.Add("Chat 格式 (需路由)");
+                }
+                else if (string.Equals(P.WireApi, "responses", StringComparison.OrdinalIgnoreCase))
+                {
+                    parts.Add("Responses 格式 (需路由)");
+                }
+
+                if (P.ModelMappings != null && P.ModelMappings.Count > 0)
+                {
+                    var mapParts = P.ModelMappings
+                        .Where(m => !string.IsNullOrWhiteSpace(m.Model))
+                        .Select(m => $"{m.Role}: {m.Model}{(m.Supports1m ? "[1M]" : "")}");
+                    var mapStr = string.Join(" | ", mapParts);
+                    if (!string.IsNullOrEmpty(mapStr))
+                    {
+                        parts.Add(mapStr);
+                    }
+                    else if (!string.IsNullOrEmpty(P.Model))
+                    {
+                        parts.Add("模型 " + P.Model);
+                    }
+                }
+                else if (!string.IsNullOrEmpty(P.Model))
+                {
+                    parts.Add("模型 " + P.Model);
+                }
+
+                return string.Join("   ·   ", parts.Where(s => !string.IsNullOrWhiteSpace(s)));
+            }
+        }
 
         public string Status => IsCurrent ? "● 当前" : "";
     }
@@ -908,12 +962,65 @@ public partial class MainWindow : Window
 
         if (!ok || dlg.ResultClaude == null) return;
         var p = dlg.ResultClaude;
-        var idx = existing != null ? _claudeProviders.IndexOf(existing) : _claudeProviders.FindIndex(x => x.Name == p.Name);
+        int idx = -1;
+        if (existing != null)
+        {
+            idx = _claudeProviders.IndexOf(existing);
+            if (idx < 0 && !string.IsNullOrEmpty(existing.Id))
+                idx = _claudeProviders.FindIndex(x => string.Equals(x.Id, existing.Id, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0 && !string.IsNullOrEmpty(existing.Name))
+                idx = _claudeProviders.FindIndex(x => string.Equals(x.Name, existing.Name, StringComparison.OrdinalIgnoreCase));
+        }
+        if (idx < 0 && !string.IsNullOrEmpty(p.Id))
+            idx = _claudeProviders.FindIndex(x => string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0 && !string.IsNullOrEmpty(p.Name))
+            idx = _claudeProviders.FindIndex(x => string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
+
         if (idx >= 0) _claudeProviders[idx] = p;
-        else _claudeProviders.Add(p);
+        else
+        {
+            _claudeProviders.Add(p);
+            idx = _claudeProviders.Count - 1;
+        }
+
+        for (int i = _claudeProviders.Count - 1; i >= 0; i--)
+        {
+            if (i != idx)
+            {
+                var other = _claudeProviders[i];
+                bool sameId = !string.IsNullOrEmpty(p.Id) && !string.IsNullOrEmpty(other.Id) && string.Equals(p.Id, other.Id, StringComparison.OrdinalIgnoreCase);
+                bool sameName = string.Equals(p.Name, other.Name, StringComparison.OrdinalIgnoreCase);
+                if (sameId || sameName)
+                {
+                    _claudeProviders.RemoveAt(i);
+                    if (i < idx) idx--;
+                }
+            }
+        }
         CliStore.SaveClaude(_claudeProviders);
+
+        var currentName = ClaudeCli.CurrentProviderName();
+        var currentUrl = ClaudeCli.CurrentBaseUrl()?.TrimEnd('/');
+        var isCurrent = (existing != null && (
+            (!string.IsNullOrEmpty(currentName) && (string.Equals(existing.Name, currentName, StringComparison.OrdinalIgnoreCase) || string.Equals(existing.Id, currentName, StringComparison.OrdinalIgnoreCase))) ||
+            (!string.IsNullOrEmpty(currentUrl) && string.Equals(existing.BaseUrl?.TrimEnd('/'), currentUrl, StringComparison.OrdinalIgnoreCase))
+        )) || (
+            (!string.IsNullOrEmpty(currentName) && (string.Equals(p.Name, currentName, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Id, currentName, StringComparison.OrdinalIgnoreCase))) ||
+            (!string.IsNullOrEmpty(currentUrl) && string.Equals(p.BaseUrl?.TrimEnd('/'), currentUrl, StringComparison.OrdinalIgnoreCase))
+        );
+
+        if (isCurrent)
+        {
+            var dummyRow = new ClaudeRow { P = p, IsDesktop = false };
+            if (dummyRow.RequiresRouter && !LocalProxyServer.IsClaudeCliEnabled)
+            {
+                LocalProxyServer.SetClaudeCliEnabled(true);
+            }
+            try { ClaudeCli.Apply(p); } catch { }
+        }
+
         RefreshClaude();
-        ShowToast($"已保存供应商「{p.Name}」");
+        ShowToast(isCurrent ? $"已保存并同步生效当前配置「{p.Name}」" : $"已保存供应商「{p.Name}」");
     }
 
     void OnRefreshClaude(object sender, RoutedEventArgs e) => RefreshClaude();
@@ -1018,12 +1125,79 @@ public partial class MainWindow : Window
 
         if (!ok || dlg.ResultClaude == null) return;
         var p = dlg.ResultClaude;
-        var idx = existing != null ? _desktopProviders.IndexOf(existing) : _desktopProviders.FindIndex(x => x.Name == p.Name);
+        int idx = -1;
+        if (existing != null)
+        {
+            idx = _desktopProviders.IndexOf(existing);
+            if (idx < 0 && !string.IsNullOrEmpty(existing.Id))
+                idx = _desktopProviders.FindIndex(x => string.Equals(x.Id, existing.Id, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0 && !string.IsNullOrEmpty(existing.Name))
+                idx = _desktopProviders.FindIndex(x => string.Equals(x.Name, existing.Name, StringComparison.OrdinalIgnoreCase));
+        }
+        if (idx < 0 && !string.IsNullOrEmpty(p.Id))
+            idx = _desktopProviders.FindIndex(x => string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0 && !string.IsNullOrEmpty(p.Name))
+            idx = _desktopProviders.FindIndex(x => string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
+
         if (idx >= 0) _desktopProviders[idx] = p;
-        else _desktopProviders.Add(p);
+        else
+        {
+            _desktopProviders.Add(p);
+            idx = _desktopProviders.Count - 1;
+        }
+
+        for (int i = _desktopProviders.Count - 1; i >= 0; i--)
+        {
+            if (i != idx)
+            {
+                var other = _desktopProviders[i];
+                bool sameId = !string.IsNullOrEmpty(p.Id) && !string.IsNullOrEmpty(other.Id) && string.Equals(p.Id, other.Id, StringComparison.OrdinalIgnoreCase);
+                bool sameName = string.Equals(p.Name, other.Name, StringComparison.OrdinalIgnoreCase);
+                if (sameId || sameName)
+                {
+                    _desktopProviders.RemoveAt(i);
+                    if (i < idx) idx--;
+                }
+            }
+        }
         CliStore.SaveClaudeDesktop(_desktopProviders);
+
+        var currentName = ClaudeDesktopCli.CurrentProviderName();
+        var currentUrl = ClaudeDesktopCli.CurrentGatewayUrl()?.TrimEnd('/');
+        var isCurrent = (existing != null && (
+            (!string.IsNullOrEmpty(currentName) && (string.Equals(existing.Name, currentName, StringComparison.OrdinalIgnoreCase) || string.Equals(existing.Id, currentName, StringComparison.OrdinalIgnoreCase))) ||
+            (!string.IsNullOrEmpty(currentUrl) && string.Equals(existing.BaseUrl?.TrimEnd('/'), currentUrl, StringComparison.OrdinalIgnoreCase))
+        )) || (
+            (!string.IsNullOrEmpty(currentName) && (string.Equals(p.Name, currentName, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Id, currentName, StringComparison.OrdinalIgnoreCase))) ||
+            (!string.IsNullOrEmpty(currentUrl) && string.Equals(p.BaseUrl?.TrimEnd('/'), currentUrl, StringComparison.OrdinalIgnoreCase))
+        );
+
+        if (isCurrent)
+        {
+            var dummyRow = new ClaudeRow { P = p, IsDesktop = true };
+            if (dummyRow.RequiresRouter && !LocalProxyServer.IsClaudeDesktopEnabled)
+            {
+                LocalProxyServer.SetClaudeDesktopEnabled(true);
+            }
+            try { ClaudeDesktopCli.Apply(p); } catch { }
+        }
+
         RefreshDesktop();
-        ShowToast($"已保存供应商「{p.Name}」");
+        ShowToast(isCurrent ? $"已保存并同步更新当前客户端配置「{p.Name}」（需重启 Claude 生效）" : $"已保存供应商「{p.Name}」");
+    }
+
+    async void OnRestartClaudeDesktop(object sender, RoutedEventArgs e)
+    {
+        ShowToast("正在重启 Claude 客户端…");
+        try
+        {
+            await ClaudeProcess.RestartClaudeAsync();
+            ShowToast("Claude 客户端已重启");
+        }
+        catch (Exception ex)
+        {
+            ShowToast("重启 Claude 失败：" + ex.Message, isError: true);
+        }
     }
 
     void OnRefreshDesktop(object sender, RoutedEventArgs e) => RefreshDesktop();
@@ -1336,20 +1510,64 @@ public partial class MainWindow : Window
 
         if (!ok || dlg.ResultCodex == null) return;
         var p = dlg.ResultCodex;
-        var idx = existing != null ? _codexProviders.IndexOf(existing) : _codexProviders.FindIndex(x => x.Name == p.Name || x.Id == p.Id);
+        int idx = -1;
+        if (existing != null)
+        {
+            idx = _codexProviders.IndexOf(existing);
+            if (idx < 0 && !string.IsNullOrEmpty(existing.Id))
+                idx = _codexProviders.FindIndex(x => string.Equals(x.Id, existing.Id, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0 && !string.IsNullOrEmpty(existing.Name))
+                idx = _codexProviders.FindIndex(x => string.Equals(x.Name, existing.Name, StringComparison.OrdinalIgnoreCase));
+        }
+        if (idx < 0 && !string.IsNullOrEmpty(p.Id))
+            idx = _codexProviders.FindIndex(x => string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0 && !string.IsNullOrEmpty(p.Name))
+            idx = _codexProviders.FindIndex(x => string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
+
         if (idx >= 0) _codexProviders[idx] = p;
-        else _codexProviders.Add(p);
+        else
+        {
+            _codexProviders.Add(p);
+            idx = _codexProviders.Count - 1;
+        }
+
+        for (int i = _codexProviders.Count - 1; i >= 0; i--)
+        {
+            if (i != idx)
+            {
+                var other = _codexProviders[i];
+                bool sameId = !string.IsNullOrEmpty(p.Id) && !string.IsNullOrEmpty(other.Id) && string.Equals(p.Id, other.Id, StringComparison.OrdinalIgnoreCase);
+                bool sameName = string.Equals(p.Name, other.Name, StringComparison.OrdinalIgnoreCase);
+                if (sameId || sameName)
+                {
+                    _codexProviders.RemoveAt(i);
+                    if (i < idx) idx--;
+                }
+            }
+        }
         CliStore.SaveCodex(_codexProviders);
 
         var currentId = CodexCli.CurrentProviderId();
-        var isCurrent = (p.IsOfficial && string.IsNullOrEmpty(currentId)) || (!p.IsOfficial && string.Equals(currentId, p.Id, StringComparison.OrdinalIgnoreCase));
+        var isCurrent = (existing != null && (
+            (!string.IsNullOrEmpty(currentId) && (string.Equals(existing.Id, currentId, StringComparison.OrdinalIgnoreCase) || string.Equals(existing.Name, currentId, StringComparison.OrdinalIgnoreCase))) ||
+            (existing.IsOfficial && string.IsNullOrEmpty(currentId))
+        )) || (
+            (!string.IsNullOrEmpty(currentId) && (string.Equals(p.Id, currentId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, currentId, StringComparison.OrdinalIgnoreCase))) ||
+            (p.IsOfficial && string.IsNullOrEmpty(currentId))
+        );
+
         if (isCurrent)
         {
+            var dummyRow = new CodexRow { P = p };
+            if (dummyRow.RequiresRouter && !LocalProxyServer.IsCodexEnabled)
+            {
+                LocalProxyServer.SetCodexEnabled(true);
+            }
             try { CodexCli.Apply(p); } catch { }
         }
 
         RefreshCodex();
-        ShowToast($"已保存供应商「{p.Name}」");
+        ShowToast(isCurrent ? $"已保存并同步生效当前配置「{p.Name}」" : $"已保存供应商「{p.Name}」");
     }
 
 
@@ -1503,8 +1721,20 @@ public partial class MainWindow : Window
             if (existing != null && existing.Id != p.Id)
                 OpenCodeCli.DeleteProvider(existing.Id);
             OpenCodeCli.SaveProvider(p);
+
+            var currentModel = OpenCodeCli.CurrentModel();
+            var isCurrent = !string.IsNullOrEmpty(currentModel) && (
+                (existing != null && (currentModel == existing.Id || currentModel.StartsWith(existing.Id + "/", StringComparison.Ordinal))) ||
+                (currentModel == p.Id || currentModel.StartsWith(p.Id + "/", StringComparison.Ordinal))
+            );
+            if (isCurrent)
+            {
+                var dummyRow = new OpenCodeRow { P = p };
+                ApplyOpencodeRow(dummyRow);
+            }
+
             RefreshOpencode();
-            ShowToast($"已保存供应商「{p.Id}」");
+            ShowToast(isCurrent ? $"已保存并同步生效当前配置「{p.Id}」" : $"已保存供应商「{p.Id}」");
         }
         catch (Exception ex) { ShowToast("保存失败：" + ex.Message, isError: true); }
     }
@@ -1657,22 +1887,25 @@ public partial class MainWindow : Window
 
     void UpsertClaude(ClaudeProvider p)
     {
-        var i = _claudeProviders.FindIndex(x => x.Name == p.Name);
+        var i = _claudeProviders.FindIndex(x => (!string.IsNullOrEmpty(p.Id) && string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase)) || string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
         if (i >= 0) _claudeProviders[i] = p; else _claudeProviders.Add(p);
+        _claudeProviders = CliStore.DeduplicateClaude(_claudeProviders);
         CliStore.SaveClaude(_claudeProviders);
     }
 
     void UpsertDesktop(ClaudeProvider p)
     {
-        var i = _desktopProviders.FindIndex(x => x.Name == p.Name);
+        var i = _desktopProviders.FindIndex(x => (!string.IsNullOrEmpty(p.Id) && string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase)) || string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
         if (i >= 0) _desktopProviders[i] = p; else _desktopProviders.Add(p);
+        _desktopProviders = CliStore.DeduplicateClaude(_desktopProviders);
         CliStore.SaveClaudeDesktop(_desktopProviders);
     }
 
     void UpsertCodex(CodexProvider p)
     {
-        var i = _codexProviders.FindIndex(x => x.Name == p.Name || x.Id == p.Id);
+        var i = _codexProviders.FindIndex(x => (!string.IsNullOrEmpty(p.Id) && string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase)) || string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
         if (i >= 0) _codexProviders[i] = p; else _codexProviders.Add(p);
+        _codexProviders = CliStore.DeduplicateCodex(_codexProviders);
         CliStore.SaveCodex(_codexProviders);
     }
 
