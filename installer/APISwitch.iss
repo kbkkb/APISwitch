@@ -13,10 +13,13 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
-DefaultDirName={localappdata}\Programs\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppName}
+; 强制显示选择目标安装目录页面，允许用户自主更改安装路径
+DisableDirPage=no
 DisableProgramGroupPage=yes
-; 采用当前用户权限安装（免管理员 UAC 弹窗，支持无缝静默更新）
+; 采用当前用户权限为默认（免管理员 UAC 弹窗），并允许用户选择为当前用户或所有用户安装
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\Release_Package
 OutputBaseFilename=APISwitch-Setup-v{#MyAppVersion}
 SetupIconFile=..\Assets\app.ico
@@ -33,7 +36,7 @@ VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimp"; MessagesFile: "ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
