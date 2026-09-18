@@ -1,4 +1,4 @@
-﻿; Inno Setup Script for APISwitch
+; Inno Setup Script for APISwitch
 #define MyAppName "APISwitch"
 #define MyAppVersion "0.1.1"
 #define MyAppPublisher "kbkkb"
@@ -24,6 +24,13 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+VersionInfoVersion={#MyAppVersion}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoCopyright=Copyright (C) 2026 {#MyAppPublisher}
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
 
 [Languages]
 Name: "chinesesimp"; MessagesFile: "compiler:Default.isl"
