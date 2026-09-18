@@ -23,10 +23,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Remove="Assets\**" />
     <Resource Include="Assets\**" />
-    <Content Include="Assets\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>

@@ -43,8 +43,20 @@ public partial class App : System.Windows.Application
         };
     }
 
+    public static void LogStartup(string msg)
+    {
+        try
+        {
+            var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
+            Directory.CreateDirectory(logDir);
+            File.AppendAllText(Path.Combine(logDir, "startup.log"), $"[{DateTime.Now:O}] [PID:{Environment.ProcessId}] {msg}\n");
+        }
+        catch { }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
+        LogStartup($"OnStartup start, args=[{string.Join(" ", e.Args)}]");
         if (e.Args.Contains("--probe"))
         {
             RunProbe();
@@ -57,6 +69,34 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+        if (e.Args.Length >= 2 && e.Args[0] == "--render-test")
+        {
+            var outputPath = e.Args[1];
+            try
+            {
+                LocalProxyServer.Initialize();
+                var win = new MainWindow();
+                win.Show();
+                win.UpdateLayout();
+                var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)win.ActualWidth, (int)win.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                rtb.Render(win);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                using (var fs = File.Open(outputPath, FileMode.Create, FileAccess.Write))
+                {
+                    encoder.Save(fs);
+                }
+                win.Close();
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText(outputPath + ".err", ex.ToString());
+            }
+            Shutdown();
+            return;
+        }
+
         if (e.Args.Length >= 2 && e.Args[0] == "--apply-desktop")
         {
             var targetName = e.Args[1];
@@ -91,6 +131,7 @@ public partial class App : System.Windows.Application
 
         if (!hasHandle)
         {
+            LogStartup("Another instance is already running. Signaling wakeup event and exiting.");
             try
             {
                 AllowSetForegroundWindow(ASFW_ANY);
@@ -102,6 +143,8 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+
+        LogStartup("Single instance mutex acquired.");
 
         try
         {
@@ -124,15 +167,20 @@ public partial class App : System.Windows.Application
         catch { }
 
         LocalProxyServer.Initialize();
+        LogStartup("LocalProxyServer initialized.");
         base.OnStartup(e);
 
+        LogStartup("Creating MainWindow...");
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
+        LogStartup("MainWindow instantiated. Calling Show()...");
         mainWindow.Show();
+        LogStartup("mainWindow.Show() finished.");
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        LogStartup($"OnExit called with ExitCode: {e.ApplicationExitCode}");
         try
         {
             _registeredWait?.Unregister(null);

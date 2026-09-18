@@ -51,7 +51,9 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        App.LogStartup("MainWindow ctor: Before InitializeComponent");
         InitializeComponent();
+        App.LogStartup("MainWindow ctor: After InitializeComponent");
         ProfileList.ItemsSource = _profiles;
         CodexList.ItemsSource = _codexCollection;
         ClaudeList.ItemsSource = _claudeCollection;
@@ -67,6 +69,7 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) =>
         {
+            App.LogStartup("MainWindow Loaded: start");
             ApplyTabTheme((Tabs.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity");
             LocalProxyServer.StateChanged += () => Dispatcher.Invoke(UpdateRouterUI);
             RefreshAll();
@@ -77,7 +80,9 @@ public partial class MainWindow : Window
             }
             InitAgQuotaTimer();
             InitTrayIcon();
+            App.LogStartup("MainWindow Loaded: finished");
         };
+        App.LogStartup("MainWindow ctor: finished");
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -3060,6 +3065,16 @@ public partial class MainWindow : Window
             if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
             {
                 _notifyIcon.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
+            }
+            if (_notifyIcon.Icon == null)
+            {
+                try
+                {
+                    var streamInfo = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/app.ico"));
+                    if (streamInfo?.Stream != null)
+                        _notifyIcon.Icon = new System.Drawing.Icon(streamInfo.Stream);
+                }
+                catch { }
             }
             if (_notifyIcon.Icon == null)
             {
