@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -8,6 +9,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using MediaColor = System.Windows.Media.Color;
+using WpfPoint = System.Windows.Point;
 using APISwitch.Dialogs;
 using APISwitch.Models;
 using APISwitch.Services;
@@ -22,7 +27,13 @@ public partial class MainWindow : Window
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
-    List<Profile> _profiles = new();
+    ObservableCollection<Profile> _profiles = new();
+    ObservableCollection<CodexRow> _codexCollection = new();
+    ObservableCollection<ClaudeRow> _claudeCollection = new();
+    ObservableCollection<ClaudeRow> _desktopCollection = new();
+    ObservableCollection<OpenCodeRow> _ocCollection = new();
+    ObservableCollection<PiRow> _piCollection = new();
+
     List<ClaudeProvider> _claudeProviders = new();
     List<ClaudeProvider> _desktopProviders = new();
     List<CodexProvider> _codexProviders = new();
@@ -41,11 +52,14 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        if (ver != null && AppVersionText != null)
-        {
-            AppVersionText.Text = $"v{ver.Major}.{ver.Minor}.{ver.Build}";
-        }
+        ProfileList.ItemsSource = _profiles;
+        CodexList.ItemsSource = _codexCollection;
+        ClaudeList.ItemsSource = _claudeCollection;
+        DesktopList.ItemsSource = _desktopCollection;
+        OcList.ItemsSource = _ocCollection;
+        PiList.ItemsSource = _piCollection;
+        RestoreTabOrder();
+        ApplyTabTheme((Tabs.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity");
 
         Activated += OnWindowActivated;
         Deactivated += OnWindowDeactivated;
@@ -53,10 +67,14 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) =>
         {
+            ApplyTabTheme((Tabs.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity");
             LocalProxyServer.StateChanged += () => Dispatcher.Invoke(UpdateRouterUI);
             RefreshAll();
             UpdateRouterUI();
-            _ = CheckUpdateSilentAsync();
+            if (AppSettingsService.Current.AutoCheckUpdate)
+            {
+                _ = CheckUpdateSilentAsync();
+            }
             InitAgQuotaTimer();
             InitTrayIcon();
         };
@@ -85,7 +103,7 @@ public partial class MainWindow : Window
         }
     }
 
-    void RefreshAll()
+    public void RefreshAll()
     {
         RefreshAntigravity();
         RefreshCodex();
@@ -103,7 +121,7 @@ public partial class MainWindow : Window
         };
         _agQuotaTimer.Tick += (_, _) =>
         {
-            if (IsActive && WindowState != WindowState.Minimized && Tabs?.SelectedIndex == 0)
+            if (IsActive && WindowState != WindowState.Minimized && (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity")
             {
                 _ = RefreshAllAgQuotasAsync(silent: true);
             }
@@ -145,7 +163,7 @@ public partial class MainWindow : Window
         _agQuotaTimer?.Stop();
         _agQuotaTimer?.Start();
 
-        if (Tabs?.SelectedIndex == 0)
+        if ((Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity")
         {
             _ = RefreshAllAgQuotasAsync(silent: true);
         }
@@ -153,18 +171,21 @@ public partial class MainWindow : Window
 
     void OnTabChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!IsLoaded) return;
-        switch (Tabs!.SelectedIndex)
+        if (e.Source != Tabs || !IsLoaded || _isReorderingTabs) return;
+        var tag = (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() ?? "";
+        ApplyTabTheme(tag);
+
+        switch (tag)
         {
-            case 0:
+            case "antigravity":
                 RefreshAntigravity();
                 _ = RefreshAllAgQuotasAsync(silent: true);
                 break;
-            case 1: RefreshCodex(); break;
-            case 2: RefreshClaude(); break;
-            case 3: RefreshDesktop(); break;
-            case 4: RefreshOpencode(); break;
-            case 5: RefreshPi(); break;
+            case "codex": RefreshCodex(); break;
+            case "claude": RefreshClaude(); break;
+            case "desktop": RefreshDesktop(); break;
+            case "opencode": RefreshOpencode(); break;
+            case "pi": RefreshPi(); break;
         }
     }
 
@@ -243,10 +264,10 @@ public partial class MainWindow : Window
         IdeChip.Text = running ? "IDE 运行中" : "IDE 未运行";
         IdeChip.Foreground = running ? System.Windows.Media.Brushes.LightGreen : null;
 
-        _profiles = ProfileStore.Load();
+        var loaded = ProfileStore.Load();
 
         // If no profiles loaded yet and Antigravity Tools is available, auto import
-        if (_profiles.Count == 0 && AgToolsService.IsInstalled())
+        if (loaded.Count == 0 && AgToolsService.IsInstalled())
         {
             try
             {
@@ -262,9 +283,22 @@ public partial class MainWindow : Window
             catch { }
         }
 
-        foreach (var p in _profiles) p.IsCurrent = email != null && email.Equals(p.Email, StringComparison.OrdinalIgnoreCase);
-        ProfileList.ItemsSource = null;
-        ProfileList.ItemsSource = _profiles;
+        _profiles.Clear();
+        var seenAg = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in loaded)
+        {
+            var key = (!string.IsNullOrEmpty(p.Email) ? p.Email : p.Name).Trim();
+            if (!string.IsNullOrEmpty(key) && seenAg.Add(key))
+            {
+                p.IsCurrent = email != null && email.Equals(p.Email, StringComparison.OrdinalIgnoreCase);
+                _profiles.Add(p);
+            }
+        }
+
+        if (ProfileList.ItemsSource != _profiles)
+        {
+            ProfileList.ItemsSource = _profiles;
+        }
         AgEmpty.Visibility = _profiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -394,7 +428,7 @@ public partial class MainWindow : Window
                 if (target.IsProTier)
                     ShowToast($"已同时刷新 {target.Email} 的 Gemini 与 GPT/Claude 配额");
                 else
-                    ShowToast($"已刷新 {target.Email} 的 Gemini 周配额 (免费版仅限Gemini周额度)");
+                    ShowToast($"已刷新 {target.Email} 的 Gemini 与 Claude/GPT 周配额");
             }
             else
             {
@@ -553,11 +587,45 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo(AgPaths.ProfilesDir) { UseShellExecute = true });
     }
 
-    // ---------- Card Drag and Drop Reordering ----------
+    void OnOpenSettings(object sender, RoutedEventArgs e)
+    {
+        var tag = (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity";
+        var dlg = new SettingsDialog(tag, this) { Owner = this };
+        dlg.ShowDialog();
+    }
 
-    System.Windows.Point _dragStartPoint;
-    object? _draggedItem;
-    System.Windows.Controls.ListBox? _dragSourceListBox;
+    void OnOpenBugFeedbackClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("https://github.com/kbkkb/APISwitch/issues") { UseShellExecute = true });
+        }
+        catch { }
+    }
+
+    // ==================== Modern Real-time Floating Drag & Drop Engine ====================
+
+    enum DragCategory { None, Tab, Card }
+    DragCategory _activeDragCategory = DragCategory.None;
+
+    // Tab dragging
+    TabItem? _draggedTab;
+    WpfPoint _tabDragStartPoint;
+    WpfPoint _tabGrabOffset;
+    bool _isTabDragging = false;
+    bool _isReorderingTabs = false;
+
+    // Card dragging
+    System.Windows.Controls.ListBox? _draggedCardListBox;
+    ListBoxItem? _draggedCardItem;
+    object? _draggedCardData;
+    WpfPoint _cardDragStartPoint;
+    WpfPoint _cardGrabOffset;
+    bool _isCardDragging = false;
+    bool _isReorderingCards = false;
+    double _cardFixedX = 250;
+
+    static string TabOrderFile => Path.Combine(AgPaths.AppData, "APISwitch", "tab-order.json");
 
     static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
     {
@@ -569,145 +637,903 @@ public partial class MainWindow : Window
         return null;
     }
 
+    static bool IsVisualChildOf(DependencyObject? child, DependencyObject parent)
+    {
+        while (child != null)
+        {
+            if (ReferenceEquals(child, parent)) return true;
+            child = VisualTreeHelper.GetParent(child);
+        }
+        return false;
+    }
+
+    void OnTabItemPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) return;
+
+        // The TabItem Header is on the sidebar (Column 0, width 236).
+        // If the click is anywhere on the right content area (X >= 236), ignore completely so cards can be dragged!
+        var pos = e.GetPosition(this);
+        if (pos.X >= 236) return;
+
+        var dep = e.OriginalSource as DependencyObject;
+        if (sender is TabItem tab)
+        {
+            var bd = tab.Template?.FindName("Bd", tab) as FrameworkElement ?? tab;
+            if (bd != null && !IsVisualChildOf(dep, bd))
+            {
+                return;
+            }
+
+            // Clear any card drag state
+            _draggedCardListBox = null;
+            _draggedCardItem = null;
+            _draggedCardData = null;
+            _isCardDragging = false;
+
+            _draggedTab = tab;
+            _tabDragStartPoint = pos;
+            _tabGrabOffset = e.GetPosition(bd);
+            _isTabDragging = false;
+        }
+    }
+
     void OnCardListPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.LeftButton != MouseButtonState.Pressed) return;
         if (sender is not System.Windows.Controls.ListBox lb) return;
 
-        // If clicked on any button or interactive element, don't start dragging
-        if (FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) != null)
+        // Clear any tab drag state
+        _draggedTab = null;
+        _isTabDragging = false;
+
+        var dep = e.OriginalSource as DependencyObject;
+        if (FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(dep) != null ||
+            FindVisualParent<System.Windows.Controls.TextBox>(dep) != null ||
+            FindVisualParent<System.Windows.Controls.PasswordBox>(dep) != null ||
+            FindVisualParent<System.Windows.Controls.ComboBox>(dep) != null ||
+            FindVisualParent<System.Windows.Controls.CheckBox>(dep) != null)
         {
-            _draggedItem = null;
-            _dragSourceListBox = null;
             return;
         }
 
-        var item = FindVisualParent<ListBoxItem>(e.OriginalSource as DependencyObject);
+        var item = FindVisualParent<ListBoxItem>(dep);
         if (item != null && item.DataContext != null)
         {
-            _dragStartPoint = e.GetPosition(lb);
-            _draggedItem = item.DataContext;
-            _dragSourceListBox = lb;
+            _draggedCardListBox = lb;
+            _draggedCardItem = item;
+            _draggedCardData = item.DataContext;
+            _cardDragStartPoint = e.GetPosition(this);
+            _cardGrabOffset = e.GetPosition(item);
+            _isCardDragging = false;
         }
     }
 
-    void OnCardListPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    void OnWindowPreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        _draggedItem = null;
-        _dragSourceListBox = null;
-    }
-
-    void OnCardListPreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (e.LeftButton != MouseButtonState.Pressed || _draggedItem == null || _dragSourceListBox != sender)
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            if (_isTabDragging || _isCardDragging)
+            {
+                EndAllDrag();
+            }
             return;
+        }
 
-        var lb = sender as System.Windows.Controls.ListBox;
-        if (lb == null) return;
+        var currentPos = e.GetPosition(this);
 
-        System.Windows.Point currentPoint = e.GetPosition(lb);
-        Vector diff = _dragStartPoint - currentPoint;
-
-        if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
-            Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+        // 1. Check initiation of Tab Drag
+        if (_draggedTab != null && !_isTabDragging && _activeDragCategory == DragCategory.None)
         {
-            var data = _draggedItem;
-            var srcLb = _dragSourceListBox;
-            try
+            var diff = currentPos - _tabDragStartPoint;
+            if (Math.Abs(diff.Y) > 5 || Math.Abs(diff.X) > 5)
             {
-                System.Windows.DragDrop.DoDragDrop(srcLb, data, System.Windows.DragDropEffects.Move);
+                StartTabDrag(currentPos);
             }
-            catch { }
-            finally
+        }
+
+        // 2. Check initiation of Card Drag
+        if (_draggedCardItem != null && !_isCardDragging && _activeDragCategory == DragCategory.None)
+        {
+            var diff = currentPos - _cardDragStartPoint;
+            if (Math.Abs(diff.Y) > 5 || Math.Abs(diff.X) > 5)
             {
-                _draggedItem = null;
-                _dragSourceListBox = null;
+                StartCardDrag(currentPos);
             }
+        }
+
+        // 3. Process Tab Dragging
+        if (_isTabDragging && _draggedTab != null)
+        {
+            UpdateGhostPosition();
+            LiveReorderTab(currentPos);
+            e.Handled = true;
+            return;
+        }
+
+        // 4. Process Card Dragging
+        if (_isCardDragging && _draggedCardListBox != null && _draggedCardData != null)
+        {
+            UpdateGhostPosition();
+            LiveReorderCard(currentPos);
+            e.Handled = true;
+            return;
         }
     }
 
-    void OnCardListDragOver(object sender, System.Windows.DragEventArgs e)
+    void StartTabDrag(WpfPoint mousePos)
     {
-        if (sender is System.Windows.Controls.ListBox lb && _dragSourceListBox == lb && _draggedItem != null)
-        {
-            e.Effects = System.Windows.DragDropEffects.Move;
+        if (_draggedTab == null) return;
+        _isTabDragging = true;
+        _activeDragCategory = DragCategory.Tab;
 
-            // Auto-scroll when dragging near boundaries
-            if (FindVisualParent<ScrollViewer>(lb) is ScrollViewer sv)
+        // Render only the sidebar tab button Bd, NEVER the full content page
+        FrameworkElement targetVisual = _draggedTab;
+        if (_draggedTab.Template?.FindName("Bd", _draggedTab) is FrameworkElement bd)
+        {
+            targetVisual = bd;
+        }
+
+        double w = targetVisual.ActualWidth > 0 ? targetVisual.ActualWidth : 216;
+        double h = targetVisual.ActualHeight > 0 ? targetVisual.ActualHeight : 42;
+
+        if (_tabGrabOffset.X <= 0 || _tabGrabOffset.X > w || _tabGrabOffset.Y <= 0 || _tabGrabOffset.Y > h)
+        {
+            _tabGrabOffset = new WpfPoint(Math.Min(30, w / 2), Math.Min(20, h / 2));
+        }
+
+        DragGhostRect.Width = w;
+        DragGhostRect.Height = h;
+        DragGhostBorder.Width = w;
+        DragGhostBorder.Height = h;
+        DragGhostBorder.CornerRadius = new CornerRadius(8);
+        DragGhostRect.RadiusX = 8;
+        DragGhostRect.RadiusY = 8;
+
+        int width = Math.Max(1, (int)Math.Ceiling(w));
+        int height = Math.Max(1, (int)Math.Ceiling(h));
+
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            var vb = new VisualBrush(targetVisual)
             {
-                var pos = e.GetPosition(sv);
-                if (pos.Y < 30) sv.ScrollToVerticalOffset(sv.VerticalOffset - 10);
-                else if (pos.Y > sv.ActualHeight - 30) sv.ScrollToVerticalOffset(sv.VerticalOffset + 10);
-            }
+                Stretch = Stretch.None,
+                Viewbox = new Rect(0, 0, w, h),
+                ViewboxUnits = BrushMappingMode.Absolute
+            };
+            dc.DrawRectangle(vb, null, new Rect(0, 0, w, h));
+        }
+        var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        DragGhostRect.Fill = new ImageBrush(rtb);
+
+        targetVisual.Opacity = 0.35;
+        DragOverlayCanvas.Visibility = Visibility.Visible;
+        UpdateGhostPosition();
+
+        this.CaptureMouse();
+        Mouse.OverrideCursor = System.Windows.Input.Cursors.SizeAll;
+    }
+
+    void StartCardDrag(WpfPoint mousePos)
+    {
+        if (_draggedCardItem == null || _draggedCardListBox == null) return;
+        _isCardDragging = true;
+        _activeDragCategory = DragCategory.Card;
+
+        double w = _draggedCardItem.ActualWidth;
+        double h = _draggedCardItem.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+
+        try
+        {
+            var origin = _draggedCardItem.TranslatePoint(new WpfPoint(0, 0), this);
+            _cardFixedX = Math.Max(200, origin.X);
+        }
+        catch
+        {
+            _cardFixedX = 250;
+        }
+
+        if (_cardGrabOffset.X <= 0 || _cardGrabOffset.X > w || _cardGrabOffset.Y <= 0 || _cardGrabOffset.Y > h)
+        {
+            _cardGrabOffset = new WpfPoint(Math.Min(40, w / 2), Math.Min(25, h / 2));
+        }
+
+        DragGhostRect.Width = w;
+        DragGhostRect.Height = h;
+        DragGhostBorder.Width = w;
+        DragGhostBorder.Height = h;
+        DragGhostBorder.CornerRadius = new CornerRadius(12);
+        DragGhostRect.RadiusX = 12;
+        DragGhostRect.RadiusY = 12;
+
+        int width = Math.Max(1, (int)Math.Ceiling(w));
+        int height = Math.Max(1, (int)Math.Ceiling(h));
+
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
+        {
+            var vb = new VisualBrush(_draggedCardItem)
+            {
+                Stretch = Stretch.None,
+                Viewbox = new Rect(0, 0, w, h),
+                ViewboxUnits = BrushMappingMode.Absolute
+            };
+            dc.DrawRectangle(vb, null, new Rect(0, 0, w, h));
+        }
+        var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
+        DragGhostRect.Fill = new ImageBrush(rtb);
+
+        _draggedCardItem.Opacity = 0.25;
+        DragOverlayCanvas.Visibility = Visibility.Visible;
+        UpdateGhostPosition();
+
+        this.CaptureMouse();
+        Mouse.OverrideCursor = System.Windows.Input.Cursors.SizeAll;
+    }
+
+    void UpdateGhostPosition()
+    {
+        if (DragOverlayCanvas == null || DragGhostBorder == null) return;
+
+        double ghostH = DragGhostBorder.Height > 0 ? DragGhostBorder.Height : 50;
+        var mouseWin = Mouse.GetPosition(this);
+
+        double x;
+        double y;
+
+        if (_isTabDragging)
+        {
+            x = 8;
+            y = mouseWin.Y - _tabGrabOffset.Y;
+            double minY = 46;
+            double maxY = Math.Max(minY, this.ActualHeight - ghostH - 12);
+            y = Math.Clamp(y, minY, maxY);
+        }
+        else // Card dragging
+        {
+            double deltaX = Math.Clamp(mouseWin.X - _cardDragStartPoint.X, -25, 25);
+            x = _cardFixedX + deltaX;
+
+            y = mouseWin.Y - _cardGrabOffset.Y;
+            double minY = 46;
+            double maxY = Math.Max(minY, this.ActualHeight - ghostH - 12);
+            y = Math.Clamp(y, minY, maxY);
+        }
+
+        Canvas.SetLeft(DragGhostBorder, x);
+        Canvas.SetTop(DragGhostBorder, y);
+    }
+
+    void OnWindowPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_isTabDragging || _isCardDragging)
+        {
+            EndAllDrag();
+            e.Handled = true;
         }
         else
         {
-            e.Effects = System.Windows.DragDropEffects.None;
+            _draggedTab = null;
+            _draggedCardItem = null;
+            _draggedCardData = null;
+            _draggedCardListBox = null;
+            _isTabDragging = false;
+            _isCardDragging = false;
+            _activeDragCategory = DragCategory.None;
         }
-        e.Handled = true;
     }
 
-    void OnCardListDrop(object sender, System.Windows.DragEventArgs e)
+    protected override void OnLostMouseCapture(System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is not System.Windows.Controls.ListBox lb || _dragSourceListBox != lb || _draggedItem == null) return;
-
-        var targetItem = FindVisualParent<ListBoxItem>(e.OriginalSource as DependencyObject);
-        object? targetData = targetItem?.DataContext;
-
-        if (lb == CodexList && _draggedItem is CodexRow srcCodex)
+        base.OnLostMouseCapture(e);
+        if (_isReorderingTabs || _isReorderingCards) return;
+        if (Mouse.LeftButton == MouseButtonState.Pressed)
         {
-            int oldIndex = _codexProviders.FindIndex(x => x.Name == srcCodex.P.Name && x.Id == srcCodex.P.Id);
-            int newIndex = targetData is CodexRow dstCodex
-                ? _codexProviders.FindIndex(x => x.Name == dstCodex.P.Name && x.Id == dstCodex.P.Id)
-                : _codexProviders.Count - 1;
-
-            if (oldIndex >= 0 && newIndex >= 0 && oldIndex != newIndex)
+            if (_isTabDragging || _isCardDragging)
             {
-                var item = _codexProviders[oldIndex];
-                _codexProviders.RemoveAt(oldIndex);
-                _codexProviders.Insert(newIndex, item);
-                CliStore.SaveCodex(_codexProviders);
-                RefreshCodex();
-                ShowToast($"已将「{srcCodex.Name}」移动至第 {newIndex + 1} 位");
+                this.CaptureMouse();
+                return;
             }
         }
-        else if (lb == ClaudeList && _draggedItem is ClaudeRow srcClaude)
+        if (_isTabDragging || _isCardDragging)
         {
-            int oldIndex = _claudeProviders.FindIndex(x => x.Name == srcClaude.P.Name);
-            int newIndex = targetData is ClaudeRow dstClaude
-                ? _claudeProviders.FindIndex(x => x.Name == dstClaude.P.Name)
-                : _claudeProviders.Count - 1;
+            EndAllDrag();
+        }
+    }
 
-            if (oldIndex >= 0 && newIndex >= 0 && oldIndex != newIndex)
+    void EndAllDrag()
+    {
+        bool wasTabDragging = _isTabDragging;
+        bool wasCardDragging = _isCardDragging;
+        var finishedCardLb = _draggedCardListBox;
+
+        DragOverlayCanvas.Visibility = Visibility.Collapsed;
+        DragGhostRect.Fill = null;
+
+        if (_draggedTab != null)
+        {
+            _draggedTab.Opacity = 1.0;
+            if (_draggedTab.Template?.FindName("Bd", _draggedTab) is FrameworkElement bd)
             {
-                var item = _claudeProviders[oldIndex];
-                _claudeProviders.RemoveAt(oldIndex);
-                _claudeProviders.Insert(newIndex, item);
-                CliStore.SaveClaude(_claudeProviders);
-                RefreshClaude();
-                ShowToast($"已将「{srcClaude.Name}」移动至第 {newIndex + 1} 位");
+                bd.Opacity = 1.0;
             }
         }
-        else if (lb == DesktopList && _draggedItem is ClaudeRow srcDesk)
+        if (_draggedCardItem != null)
         {
-            int oldIndex = _desktopProviders.FindIndex(x => x.Name == srcDesk.P.Name);
-            int newIndex = targetData is ClaudeRow dstDesk
-                ? _desktopProviders.FindIndex(x => x.Name == dstDesk.P.Name)
-                : _desktopProviders.Count - 1;
-
-            if (oldIndex >= 0 && newIndex >= 0 && oldIndex != newIndex)
+            _draggedCardItem.Opacity = 1.0;
+        }
+        if (finishedCardLb != null)
+        {
+            for (int i = 0; i < finishedCardLb.Items.Count; i++)
             {
-                var item = _desktopProviders[oldIndex];
-                _desktopProviders.RemoveAt(oldIndex);
-                _desktopProviders.Insert(newIndex, item);
-                CliStore.SaveClaudeDesktop(_desktopProviders);
-                RefreshDesktop();
-                ShowToast($"已将「{srcDesk.Name}」移动至第 {newIndex + 1} 位");
+                if (finishedCardLb.ItemContainerGenerator.ContainerFromIndex(i) is ListBoxItem lbi)
+                {
+                    lbi.Opacity = 1.0;
+                }
             }
         }
 
-        _draggedItem = null;
-        _dragSourceListBox = null;
-        e.Handled = true;
+        this.ReleaseMouseCapture();
+        Mouse.OverrideCursor = null;
+
+        if (wasTabDragging)
+        {
+            SaveTabOrder();
+        }
+
+        if (wasCardDragging && finishedCardLb != null)
+        {
+            SaveCardOrder(finishedCardLb);
+        }
+
+        _draggedTab = null;
+        _isTabDragging = false;
+        _isReorderingTabs = false;
+
+        _draggedCardListBox = null;
+        _draggedCardItem = null;
+        _draggedCardData = null;
+        _isCardDragging = false;
+        _isReorderingCards = false;
+        _activeDragCategory = DragCategory.None;
+    }
+
+    void SaveCardOrder(System.Windows.Controls.ListBox lb)
+    {
+        try
+        {
+            if (lb == ProfileList)
+            {
+                var deduped = _profiles.GroupBy(p => !string.IsNullOrEmpty(p.Email) ? p.Email : p.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+                ProfileStore.SaveOrder(deduped);
+            }
+            else if (lb == CodexList)
+            {
+                var list = CliStore.DeduplicateCodex(_codexCollection.Select(r => r.P).ToList());
+                _codexProviders = list;
+                CliStore.SaveCodex(list);
+            }
+            else if (lb == ClaudeList)
+            {
+                var list = CliStore.DeduplicateClaude(_claudeCollection.Select(r => r.P).ToList());
+                _claudeProviders = list;
+                CliStore.SaveClaude(list);
+            }
+            else if (lb == DesktopList)
+            {
+                var list = CliStore.DeduplicateClaude(_desktopCollection.Select(r => r.P).ToList());
+                _desktopProviders = list;
+                CliStore.SaveClaudeDesktop(list);
+            }
+            else if (lb == OcList)
+            {
+                var list = CliStore.DeduplicateOpenCode(_ocCollection.Select(r => r.P).ToList());
+                _openCodeProviders = list;
+                CliStore.SaveOpencode(list);
+            }
+            else if (lb == PiList)
+            {
+                var list = CliStore.DeduplicatePi(_piCollection.Select(r => r.P).ToList());
+                _piProviders = list;
+                CliStore.SavePiProviders(list);
+            }
+        }
+        catch { }
+    }
+
+    void LiveReorderTab(WpfPoint currentPos)
+    {
+        if (_draggedTab == null || _isReorderingTabs) return;
+
+        int currentIndex = Tabs.Items.IndexOf(_draggedTab);
+        if (currentIndex < 0) return;
+
+        // Check swapping with upper tab
+        if (currentIndex > 0 && Tabs.Items[currentIndex - 1] is TabItem prevTab)
+        {
+            var prevVisual = prevTab.Template?.FindName("Bd", prevTab) as FrameworkElement ?? prevTab;
+            if (TryGetMidY(prevVisual, this, out double prevMid) && currentPos.Y < prevMid)
+            {
+                _isReorderingTabs = true;
+                try
+                {
+                    var selected = Tabs.SelectedItem;
+                    Tabs.Items.RemoveAt(currentIndex);
+                    Tabs.Items.Insert(currentIndex - 1, _draggedTab);
+                    Tabs.SelectedItem = selected;
+                    Tabs.UpdateLayout();
+                    this.CaptureMouse();
+                }
+                catch { }
+                finally
+                {
+                    _isReorderingTabs = false;
+                }
+                return;
+            }
+        }
+
+        // Check swapping with lower tab
+        if (currentIndex < Tabs.Items.Count - 1 && Tabs.Items[currentIndex + 1] is TabItem nextTab)
+        {
+            var nextVisual = nextTab.Template?.FindName("Bd", nextTab) as FrameworkElement ?? nextTab;
+            if (TryGetMidY(nextVisual, this, out double nextMid) && currentPos.Y > nextMid)
+            {
+                _isReorderingTabs = true;
+                try
+                {
+                    var selected = Tabs.SelectedItem;
+                    Tabs.Items.RemoveAt(currentIndex);
+                    Tabs.Items.Insert(currentIndex + 1, _draggedTab);
+                    Tabs.SelectedItem = selected;
+                    Tabs.UpdateLayout();
+                    this.CaptureMouse();
+                }
+                catch { }
+                finally
+                {
+                    _isReorderingTabs = false;
+                }
+                return;
+            }
+        }
+    }
+
+    static bool TryGetMidY(FrameworkElement? el, UIElement relativeTo, out double midY)
+    {
+        midY = 0;
+        if (el == null || !el.IsLoaded || !el.IsVisible) return false;
+        try
+        {
+            var pt = el.TranslatePoint(new WpfPoint(0, el.ActualHeight / 2), relativeTo);
+            midY = pt.Y;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    void LiveReorderCard(WpfPoint currentPos)
+    {
+        if (_draggedCardListBox == null || _draggedCardData == null || _isReorderingCards) return;
+
+        var lb = _draggedCardListBox;
+        int count = lb.Items.Count;
+        if (count <= 1) return;
+
+        int currentIndex = -1;
+        for (int i = 0; i < count; i++)
+        {
+            if (ReferenceEquals(lb.Items[i], _draggedCardData) || IsMatchingRow(lb.Items[i], _draggedCardData))
+            {
+                currentIndex = i;
+                break;
+            }
+        }
+        if (currentIndex < 0) return;
+
+        // Auto-scroll when dragging near top/bottom edges of the scroll container
+        var sv = FindVisualParent<ScrollViewer>(lb);
+        if (sv != null)
+        {
+            try
+            {
+                var svTopLeft = sv.TranslatePoint(new WpfPoint(0, 0), this);
+                double relY = currentPos.Y - svTopLeft.Y;
+                if (relY < 40 && sv.VerticalOffset > 0)
+                {
+                    sv.ScrollToVerticalOffset(Math.Max(0, sv.VerticalOffset - 14));
+                }
+                else if (relY > sv.ActualHeight - 40 && sv.VerticalOffset < sv.ScrollableHeight)
+                {
+                    sv.ScrollToVerticalOffset(Math.Min(sv.ScrollableHeight, sv.VerticalOffset + 14));
+                }
+            }
+            catch { }
+        }
+
+        // Check upper card (Move UP)
+        if (currentIndex > 0)
+        {
+            var prevContainer = (lb.ItemContainerGenerator.ContainerFromIndex(currentIndex - 1) as FrameworkElement)
+                                ?? FindListBoxItemByData(lb, lb.Items[currentIndex - 1]);
+            if (TryGetMidY(prevContainer, this, out double prevMid) && currentPos.Y < prevMid)
+            {
+                SwapCardItems(currentIndex, currentIndex - 1);
+                return;
+            }
+        }
+
+        // Check lower card (Move DOWN)
+        if (currentIndex < count - 1)
+        {
+            var nextContainer = (lb.ItemContainerGenerator.ContainerFromIndex(currentIndex + 1) as FrameworkElement)
+                                ?? FindListBoxItemByData(lb, lb.Items[currentIndex + 1]);
+            if (TryGetMidY(nextContainer, this, out double nextMid) && currentPos.Y > nextMid)
+            {
+                SwapCardItems(currentIndex, currentIndex + 1);
+                return;
+            }
+        }
+    }
+
+    void SwapCardItems(int fromIndex, int toIndex)
+    {
+        if (_isReorderingCards) return;
+        _isReorderingCards = true;
+        try
+        {
+            var lb = _draggedCardListBox;
+            if (lb == null) return;
+            int count = lb.Items.Count;
+            if (fromIndex < 0 || fromIndex >= count || toIndex < 0 || toIndex >= count || fromIndex == toIndex) return;
+
+            if (lb == ProfileList)
+            {
+                _profiles.Move(fromIndex, toIndex);
+            }
+            else if (lb == CodexList)
+            {
+                _codexCollection.Move(fromIndex, toIndex);
+            }
+            else if (lb == ClaudeList)
+            {
+                _claudeCollection.Move(fromIndex, toIndex);
+            }
+            else if (lb == DesktopList)
+            {
+                _desktopCollection.Move(fromIndex, toIndex);
+            }
+            else if (lb == OcList)
+            {
+                _ocCollection.Move(fromIndex, toIndex);
+            }
+            else if (lb == PiList)
+            {
+                _piCollection.Move(fromIndex, toIndex);
+            }
+
+            lb.UpdateLayout();
+
+            // Synchronize opacity: ensure only the item at toIndex is dimmed, all others 1.0
+            for (int i = 0; i < lb.Items.Count; i++)
+            {
+                var lbi = lb.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem
+                          ?? FindListBoxItemByData(lb, lb.Items[i]);
+                if (lbi != null)
+                {
+                    if (i == toIndex)
+                    {
+                        lbi.Opacity = 0.25;
+                        _draggedCardItem = lbi;
+                    }
+                    else
+                    {
+                        lbi.Opacity = 1.0;
+                    }
+                }
+            }
+        }
+        catch { }
+        finally
+        {
+            _isReorderingCards = false;
+        }
+    }
+
+    static bool IsMatchingRow(object? a, object? b)
+    {
+        if (a == null || b == null) return false;
+        if (ReferenceEquals(a, b)) return true;
+        if (a is Profile pa && b is Profile pb)
+            return string.Equals(pa.Email, pb.Email, StringComparison.OrdinalIgnoreCase);
+        if (a is CodexRow ca && b is CodexRow cb)
+            return (string.Equals(ca.P.Id, cb.P.Id, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(ca.P.Name, cb.P.Name, StringComparison.OrdinalIgnoreCase)) ||
+                   string.Equals(ca.P.Name, cb.P.Name, StringComparison.OrdinalIgnoreCase);
+        if (a is ClaudeRow cla && b is ClaudeRow clb)
+            return string.Equals(cla.P.Name, clb.P.Name, StringComparison.OrdinalIgnoreCase);
+        if (a is OpenCodeRow oa && b is OpenCodeRow ob)
+            return string.Equals(oa.P.Id, ob.P.Id, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(oa.P.Name, ob.P.Name, StringComparison.OrdinalIgnoreCase);
+        if (a is PiRow pia && b is PiRow pib)
+            return string.Equals(pia.P.Id, pib.P.Id, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(pia.P.Name, pib.P.Name, StringComparison.OrdinalIgnoreCase);
+        return false;
+    }
+
+    static IEnumerable<T> FindVisualChildren<T>(DependencyObject? depObj) where T : DependencyObject
+    {
+        if (depObj == null) yield break;
+        int count = VisualTreeHelper.GetChildrenCount(depObj);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(depObj, i);
+            if (child is T t) yield return t;
+            foreach (var grandChild in FindVisualChildren<T>(child))
+                yield return grandChild;
+        }
+    }
+
+    static ListBoxItem? FindListBoxItemByData(System.Windows.Controls.ListBox lb, object? data)
+    {
+        if (data == null) return null;
+        if (lb.ItemContainerGenerator.ContainerFromItem(data) is ListBoxItem item)
+            return item;
+        return FindVisualChildren<ListBoxItem>(lb).FirstOrDefault(x => ReferenceEquals(x.DataContext, data) || IsMatchingRow(x.DataContext, data));
+    }
+
+    void SaveTabOrder()
+    {
+        try
+        {
+            var tags = Tabs.Items.OfType<TabItem>()
+                .Select(t => t.Tag as string)
+                .Where(t => !string.IsNullOrEmpty(t))
+                .ToList();
+            var dir = Path.GetDirectoryName(TabOrderFile);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(TabOrderFile, JsonSerializer.Serialize(tags));
+        }
+        catch { }
+    }
+
+    void RestoreTabOrder()
+    {
+        try
+        {
+            if (!File.Exists(TabOrderFile)) return;
+            var tags = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(TabOrderFile));
+            if (tags == null || tags.Count == 0) return;
+
+            var allTabs = Tabs.Items.OfType<TabItem>().ToList();
+            _isReorderingTabs = true;
+            try
+            {
+                Tabs.Items.Clear();
+                foreach (var tag in tags)
+                {
+                    var tab = allTabs.FirstOrDefault(t => (t.Tag as string) == tag);
+                    if (tab != null)
+                    {
+                        Tabs.Items.Add(tab);
+                        allTabs.Remove(tab);
+                    }
+                }
+                foreach (var remaining in allTabs)
+                {
+                    Tabs.Items.Add(remaining);
+                }
+                if (Tabs.Items.Count > 0)
+                {
+                    Tabs.SelectedIndex = 0;
+                }
+            }
+            finally
+            {
+                _isReorderingTabs = false;
+            }
+        }
+        catch { }
+    }
+
+    static string GetTabTitle(TabItem tab) => (tab.Tag as string) switch
+    {
+        "antigravity" => "Antigravity",
+        "codex" => "Codex",
+        "claude" => "Claude Code",
+        "desktop" => "Claude Desktop",
+        "opencode" => "OpenCode",
+        "pi" => "Pi",
+        _ => tab.Header?.ToString() ?? "应用"
+    };
+
+    void ApplyTabTheme(string tag)
+    {
+        MediaColor primaryColor;
+        MediaColor gradientEndColor;
+        MediaColor hoverColor;
+        MediaColor hoverGradientEndColor;
+        MediaColor activeBgColor;
+        MediaColor activeBorderColor;
+        MediaColor activeTabFgColor;
+        MediaColor titleBarBgColor;
+        MediaColor titleBarBorderColor;
+        MediaColor sidebarBgColor;
+        MediaColor sidebarBorderColor;
+        MediaColor windowBgColor;
+        MediaColor pageBgStartColor;
+        MediaColor pageBgEndColor;
+        MediaColor heroCardBgEndColor;
+        MediaColor heroCardBorderColor;
+        MediaColor ghostHoverBgColor;
+        MediaColor ghostHoverBorderColor;
+
+        switch (tag)
+        {
+            case "codex":
+                // OpenAI Emerald Green
+                primaryColor = MediaColor.FromRgb(0x10, 0xA3, 0x7F);
+                gradientEndColor = MediaColor.FromRgb(0x05, 0x96, 0x69);
+                hoverColor = MediaColor.FromRgb(0x04, 0x78, 0x57);
+                hoverGradientEndColor = MediaColor.FromRgb(0x06, 0x5F, 0x46);
+                activeBgColor = MediaColor.FromRgb(0xC4, 0xF3, 0xDE);
+                activeBorderColor = MediaColor.FromRgb(0x34, 0xD3, 0x99);
+                activeTabFgColor = MediaColor.FromRgb(0x06, 0x5F, 0x46);
+                titleBarBgColor = MediaColor.FromRgb(0xD3, 0xEF, 0xE3);
+                titleBarBorderColor = MediaColor.FromRgb(0xB9, 0xE5, 0xD2);
+                sidebarBgColor = MediaColor.FromRgb(0xDC, 0xF4, 0xEB);
+                sidebarBorderColor = MediaColor.FromRgb(0xBF, 0xE7, 0xD6);
+                windowBgColor = MediaColor.FromRgb(0xDC, 0xF4, 0xEB);
+                pageBgStartColor = MediaColor.FromRgb(0xE8, 0xF8, 0xF1);
+                pageBgEndColor = MediaColor.FromRgb(0xD8, 0xF3, 0xE6);
+                heroCardBgEndColor = MediaColor.FromRgb(0xEC, 0xFD, 0xF5);
+                heroCardBorderColor = MediaColor.FromRgb(0xA7, 0xF3, 0xD0);
+                ghostHoverBgColor = MediaColor.FromRgb(0xEC, 0xFD, 0xF5);
+                ghostHoverBorderColor = MediaColor.FromRgb(0xA7, 0xF3, 0xD0);
+                break;
+
+            case "claude":
+            case "desktop":
+                // Anthropic Terracotta / Warm Sand
+                primaryColor = MediaColor.FromRgb(0xD9, 0x77, 0x06);
+                gradientEndColor = MediaColor.FromRgb(0xEA, 0x58, 0x0C);
+                hoverColor = MediaColor.FromRgb(0xB4, 0x53, 0x09);
+                hoverGradientEndColor = MediaColor.FromRgb(0xC2, 0x41, 0x0C);
+                activeBgColor = MediaColor.FromRgb(0xFC, 0xE3, 0xCB);
+                activeBorderColor = MediaColor.FromRgb(0xFB, 0x92, 0x3C);
+                activeTabFgColor = MediaColor.FromRgb(0x9A, 0x34, 0x12);
+                titleBarBgColor = MediaColor.FromRgb(0xF0, 0xDF, 0xCD);
+                titleBarBorderColor = MediaColor.FromRgb(0xE4, 0xCD, 0xAF);
+                sidebarBgColor = MediaColor.FromRgb(0xF7, 0xE8, 0xD8);
+                sidebarBorderColor = MediaColor.FromRgb(0xE8, 0xD4, 0xBE);
+                windowBgColor = MediaColor.FromRgb(0xF7, 0xE8, 0xD8);
+                pageBgStartColor = MediaColor.FromRgb(0xFF, 0xF2, 0xE4);
+                pageBgEndColor = MediaColor.FromRgb(0xF9, 0xE6, 0xD2);
+                heroCardBgEndColor = MediaColor.FromRgb(0xFF, 0xF7, 0xED);
+                heroCardBorderColor = MediaColor.FromRgb(0xFE, 0xD7, 0xAA);
+                ghostHoverBgColor = MediaColor.FromRgb(0xFF, 0xF7, 0xED);
+                ghostHoverBorderColor = MediaColor.FromRgb(0xFE, 0xD7, 0xAA);
+                break;
+
+            case "opencode":
+                // Cyber Sky Cyan / Tech Blue
+                primaryColor = MediaColor.FromRgb(0x02, 0x84, 0xC7);
+                gradientEndColor = MediaColor.FromRgb(0x0E, 0xA5, 0xE9);
+                hoverColor = MediaColor.FromRgb(0x03, 0x69, 0xA1);
+                hoverGradientEndColor = MediaColor.FromRgb(0x02, 0x84, 0xC7);
+                activeBgColor = MediaColor.FromRgb(0xBD, 0xE3, 0xFB);
+                activeBorderColor = MediaColor.FromRgb(0x38, 0xBD, 0xF8);
+                activeTabFgColor = MediaColor.FromRgb(0x03, 0x69, 0xA1);
+                titleBarBgColor = MediaColor.FromRgb(0xCC, 0xE6, 0xFA);
+                titleBarBorderColor = MediaColor.FromRgb(0xB0, 0xD7, 0xF6);
+                sidebarBgColor = MediaColor.FromRgb(0xD8, 0xED, 0xFC);
+                sidebarBorderColor = MediaColor.FromRgb(0xB9, 0xDC, 0xF7);
+                windowBgColor = MediaColor.FromRgb(0xD8, 0xED, 0xFC);
+                pageBgStartColor = MediaColor.FromRgb(0xE4, 0xF3, 0xFD);
+                pageBgEndColor = MediaColor.FromRgb(0xD2, 0xEA, 0xFD);
+                heroCardBgEndColor = MediaColor.FromRgb(0xF0, 0xF9, 0xFF);
+                heroCardBorderColor = MediaColor.FromRgb(0xBA, 0xE6, 0xFD);
+                ghostHoverBgColor = MediaColor.FromRgb(0xF0, 0xF9, 0xFF);
+                ghostHoverBorderColor = MediaColor.FromRgb(0xBA, 0xE6, 0xFD);
+                break;
+
+            case "pi":
+                // Math Geek Violet / Purple
+                primaryColor = MediaColor.FromRgb(0x7C, 0x3A, 0xED);
+                gradientEndColor = MediaColor.FromRgb(0x93, 0x33, 0xEA);
+                hoverColor = MediaColor.FromRgb(0x6D, 0x28, 0xD9);
+                hoverGradientEndColor = MediaColor.FromRgb(0x7E, 0x22, 0xCE);
+                activeBgColor = MediaColor.FromRgb(0xD9, 0xC8, 0xFB);
+                activeBorderColor = MediaColor.FromRgb(0xA7, 0x8B, 0xFA);
+                activeTabFgColor = MediaColor.FromRgb(0x5B, 0x21, 0xB6);
+                titleBarBgColor = MediaColor.FromRgb(0xDE, 0xD3, 0xFA);
+                titleBarBorderColor = MediaColor.FromRgb(0xC8, 0xB6, 0xF5);
+                sidebarBgColor = MediaColor.FromRgb(0xE7, 0xDC, 0xFD);
+                sidebarBorderColor = MediaColor.FromRgb(0xD0, 0xC1, 0xF7);
+                windowBgColor = MediaColor.FromRgb(0xE7, 0xDC, 0xFD);
+                pageBgStartColor = MediaColor.FromRgb(0xEF, 0xE6, 0xFE);
+                pageBgEndColor = MediaColor.FromRgb(0xE2, 0xD4, 0xFD);
+                heroCardBgEndColor = MediaColor.FromRgb(0xF5, 0xF3, 0xFF);
+                heroCardBorderColor = MediaColor.FromRgb(0xDD, 0xD6, 0xFE);
+                ghostHoverBgColor = MediaColor.FromRgb(0xF5, 0xF3, 0xFF);
+                ghostHoverBorderColor = MediaColor.FromRgb(0xDD, 0xD6, 0xFE);
+                break;
+
+            case "antigravity":
+            default:
+                // Google Indigo / Tech Blue
+                primaryColor = MediaColor.FromRgb(0x4F, 0x46, 0xE5);
+                gradientEndColor = MediaColor.FromRgb(0x63, 0x66, 0xF1);
+                hoverColor = MediaColor.FromRgb(0x43, 0x38, 0xCA);
+                hoverGradientEndColor = MediaColor.FromRgb(0x4F, 0x46, 0xE5);
+                activeBgColor = MediaColor.FromRgb(0xDB, 0xE5, 0xFE);
+                activeBorderColor = MediaColor.FromRgb(0x81, 0x8C, 0xF8);
+                activeTabFgColor = MediaColor.FromRgb(0x43, 0x38, 0xCA);
+                titleBarBgColor = MediaColor.FromRgb(0xE0, 0xE7, 0xF8);
+                titleBarBorderColor = MediaColor.FromRgb(0xCB, 0xD7, 0xEE);
+                sidebarBgColor = MediaColor.FromRgb(0xE8, 0xEE, 0xFB);
+                sidebarBorderColor = MediaColor.FromRgb(0xCF, 0xDB, 0xEE);
+                windowBgColor = MediaColor.FromRgb(0xE8, 0xEE, 0xFB);
+                pageBgStartColor = MediaColor.FromRgb(0xED, 0xF2, 0xFE);
+                pageBgEndColor = MediaColor.FromRgb(0xE2, 0xEA, 0xF8);
+                heroCardBgEndColor = MediaColor.FromRgb(0xEE, 0xF2, 0xFF);
+                heroCardBorderColor = MediaColor.FromRgb(0xC7, 0xD2, 0xFE);
+                ghostHoverBgColor = MediaColor.FromRgb(0xEE, 0xF2, 0xFF);
+                ghostHoverBorderColor = MediaColor.FromRgb(0xC7, 0xD2, 0xFE);
+                break;
+        }
+
+        // Apply to Window / Title / Sidebar / Page Backgrounds
+        Resources["WindowBgBrush"] = new SolidColorBrush(windowBgColor);
+        Resources["TitleBarBgBrush"] = new SolidColorBrush(titleBarBgColor);
+        Resources["TitleBarBorderBrush"] = new SolidColorBrush(titleBarBorderColor);
+        Resources["SidebarBgBrush"] = new SolidColorBrush(sidebarBgColor);
+        Resources["SidebarBorderBrush"] = new SolidColorBrush(sidebarBorderColor);
+
+        var pageGrad = new LinearGradientBrush { StartPoint = new WpfPoint(0, 0), EndPoint = new WpfPoint(0, 1) };
+        pageGrad.GradientStops.Add(new GradientStop(pageBgStartColor, 0));
+        pageGrad.GradientStops.Add(new GradientStop(pageBgEndColor, 1));
+        Resources["TabPageBgBrush"] = pageGrad;
+
+        var heroGrad = new LinearGradientBrush { StartPoint = new WpfPoint(0, 0), EndPoint = new WpfPoint(0, 1) };
+        heroGrad.GradientStops.Add(new GradientStop(MediaColor.FromRgb(0xFF, 0xFF, 0xFF), 0));
+        heroGrad.GradientStops.Add(new GradientStop(heroCardBgEndColor, 1));
+        Resources["HeroCardBgBrush"] = heroGrad;
+        Resources["HeroCardBorderBrush"] = new SolidColorBrush(heroCardBorderColor);
+
+        Resources["GhostHoverBgBrush"] = new SolidColorBrush(ghostHoverBgColor);
+        Resources["GhostHoverBorderBrush"] = new SolidColorBrush(ghostHoverBorderColor);
+
+        // Tab state brushes
+        Resources["TabAccentBrush"] = new SolidColorBrush(activeTabFgColor);
+        Resources["TabAccentHoverBrush"] = new SolidColorBrush(hoverColor);
+        Resources["TabActiveBgBrush"] = new SolidColorBrush(activeBgColor);
+        Resources["TabActiveBorderBrush"] = new SolidColorBrush(activeBorderColor);
+
+        var grad = new LinearGradientBrush { StartPoint = new WpfPoint(0, 0), EndPoint = new WpfPoint(1, 0) };
+        grad.GradientStops.Add(new GradientStop(primaryColor, 0));
+        grad.GradientStops.Add(new GradientStop(gradientEndColor, 1));
+        Resources["TabAccentGradient"] = grad;
+
+        var gradHover = new LinearGradientBrush { StartPoint = new WpfPoint(0, 0), EndPoint = new WpfPoint(1, 0) };
+        gradHover.GradientStops.Add(new GradientStop(hoverColor, 0));
+        gradHover.GradientStops.Add(new GradientStop(hoverGradientEndColor, 1));
+        Resources["TabAccentGradientHover"] = gradHover;
+
+        // Propagate to global Accent brushes in MainWindow
+        Resources["AccentBrush"] = new SolidColorBrush(primaryColor);
+        Resources["AccentHoverBrush"] = new SolidColorBrush(hoverColor);
+        Resources["AccentGradient"] = grad;
+        Resources["AccentGradientHover"] = gradHover;
+        Resources["CardActiveBorderBrush"] = new SolidColorBrush(primaryColor);
+        Resources["CardActiveBrush"] = new SolidColorBrush(activeBgColor);
     }
 
     // ---------- Shared row types ----------
@@ -883,8 +1709,17 @@ public partial class MainWindow : Window
                   (!string.IsNullOrEmpty(currentUrl) && string.Equals(currentUrl.TrimEnd('/'), p.BaseUrl?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)),
         }).ToList();
 
-        ClaudeList.ItemsSource = null;
-        ClaudeList.ItemsSource = rows;
+        _claudeCollection.Clear();
+        var seenClaude = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var key = (!string.IsNullOrEmpty(r.P.Id) ? r.P.Id : r.P.Name).Trim();
+            if (seenClaude.Add(key))
+            {
+                _claudeCollection.Add(r);
+            }
+        }
+        if (ClaudeList.ItemsSource != _claudeCollection) ClaudeList.ItemsSource = _claudeCollection;
 
         var active = rows.FirstOrDefault(r => r.IsCurrent);
         ClaudeCurrentText.Text = active != null
@@ -1046,8 +1881,17 @@ public partial class MainWindow : Window
                   (!string.IsNullOrEmpty(currentUrl) && string.Equals(currentUrl.TrimEnd('/'), p.BaseUrl?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)),
         }).ToList();
 
-        DesktopList.ItemsSource = null;
-        DesktopList.ItemsSource = rows;
+        _desktopCollection.Clear();
+        var seenDesk = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var key = (!string.IsNullOrEmpty(r.P.Id) ? r.P.Id : r.P.Name).Trim();
+            if (seenDesk.Add(key))
+            {
+                _desktopCollection.Add(r);
+            }
+        }
+        if (DesktopList.ItemsSource != _desktopCollection) DesktopList.ItemsSource = _desktopCollection;
 
         var active = rows.FirstOrDefault(r => r.IsCurrent);
         DesktopCurrentText.Text = active != null
@@ -1221,8 +2065,17 @@ public partial class MainWindow : Window
                   (!string.IsNullOrEmpty(current) && string.Equals(current, p.Name, StringComparison.OrdinalIgnoreCase)),
         }).ToList();
 
-        CodexList.ItemsSource = null;
-        CodexList.ItemsSource = rows;
+        _codexCollection.Clear();
+        var seenCodex = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var key = (!string.IsNullOrEmpty(r.P.Id) ? r.P.Id : r.P.Name).Trim();
+            if (seenCodex.Add(key))
+            {
+                _codexCollection.Add(r);
+            }
+        }
+        if (CodexList.ItemsSource != _codexCollection) CodexList.ItemsSource = _codexCollection;
 
         var active = rows.FirstOrDefault(r => r.IsCurrent);
         CodexCurrentText.Text = active != null
@@ -1614,6 +2467,7 @@ public partial class MainWindow : Window
             }.Where(s => !string.IsNullOrEmpty(s)));
 
         public Visibility PoolBadgeVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility UnpoolBadgeVisibility => !IsInConfig ? Visibility.Visible : Visibility.Collapsed;
         public Visibility AddBtnVisibility => !IsInConfig ? Visibility.Visible : Visibility.Collapsed;
         public Visibility RemoveBtnVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1643,22 +2497,31 @@ public partial class MainWindow : Window
         _openCodeProviders = CliStore.LoadOpencode();
         var liveIds = new HashSet<string>(OpenCodeCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
 
-        int inPoolCount = _openCodeProviders.Count(p => liveIds.Contains(p.Id));
+        int inPoolCount = _openCodeProviders.Count(p => (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name)));
         if (OcPoolCountText != null)
             OcPoolCountText.Text = $"{inPoolCount} / {_openCodeProviders.Count} 个供应商";
 
         var rows = _openCodeProviders.Select(p =>
         {
-            bool inCfg = liveIds.Contains(p.Id);
+            bool inCfg = (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name));
             return new OpenCodeRow
             {
                 P = p,
                 IsInConfig = inCfg,
             };
-        }).OrderByDescending(r => r.IsInConfig).ThenBy(r => r.Name).ToList();
+        }).ToList();
 
-        OcList.ItemsSource = null;
-        OcList.ItemsSource = rows;
+        _ocCollection.Clear();
+        var seenOc = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var key = (!string.IsNullOrEmpty(r.P?.Id) ? r.P.Id : (r.P?.Name ?? "")).Trim();
+            if (!string.IsNullOrEmpty(key) && seenOc.Add(key))
+            {
+                _ocCollection.Add(r);
+            }
+        }
+        if (OcList.ItemsSource != _ocCollection) OcList.ItemsSource = _ocCollection;
         OcEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -1832,6 +2695,7 @@ public partial class MainWindow : Window
             }.Where(s => !string.IsNullOrEmpty(s)));
 
         public Visibility PoolBadgeVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility UnpoolBadgeVisibility => !IsInConfig ? Visibility.Visible : Visibility.Collapsed;
         public Visibility AddBtnVisibility => !IsInConfig ? Visibility.Visible : Visibility.Collapsed;
         public Visibility RemoveBtnVisibility => IsInConfig ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1860,22 +2724,31 @@ public partial class MainWindow : Window
         _piProviders = CliStore.LoadPiProviders();
         var liveIds = new HashSet<string>(PiCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
 
-        int inPoolCount = _piProviders.Count(p => liveIds.Contains(p.Id));
+        int inPoolCount = _piProviders.Count(p => (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name)));
         if (PiPoolCountText != null)
             PiPoolCountText.Text = $"{inPoolCount} / {_piProviders.Count} 个供应商";
 
         var rows = _piProviders.Select(p =>
         {
-            bool inCfg = liveIds.Contains(p.Id);
+            bool inCfg = (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name));
             return new PiRow
             {
                 P = p,
                 IsInConfig = inCfg,
             };
-        }).OrderByDescending(r => r.IsInConfig).ThenBy(r => r.Name).ToList();
+        }).ToList();
 
-        PiList.ItemsSource = null;
-        PiList.ItemsSource = rows;
+        _piCollection.Clear();
+        var seenPi = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var key = (!string.IsNullOrEmpty(r.P?.Id) ? r.P.Id : (r.P?.Name ?? "")).Trim();
+            if (!string.IsNullOrEmpty(key) && seenPi.Add(key))
+            {
+                _piCollection.Add(r);
+            }
+        }
+        if (PiList.ItemsSource != _piCollection) PiList.ItemsSource = _piCollection;
         PiEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -2142,7 +3015,7 @@ public partial class MainWindow : Window
 
     // ---------- cc-switch import ----------
 
-    void OnImportCc(object sender, RoutedEventArgs e)
+    public void OnImportCc(object sender, RoutedEventArgs e)
     {
         if (!CcSwitchImport.IsAvailable)
         {
@@ -2265,9 +3138,17 @@ public partial class MainWindow : Window
     {
         if (!_isExiting)
         {
-            e.Cancel = true;
-            MinimizeToTray();
-            return;
+            if (AppSettingsService.Current.MinimizeToTrayOnClose)
+            {
+                e.Cancel = true;
+                MinimizeToTray();
+                return;
+            }
+            else
+            {
+                ExitApp();
+                return;
+            }
         }
         base.OnClosing(e);
     }
@@ -2277,25 +3158,50 @@ public partial class MainWindow : Window
     void OnMaxWindow(object sender, RoutedEventArgs e) =>
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
-    void OnCloseWindow(object sender, RoutedEventArgs e) => MinimizeToTray();
+    void OnCloseWindow(object sender, RoutedEventArgs e)
+    {
+        if (AppSettingsService.Current.MinimizeToTrayOnClose)
+        {
+            MinimizeToTray();
+        }
+        else
+        {
+            ExitApp();
+        }
+    }
 
     System.Windows.Threading.DispatcherTimer? _toastTimer;
 
-    void ShowToast(string msg, bool isError = false)
+    public void ShowToast(string msg, bool isError = false, bool isInfo = false)
     {
         Dispatcher.Invoke(() =>
         {
             _toastTimer?.Stop();
             ToastText.Text = msg;
-            ToastIcon.Data = (System.Windows.Media.Geometry)FindResource(isError ? "IconClose" : "IconCheck");
-            ToastIcon.Fill = (System.Windows.Media.Brush)FindResource(isError ? "DangerBrush" : "GreenBrush");
-            ToastBanner.BorderBrush = (System.Windows.Media.Brush)FindResource(isError ? "DangerBrush" : "CardBorderBrush");
+            if (isInfo)
+            {
+                ToastIcon.Data = (System.Windows.Media.Geometry)FindResource("IconRefresh");
+                ToastIcon.Fill = (System.Windows.Media.Brush)FindResource("AccentBrush");
+                ToastBanner.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
+            }
+            else if (isError)
+            {
+                ToastIcon.Data = (System.Windows.Media.Geometry)FindResource("IconClose");
+                ToastIcon.Fill = (System.Windows.Media.Brush)FindResource("DangerBrush");
+                ToastBanner.BorderBrush = (System.Windows.Media.Brush)FindResource("DangerBrush");
+            }
+            else
+            {
+                ToastIcon.Data = (System.Windows.Media.Geometry)FindResource("IconCheck");
+                ToastIcon.Fill = (System.Windows.Media.Brush)FindResource("GreenBrush");
+                ToastBanner.BorderBrush = (System.Windows.Media.Brush)FindResource("CardBorderBrush");
+            }
 
             ToastBanner.Visibility = Visibility.Visible;
             var anim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180));
             ToastBanner.BeginAnimation(OpacityProperty, anim);
 
-            _toastTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2.6) };
+            _toastTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(isInfo ? 5.0 : 2.6) };
             _toastTimer.Tick += (_, _) =>
             {
                 _toastTimer.Stop();
@@ -2339,7 +3245,22 @@ public partial class MainWindow : Window
 
     // ---------- Update Management ----------
 
-    async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
+    public void ApplyUpdateInfo(UpdateInfo info)
+    {
+        _latestUpdate = info;
+        if (info.HasUpdate)
+        {
+            if (UpdateCheckBtn != null) UpdateCheckBtn.Visibility = Visibility.Visible;
+            if (AppVersionText != null) AppVersionText.Text = $"v{info.LatestVersion}";
+            if (UpdateBadgeText != null) UpdateBadgeText.Text = "升级";
+        }
+        else
+        {
+            if (UpdateCheckBtn != null) UpdateCheckBtn.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    public async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
     {
         if (_latestUpdate != null && _latestUpdate.HasUpdate)
         {
@@ -2347,11 +3268,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        SetBusy("正在检查最新版本…");
+        ShowToast("正在检查最新版本…", isInfo: true);
         try
         {
             var info = await UpdateService.CheckForUpdatesAsync();
-            ClearBusy();
 
             if (info == null)
             {
@@ -2359,21 +3279,18 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _latestUpdate = info;
+            ApplyUpdateInfo(info);
             if (info.HasUpdate)
             {
-                UpdateBadge.Visibility = Visibility.Visible;
                 new UpdateDialog(info) { Owner = this }.ShowDialog();
             }
             else
             {
-                UpdateBadge.Visibility = Visibility.Collapsed;
                 ShowToast($"当前已是最新版本 ({info.CurrentVersion})");
             }
         }
         catch (Exception ex)
         {
-            ClearBusy();
             ShowToast("检查更新异常：" + ex.Message, isError: true);
         }
     }

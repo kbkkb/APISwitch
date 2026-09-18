@@ -5,7 +5,9 @@
         Width="520" SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="{StaticResource BgBrush}"
-        FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif"
+        FontFamily="{StaticResource AppFontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
         Foreground="{StaticResource TextBrush}">
     <Border Padding="24" Background="{StaticResource BgBrush}">
         <StackPanel>

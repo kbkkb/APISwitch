@@ -1,0 +1,501 @@
+<Window x:Class="APISwitch.Dialogs.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置 - APISwitch"
+        Width="820" Height="620" MinWidth="740" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBgBrush}"
+        FontFamily="{StaticResource AppFontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        Foreground="{StaticResource TextBrush}">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="12"/>
+    </WindowChrome.WindowChrome>
+
+    <Border Background="#FFFFFF" BorderBrush="{DynamicResource SidebarBorderBrush}" BorderThickness="1.5" CornerRadius="12">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 1. Header Bar -->
+            <Border Grid.Row="0" Background="{DynamicResource TitleBarBgBrush}" BorderBrush="{DynamicResource TitleBarBorderBrush}" BorderThickness="0,0,0,1" CornerRadius="11,11,0,0" MouseLeftButtonDown="Header_MouseDown">
+                <Grid Margin="18,0,8,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Path Data="{StaticResource IconSettings}" Fill="{DynamicResource AccentBrush}" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="应用设置" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Button HorizontalAlignment="Right" Style="{StaticResource CaptionCloseBtn}" Tag="{StaticResource IconClose}"
+                            WindowChrome.IsHitTestVisibleInChrome="True" Click="OnClose" ToolTip="关闭窗口"/>
+                </Grid>
+            </Border>
+
+            <!-- 2. Settings Content with Left Navigation -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left Navigation Column -->
+                <Border Grid.Column="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,1,0" Padding="10,16">
+                    <StackPanel>
+                        <RadioButton x:Name="NavSyncBtn" GroupName="SettingsNav" IsChecked="True"
+                                     Click="OnNavChanged" Tag="sync"
+                                     Style="{StaticResource {x:Type ToggleButton}}"
+                                     Background="Transparent" BorderThickness="0" Margin="0,0,0,6"
+                                     HorizontalContentAlignment="Stretch" Padding="12,10" Cursor="Hand">
+                            <RadioButton.Template>
+                                <ControlTemplate TargetType="RadioButton">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconSave}" Fill="{StaticResource TextDimBrush}" Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0" x:Name="NavIcon"/>
+                                            <TextBlock Text="数据与多端同步" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" x:Name="NavText" Foreground="{StaticResource TextDimBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavText" Property="FontWeight" Value="SemiBold"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </RadioButton.Template>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavGeneralBtn" GroupName="SettingsNav"
+                                     Click="OnNavChanged" Tag="general"
+                                     Style="{StaticResource {x:Type ToggleButton}}"
+                                     Background="Transparent" BorderThickness="0" Margin="0,0,0,6"
+                                     HorizontalContentAlignment="Stretch" Padding="12,10" Cursor="Hand">
+                            <RadioButton.Template>
+                                <ControlTemplate TargetType="RadioButton">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconSettings}" Fill="{StaticResource TextDimBrush}" Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0" x:Name="NavIcon"/>
+                                            <TextBlock Text="常规与系统" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" x:Name="NavText" Foreground="{StaticResource TextDimBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavText" Property="FontWeight" Value="SemiBold"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </RadioButton.Template>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavProxyBtn" GroupName="SettingsNav"
+                                     Click="OnNavChanged" Tag="proxy"
+                                     Style="{StaticResource {x:Type ToggleButton}}"
+                                     Background="Transparent" BorderThickness="0" Margin="0,0,0,6"
+                                     HorizontalContentAlignment="Stretch" Padding="12,10" Cursor="Hand">
+                            <RadioButton.Template>
+                                <ControlTemplate TargetType="RadioButton">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconZap}" Fill="{StaticResource TextDimBrush}" Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0" x:Name="NavIcon"/>
+                                            <TextBlock Text="本地协议路由" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" x:Name="NavText" Foreground="{StaticResource TextDimBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavText" Property="FontWeight" Value="SemiBold"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </RadioButton.Template>
+                        </RadioButton>
+
+                        <RadioButton x:Name="NavAboutBtn" GroupName="SettingsNav"
+                                     Click="OnNavChanged" Tag="about"
+                                     Style="{StaticResource {x:Type ToggleButton}}"
+                                     Background="Transparent" BorderThickness="0"
+                                     HorizontalContentAlignment="Stretch" Padding="12,10" Cursor="Hand">
+                            <RadioButton.Template>
+                                <ControlTemplate TargetType="RadioButton">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconRocket}" Fill="{StaticResource TextDimBrush}" Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0" x:Name="NavIcon"/>
+                                            <TextBlock Text="关于与更新" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" x:Name="NavText" Foreground="{StaticResource TextDimBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TabActiveBgBrush}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}"/>
+                                            <Setter TargetName="NavText" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                            <Setter TargetName="NavText" Property="FontWeight" Value="SemiBold"/>
+                                            <Setter TargetName="NavIcon" Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </RadioButton.Template>
+                        </RadioButton>
+                    </StackPanel>
+                </Border>
+
+                <!-- Right Content Area -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="24,20,24,24">
+                    <Grid>
+                        <!-- ================= Page 1: 数据与多端同步 ================= -->
+                        <StackPanel x:Name="PageSync" Visibility="Visible">
+                            <TextBlock Text="数据备份与多设备同步" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,16"/>
+
+                            <!-- Export Card -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16" Margin="0,0,0,14">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Grid.Row="0">
+                                        <TextBlock Text="一键导出所有配置 (Backup)" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="包含 Codex、Claude CLI、Claude Desktop、OpenCode、Pi 供应商以及 Antigravity 账号数据与侧边栏排序，生成标准 JSON 备份。"
+                                                   FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,12" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <Button Grid.Row="1" HorizontalAlignment="Left" Style="{StaticResource PrimaryButton}" Padding="16,8" Click="OnExportAllConfigClick">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconUpload}" Fill="#FFFFFF" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="导出所有配置为 JSON 文件..." FontWeight="Medium" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </Border>
+
+                            <!-- Import Card -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="导入配置备份文件 (Restore)" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="从已导出的备份文件中恢复配置。支持智能合并或完全重置。" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,12" TextWrapping="Wrap"/>
+
+                                    <StackPanel Margin="0,0,0,14">
+                                        <RadioButton x:Name="ImportMergeRadio" Content="合并追加（推荐：保留当前已有供应商，追加新供应商或更新同名项）" IsChecked="True" Margin="0,0,0,6"/>
+                                        <RadioButton x:Name="ImportOverwriteRadio" Content="完全覆盖（使用备份文件彻底重置覆盖当前所有工具的配置列表）"/>
+                                    </StackPanel>
+
+                                    <Button HorizontalAlignment="Left" Style="{StaticResource GhostButton}" Padding="16,8" Click="OnImportAllConfigClick">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconImport}" Fill="{DynamicResource AccentBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Text="选择备份文件并导入..." FontWeight="Medium" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Migration & Local Data Folder -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16">
+                                <StackPanel>
+                                    <TextBlock Text="本地数据与外部迁移" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="支持从旧版 cc-switch 数据库迁移，或直接查看 APISwitch 本地物理存储目录。" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,14" TextWrapping="Wrap"/>
+
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Style="{StaticResource GhostButton}" Padding="14,7" Margin="0,0,10,0" Click="OnImportCcSwitchClick">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="{StaticResource IconImport}" Fill="{DynamicResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <TextBlock Text="从 cc-switch 导入" FontWeight="Medium" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+
+                                        <Button Style="{StaticResource GhostButton}" Padding="14,7" Click="OnOpenDataFolderClick">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="{StaticResource IconFolder}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <TextBlock Text="打开数据存档目录" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ================= Page 2: 常规与系统 ================= -->
+                        <StackPanel x:Name="PageGeneral" Visibility="Collapsed">
+                            <TextBlock Text="常规与系统偏好" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,16"/>
+
+                            <!-- Startup Setting Card -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="系统自启动" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="在 Windows 登录时自动启动 APISwitch，并在后台托盘常驻，保障代理转发不中断。" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,12" TextWrapping="Wrap"/>
+                                    <CheckBox x:Name="AutoStartCheckBox" Content="开机自动启动 APISwitch" Checked="AutoStartCheckBox_Changed" Unchecked="AutoStartCheckBox_Changed"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Window Close Behavior Card -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16">
+                                <StackPanel>
+                                    <TextBlock Text="窗口关闭行为" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="点击主界面右上角的关闭 (×) 按钮时的默认处理方式。" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,12" TextWrapping="Wrap"/>
+                                    <RadioButton x:Name="CloseMinimizeRadio" Content="最小化到系统托盘（推荐，保持本地路由服务在后台持续转译）" IsChecked="True" Margin="0,0,0,6" Checked="CloseActionRadio_Changed"/>
+                                    <RadioButton x:Name="CloseExitRadio" Content="直接退出应用程序" Checked="CloseActionRadio_Changed"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ================= Page 3: 本地协议路由 ================= -->
+                        <StackPanel x:Name="PageProxy" Visibility="Collapsed">
+                            <TextBlock Text="本地协议路由与网关服务" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,16"/>
+
+                            <!-- Proxy Service Address & Network Configuration -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="服务监听与网络地址配置" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="自定义本地协议路由网关的主机地址与监听端口。保存后将自动无缝热重载并同步更新各客户端指向配置。" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,14" TextWrapping="Wrap"/>
+
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="14"/>
+                                            <ColumnDefinition Width="140"/>
+                                            <ColumnDefinition Width="14"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Host -->
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="监听主机地址 (Host)" FontSize="12" FontWeight="Medium" Foreground="{StaticResource TextBrush}" Margin="0,0,0,6"/>
+                                            <TextBox x:Name="ProxyHostTextBox" Text="127.0.0.1" Height="34" VerticalContentAlignment="Center" Padding="10,0"
+                                                     BorderBrush="#CBD5E1" Background="#FFFFFF" FontSize="13"/>
+                                            <TextBlock Text="本机专用填 127.0.0.1，局域网共享填 0.0.0.0" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
+                                        </StackPanel>
+
+                                        <!-- Port -->
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="监听端口 (Port)" FontSize="12" FontWeight="Medium" Foreground="{StaticResource TextBrush}" Margin="0,0,0,6"/>
+                                            <TextBox x:Name="ProxyPortTextBox" Text="15725" Height="34" VerticalContentAlignment="Center" Padding="10,0"
+                                                     BorderBrush="#CBD5E1" Background="#FFFFFF" FontSize="13"/>
+                                            <TextBlock Text="范围 1024 - 65535" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
+                                        </StackPanel>
+
+                                        <!-- Action Buttons -->
+                                        <StackPanel Grid.Column="4" VerticalAlignment="Top" Margin="0,20,0,0" Orientation="Horizontal">
+                                            <Button Content="保存并应用" Style="{StaticResource PrimaryButton}" Padding="16,7" Margin="0,0,8,0" Click="OnSaveProxyAddressClick"/>
+                                            <Button Content="恢复默认" Style="{StaticResource GhostButton}" Padding="12,7" Click="OnResetProxyAddressClick" ToolTip="重置为 127.0.0.1:15725"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Current Active Endpoints -->
+                                    <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="12,10">
+                                        <StackPanel>
+                                            <TextBlock Text="当前生效端点 URL：" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8"/>
+                                            <Grid Margin="0,0,0,5">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Border Width="68" Padding="0,1" CornerRadius="4" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" Margin="0,0,8,0">
+                                                        <TextBlock Text="Codex" FontSize="11" FontWeight="Medium" Foreground="#047857" HorizontalAlignment="Center"/>
+                                                    </Border>
+                                                    <TextBlock x:Name="ProxyCodexUrlText" Text="http://127.0.0.1:15725/codex/v1" FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <Button Content="复制" Style="{StaticResource GhostButton}" Padding="10,2" HorizontalAlignment="Right" FontSize="11" Click="OnCopyCodexUrlClick"/>
+                                            </Grid>
+                                            <Grid Margin="0,0,0,5">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Border Width="68" Padding="0,1" CornerRadius="4" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" Margin="0,0,8,0">
+                                                        <TextBlock Text="Claude CLI" FontSize="11" FontWeight="Medium" Foreground="#B45309" HorizontalAlignment="Center"/>
+                                                    </Border>
+                                                    <TextBlock x:Name="ProxyClaudeCliUrlText" Text="http://127.0.0.1:15725/claude-cli" FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <Button Content="复制" Style="{StaticResource GhostButton}" Padding="10,2" HorizontalAlignment="Right" FontSize="11" Click="OnCopyClaudeCliUrlClick"/>
+                                            </Grid>
+                                            <Grid>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Border Width="68" Padding="0,1" CornerRadius="4" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" Margin="0,0,8,0">
+                                                        <TextBlock Text="Desktop" FontSize="11" FontWeight="Medium" Foreground="#B45309" HorizontalAlignment="Center"/>
+                                                    </Border>
+                                                    <TextBlock x:Name="ProxyDesktopUrlText" Text="http://127.0.0.1:15725/claude-desktop" FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <Button Content="复制" Style="{StaticResource GhostButton}" Padding="10,2" HorizontalAlignment="Right" FontSize="11" Click="OnCopyDesktopUrlClick"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Proxy Services Status Card -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,10">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Border Width="10" Height="10" CornerRadius="5" Background="#16A34A" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="ProxyHeadingText" Text="服务状态：运行中" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        </StackPanel>
+                                        <Button HorizontalAlignment="Right" Style="{StaticResource GhostButton}" Padding="12,5" Click="OnRestartProxyClick">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Path Data="{StaticResource IconRefresh}" Fill="{DynamicResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock Text="重启路由" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                    <TextBlock x:Name="ProxyDescText" Text="本地网关为以下客户端提供协议桥接与 1M 长文本自动剥离转发服务：" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+
+                                    <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,8">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="Codex 协议转译" FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Text="将第三方 Chat Completions / Anthropic 端点转译为 Codex 原生 Responses 协议" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                            </StackPanel>
+                                            <TextBlock x:Name="CodexProxyStatusText" Text="已就绪" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,8">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="Claude CLI 协议转译" FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Text="将 Chat Completions / Responses 转译为 Anthropic Messages 协议" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                            </StackPanel>
+                                            <TextBlock x:Name="ClaudeCliProxyStatusText" Text="已就绪" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14,12">
+                                        <Grid>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="Claude Desktop 模型映射网关" FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Text="拦截并重写 claude-sonnet / opus / haiku 角色请求至上游真实自定义模型" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                            </StackPanel>
+                                            <TextBlock x:Name="DesktopProxyStatusText" Text="已就绪" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ================= Page 4: 关于与更新 ================= -->
+                        <StackPanel x:Name="PageAbout" Visibility="Collapsed">
+                            <TextBlock Text="关于与更新" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,16"/>
+
+                            <!-- App Info Card -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="20,18" Margin="0,0,0,14">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                                        <Image Source="pack://application:,,,/Assets/app.ico" Width="44" Height="44" Margin="0,0,14,0" VerticalAlignment="Center"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="APISwitch" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                                                <Border Margin="8,0,0,0" Padding="6,2" CornerRadius="8" Background="{DynamicResource TabActiveBgBrush}" BorderBrush="{DynamicResource TabActiveBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="AboutVersionText" Text="v0.1.1" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="第三方 API 和谷歌官方订阅切换与管理" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <Border Grid.Row="1" Height="1" Background="#E2E8F0" Margin="0,4,0,14"/>
+
+                                    <StackPanel Grid.Row="2">
+                                        <TextBlock Text="已支持的应用与客户端：" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,8"/>
+                                        <TextBlock Text="• Google Antigravity（官方订阅与账号快捷切换）" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="• OpenAI Codex（API 供应商配置与本地协议热切）" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="• Anthropic Claude Code CLI（终端命令行供应商管理）" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="• Claude Desktop（桌面客户端模型映射与路由接管）" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="• OpenCode（供应商与模型配置池管理）" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="• Pi（Minimal Agent 多模型配置与鉴权管理）" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,14"/>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                            <Button HorizontalAlignment="Left" Style="{StaticResource GhostButton}" Padding="14,7" Click="OnOpenGitHubClick" Margin="0,0,10,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="访问 GitHub 仓库" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button HorizontalAlignment="Left" Style="{StaticResource GhostButton}" Padding="14,7" Click="OnOpenBugFeedbackClick">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Path Data="{StaticResource IconBug}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="Bug 反馈 / 建议" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+
+                                        <TextBlock Text="致谢：感谢 cc-switch、Antigravity Tool 与 LINUX DO 社区" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Update Setting Card (Moved to About & Update) -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="软件更新检查" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="APISwitch 会在启动时自动检测 GitHub Release 的稳定版本更新，保持协议转译与工具支持最新。" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,8" TextWrapping="Wrap"/>
+                                        <CheckBox x:Name="AutoCheckUpdateCheckBox" Content="启动时自动检查新版本" IsChecked="True" Checked="AutoCheckUpdateCheckBox_Changed" Unchecked="AutoCheckUpdateCheckBox_Changed"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource GhostButton}" Padding="14,7" Click="OnManualCheckUpdateClick">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconRefresh}" Fill="{DynamicResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <TextBlock Text="立即检查更新" FontWeight="Medium" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- 3. Floating Toast Notification Banner -->
+            <Border x:Name="ToastBanner" Grid.Row="1"
+                    HorizontalAlignment="Center" VerticalAlignment="Top"
+                    Margin="0,16,0,0" Panel.ZIndex="999"
+                    Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1"
+                    CornerRadius="10" Padding="16,10"
+                    Opacity="0" Visibility="Collapsed" IsHitTestVisible="False">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.12" Color="#0F172A"/>
+                </Border.Effect>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Path x:Name="ToastIcon" Data="{StaticResource IconCheck}" Fill="{StaticResource GreenBrush}"
+                          Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ToastText" Text="提示信息" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -193,10 +193,8 @@ public static class UpdateService
         var currentPid = Environment.ProcessId;
         var appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
         var mainExe = Environment.ProcessPath ?? Path.Combine(appDir, "APISwitch.exe");
-        var tempDir = Path.Combine(Path.GetTempPath(), "APISwitch_Update_Work");
-
-        if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
-
+        var tempDir = Path.Combine(Path.GetTempPath(), "APISwitch_Update_Work", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
         var scriptPath = Path.Combine(tempDir, "apply_update.ps1");
         string psScript;
 

@@ -44,10 +44,12 @@ public static class AgAuthFlow
         // 2. Open browser
         Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
 
-        // 3. Wait for callback
+        // 3. Wait for a callback that matches our unique state.
         HttpListenerContext context;
-        using (cancellationToken.Register(() => { try { listener.Stop(); } catch { } }))
+        string code = "";
+        while (true)
         {
+            using var cancellationRegistration = cancellationToken.Register(() => { try { listener.Stop(); } catch { } });
             try
             {
                 context = await listener.GetContextAsync();
@@ -56,42 +58,47 @@ public static class AgAuthFlow
             {
                 throw new OperationCanceledException("用户取消或登录超时", ex);
             }
+
+            // Google redirects to /oauth-callback without the listener's trailing slash.
+            var path = context.Request.Url?.AbsolutePath ?? "/";
+            if (!path.Equals("/oauth-callback", StringComparison.OrdinalIgnoreCase) &&
+                !path.Equals("/oauth-callback/", StringComparison.OrdinalIgnoreCase))
+            {
+                try { context.Response.StatusCode = 404; context.Response.Close(); } catch { }
+                continue;
+            }
+
+            var query = context.Request.QueryString;
+            var returnedState = query["state"];
+            code = query["code"] ?? "";
+            var error = query["error"];
+
+            // Only an explicit authorization error is fatal. Ignore unrelated local callbacks so an
+            // attacker cannot win the race with a bogus state.
+            if (!string.IsNullOrEmpty(error))
+            {
+                context.Response.ContentType = "text/html; charset=utf-8";
+                var failureHtml = @"<!DOCTYPE html><html><head><meta charset='utf-8'><title>APISwitch - 授权失败</title></head><body><h1>❌ Google 授权未完成</h1><p>" + WebUtility.HtmlEncode(error) + @"</p></body></html>";
+                var failureBytes = Encoding.UTF8.GetBytes(failureHtml);
+                context.Response.ContentLength64 = failureBytes.Length;
+                await context.Response.OutputStream.WriteAsync(failureBytes, cancellationToken);
+                context.Response.OutputStream.Close();
+                throw new InvalidOperationException($"Google 授权失败: {error}");
+            }
+
+            if (returnedState == state && !string.IsNullOrEmpty(code))
+            {
+                context.Response.ContentType = "text/html; charset=utf-8";
+                var successHtml = @"<!DOCTYPE html><html><head><meta charset='utf-8'><title>APISwitch - 授权成功</title></head><body><h1>✨ Google 授权成功！</h1><p>APISwitch 已捕获登录凭据，您可以关闭此浏览器标签页并返回客户端。</p></body></html>";
+                var successBytes = Encoding.UTF8.GetBytes(successHtml);
+                context.Response.ContentLength64 = successBytes.Length;
+                await context.Response.OutputStream.WriteAsync(successBytes, cancellationToken);
+                context.Response.OutputStream.Close();
+                break;
+            }
+
+            try { context.Response.StatusCode = 400; context.Response.Close(); } catch { }
         }
-
-        var req = context.Request;
-        var query = req.QueryString;
-        var returnedState = query["state"];
-        var code = query["code"];
-        var error = query["error"];
-
-        // 4. Return user friendly HTML to browser
-        var resp = context.Response;
-        resp.ContentType = "text/html; charset=utf-8";
-
-        string html;
-        if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(code) || returnedState != state)
-        {
-            html = @"<!DOCTYPE html><html><head><meta charset='utf-8'><title>APISwitch - 授权失败</title>
-<style>body{font-family:sans-serif;background:#0B0E17;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
-.card{background:#161B2E;border:1px solid #D63939;padding:36px;border-radius:16px;text-align:center;max-width:400px;}
-h1{color:#F85149;margin:0 0 10px;font-size:20px;} p{color:#8B949E;font-size:14px;}</style></head>
-<body><div class='card'><h1>❌ Google 授权未完成</h1><p>" + WebUtility.HtmlEncode(error ?? "未接收到有效授权码") + @"</p></div></body></html>";
-            var errBytes = Encoding.UTF8.GetBytes(html);
-            resp.ContentLength64 = errBytes.Length;
-            await resp.OutputStream.WriteAsync(errBytes, cancellationToken);
-            resp.OutputStream.Close();
-            throw new InvalidOperationException($"Google 授权失败: {error ?? "State mismatch or missing code"}");
-        }
-
-        html = @"<!DOCTYPE html><html><head><meta charset='utf-8'><title>APISwitch - 授权成功</title>
-<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0B0E17;color:#E6EDF3;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
-.card{background:#161B2E;border:1px solid #283048;padding:40px;border-radius:16px;text-align:center;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.5);}
-.icon{font-size:48px;margin-bottom:16px;} h1{font-size:22px;margin:0 0 12px;color:#4E88FF;} p{font-size:14px;color:#8B949E;line-height:1.6;margin:0;}</style></head>
-<body><div class='card'><div class='icon'>✨</div><h1>Google 授权成功！</h1><p>APISwitch 已捕获登录凭据，您可以关闭此浏览器标签页并返回客户端。</p></div></body></html>";
-        var successBytes = Encoding.UTF8.GetBytes(html);
-        resp.ContentLength64 = successBytes.Length;
-        await resp.OutputStream.WriteAsync(successBytes, cancellationToken);
-        resp.OutputStream.Close();
 
         // 5. Exchange code for tokens
         using var tokenReq = new HttpRequestMessage(HttpMethod.Post, "https://oauth2.googleapis.com/token");
@@ -177,6 +184,20 @@ h1{color:#F85149;margin:0 0 10px;font-size:20px;} p{color:#8B949E;font-size:14px
             ExpiryTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + expiresIn,
             CapturedAtUtc = DateTime.UtcNow
         };
+
+        // A login can return a rotated refresh token. Merge it into an existing archive instead of
+        // overwriting its slug file with a fresh profile.
+        var existing = ProfileStore.Load().FirstOrDefault(x =>
+            x.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+        if (existing != null)
+        {
+            existing.AccessToken = profile.AccessToken;
+            existing.RefreshToken = profile.RefreshToken ?? existing.RefreshToken;
+            existing.IdToken = profile.IdToken ?? existing.IdToken;
+            existing.ExpiryTimestamp = profile.ExpiryTimestamp;
+            existing.CapturedAtUtc = profile.CapturedAtUtc;
+            profile = existing;
+        }
 
         // Query Quota and Tier
         try

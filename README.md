@@ -1,60 +1,138 @@
+[English](README.md) | [简体中文](README_zh.md)
+
 # APISwitch
 
-一站式 AI 编程工具账号 / 供应商切换器（Windows 桌面应用，WPF + .NET 10，单文件绿色 exe）。
+A lightweight desktop management tool and local protocol routing gateway for 3rd-party API providers and Google Antigravity official subscriptions (Windows WPF + .NET 10, portable single-executable).
 
-四个完全独立的模块：
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/kbkkb/APISwitch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/kbkkb/APISwitch)](https://github.com/kbkkb/APISwitch/releases)
 
-| 模块 | 管理对象 | 写入位置 |
+---
+
+## 🎯 Supported Clients & Tools
+
+APISwitch provides deep native configuration management and local protocol translation for leading AI coding assistants and clients:
+
+| Client / Tool | Management Target | Native Config & Storage Location |
 |---|---|---|
-| 🪐 谷歌反重力 | Antigravity IDE 的 Google 登录账号 | `%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb` |
-| 🧪 Codex | Codex API 供应商（客户端与 CLI 共用配置） | `~/.codex/config.toml` + `~/.codex/auth.json` |
-| 💬 Claude CLI | Claude Code 的 API 供应商 | `~/.claude/settings.json`（仅 `env` 中 `ANTHROPIC_*` 键） |
-| 🖥️ Claude 客户端 | Claude Desktop 推理网关 | `%APPDATA%\Claude\claude_desktop_config.json`（`inferenceGateway*` 字段） |
+| 🪐 **Google Antigravity** | Google account subscriptions, session snapshots, quota monitoring | `%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb` |
+| 🧪 **OpenAI Codex** | API providers, local protocol bridging & seamless model hot-switching | `~/.codex/config.toml` + `~/.codex/auth.json` |
+| 💬 **Anthropic Claude Code CLI** | CLI environment variables for API providers | `~/.claude/settings.json` (`ANTHROPIC_*` in `env`) |
+| 🖥️ **Claude Desktop** | Custom model mapping & routing gateway takeover | `%APPDATA%\Claude\claude_desktop_config.json` |
+| ⚡ **OpenCode** | Provider & model pool configuration with one-click activation | `~/.config/opencode/opencode.json` |
+| 🥧 **Pi** | Minimal Coding Agent multi-model configuration & authentication | `~/.pi/agent/models.json` + `auth.json` |
 
-## 特性
+---
 
-- **Antigravity 账号切换**：凭证快照存档，一键切换 Google 账号；切换前自动同步当前账号最新凭证（防 refresh token 轮换失效）；可自动关闭并重启 IDE
-- **供应商跨端复制**：Claude CLI / Claude 客户端 / Codex 三端供应商一键互相复制，字段自动映射（Auth Token ↔ Bearer Token / API Key），一次录入三端可用
-- **cc-switch 一键导入**：直接读取 `~/.cc-switch/cc-switch.db`，勾选式选择要导入的供应商，同名覆盖、官方项自动去重
-- **安全写入**：所有配置文件写前自动备份 `.bak`，临时文件 + 原子替换；Claude CLI 的 `hooks`/`permissions`、Codex 的 `notify`/`[desktop]`、Claude 客户端的 `mcpServers` 等非目标配置一律原样保留
-- **纯本地**：不联网、不上传，所有存档保存在 `%APPDATA%\APISwitch\`
+## ✨ Key Features
 
-## 工作原理
+### 1. Unified Multi-Tool Management & Zero-Intrusion Switching
+- **Antigravity Quick Account Switching**: Save credential snapshots and switch Google accounts with one click. Automatically captures and synchronizes the latest credentials before switching (preventing Refresh Token rotation expiration). Optionally auto-closes and smoothly restarts the IDE.
+- **Cross-Client Provider Sharing**: One-click copy of provider configurations across Claude CLI, Claude Desktop, Codex, OpenCode, and Pi with intelligent field mapping (`Auth Token` ↔ `Bearer Token` / `API Key`). Enter once, use everywhere.
+- **Model Pool Management**: Dedicated model pool mechanism for OpenCode and Pi, clearly distinguishing "In Config" from "Not in Config" states, supporting on-demand activation and batch maintenance.
+- **One-Click cc-switch Migration**: Built-in migration wizard directly reads `~/.cc-switch/cc-switch.db`, allowing checkbox selection to import existing providers with automatic deduplication and overwriting.
 
-- **Antigravity**：登录态是 VS Code fork 的 globalStorage SQLite（`ItemTable`）中的 `antigravityUnifiedStateSync.oauthToken` / `userStatus`（base64 + protobuf）。切换 = 关进程后 `INSERT OR REPLACE` 写回（含 `state.vscdb.backup`）。应用内置迷你 protobuf 解析器，从凭证中解出邮箱、订阅计划与登录态用于展示。
-- **Claude CLI**：重写 `settings.json` 中 `env` 的所有 `ANTHROPIC_*` 键，其余 JSON 节点原样保留。
-- **Claude 客户端**：写入 Cowork 推理网关字段 `inferenceProvider` / `inferenceGatewayBaseUrl` / `inferenceGatewayApiKey` / `inferenceGatewayAuthScheme` / `inferenceModels` / `coworkEgressAllowedHosts`；「官方」档则整体移除这些字段恢复官方登录。
-- **Codex**：设置根键 `model_provider` 与对应 `[model_providers.<id>]` 表（支持 `env_key` + `auth.json` 或 `experimental_bearer_token` 两种中转风格）；「官方」档移除 `model_provider` 与 `OPENAI_API_KEY`，保留 ChatGPT 登录 `tokens`。
+### 2. Built-in Local Protocol Routing Gateway
+- **High-Performance Local Gateway**: Built-in lightweight HTTP gateway service (listening on `127.0.0.1:15725` by default, configurable Host and Port in settings, supports LAN sharing).
+- **Seamless Multi-Protocol Bridging**:
+  - **Codex Protocol Bridge**: Translates standard OpenAI Chat Completions / Anthropic endpoints into Codex native Responses protocol.
+  - **Claude CLI Protocol Bridge**: Automatically manages authentication headers and request format mapping.
+  - **Claude Desktop Model Mapping**: Intercepts and rewrites `claude-sonnet` / `opus` / `haiku` requests to your designated upstream custom models.
+- **Long-Context Protection & Prompt Stripping**: Automatically strips non-essential excessive system prompts and provides safeguards against massive 1M context overflows to prevent upstream 400 errors or unexpected costs.
+- **Zero-Restart Hot Reload**: Point your client to the local gateway once. Provider switches reload instantly in the gateway with no client restarts needed.
 
-## 下载
+### 3. Data Backup & Multi-Device Roaming
+- **One-Click Full Export**: Bundle all tool provider configurations and Antigravity account data into a standardized JSON backup file.
+- **Flexible Restore Modes**: Supports both "Merge & Append" (recommended: keeps existing configs while adding new or updating matching items) and "Full Overwrite" modes for seamless roaming across multiple machines.
+- **Direct Local Management**: One click to open the local physical storage directory for full data ownership and transparency.
 
-到 [Releases](../../releases) 下载 `APISwitch.exe`（win-x64 单文件自包含版，无需安装 .NET），双击即用。
+---
 
-## 从源码构建
+## 🔬 How It Works
 
+- **Google Antigravity**: Login sessions are stored in VS Code's globalStorage SQLite database (`ItemTable`) under `antigravityUnifiedStateSync.oauthToken` and `userStatus` (base64-encoded Protobuf). APISwitch includes a lightweight Protobuf parser to safely extract email, subscription tier, and quota information. Account switching executes safe transactional writes with automatic `.backup` creation.
+- **Claude Code CLI**: Precisely rewrites `ANTHROPIC_*` environment variables in `~/.claude/settings.json`, strictly preserving all other configuration sections such as `hooks` and `permissions`.
+- **Claude Desktop**: Manages Cowork inference gateway parameters (`inferenceProvider`, `inferenceGatewayBaseUrl`, `inferenceGatewayApiKey`, etc.). Switching back to "Official" cleanly removes these fields to restore native official login.
+- **OpenAI Codex**: Configures `model_provider` and `[model_providers.<id>]` in `~/.codex/config.toml`, synchronizing authentication with `auth.json`. Supports direct upstream connections or routing through the local gateway for protocol adaptation.
+- **OpenCode & Pi**: Strictly adheres to their official specifications to read and write `opencode.json` and `models.json` / `auth.json`, ensuring immediate recognition by CLI and runtime environments.
+- **Safe Atomic Writes**: All file modifications follow a "write temporary file → verify integrity → atomic replace" workflow, generating automatic `.bak` backups to prevent corruption from unexpected interruptions.
+
+---
+
+## 📦 Download & Installation
+
+Visit the [Releases](../../releases) page to download the latest `APISwitch.exe` (portable single-file executable, no installer or runtime dependencies required, ready to run).
+
+---
+
+## 🛠️ Build from Source
+
+APISwitch is built with **.NET 10** and **WPF**.
+
+### Prerequisites
+- Windows 10 / 11 (x64)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+
+### Quick Build
 ```powershell
-# 需要 .NET 10 SDK
+# Build Release executable
 dotnet build -c Release
 
-# 发布单文件 exe（产物在 bin\Release\net10.0-windows\win-x64\publish\）
-dotnet publish -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true
+# Output binary: bin\Release\net10.0-windows\APISwitch.exe
 ```
 
-自检（沙箱内验证读写逻辑，不触碰真实配置）：
-
+### Publish Self-Contained Single-File Binary
 ```powershell
-APISwitch.exe --selftest   # 结果输出到 %TEMP%\apiswitch-selftest.txt
-APISwitch.exe --probe      # 只读探测当前各工具状态，输出到 %TEMP%\apiswitch-probe.txt
+dotnet publish -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=true `
+  -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true
+# Standalone binary: bin\Release\net10.0-windows\win-x64\publish\APISwitch.exe
 ```
 
-## 免责声明
+### Built-in Self-Test & Diagnostic Tools
+```powershell
+# Sandbox self-test for read/write logic (does not touch live configurations)
+.\APISwitch.exe --selftest   # Diagnostic report output to %TEMP%\apiswitch-selftest.txt
 
-- 本项目仅在本地读写配置文件，不修改、不代理任何网络流量
-- 多账号使用请遵守相应服务条款，因账号轮换 / 滥用导致的风险自担
-- Claude Desktop 网关字段基于社区逆向，若你的客户端版本不识别，请提 Issue
+# Read-only probe of current client configurations
+.\APISwitch.exe --probe      # Output to %TEMP%\apiswitch-probe.txt
+```
 
-## License
+---
 
-[MIT](LICENSE)
+## 🔒 Privacy & Security
+
+1. **Local-First & Offline**: All configs, keys, and session snapshots are saved exclusively on your local machine (`%APPDATA%\APISwitch\`). No credentials or private API keys are ever collected or transmitted.
+2. **Isolated Local Gateway**: The local routing gateway binds to `127.0.0.1` loopback by default. All request adaptations and context optimizations happen entirely on your machine without external relays.
+3. **Backup Protection**: Every configuration change is safeguarded by integrity checks and automatic backups to keep your development environment safe.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] **Multi-Language Support (i18n)**: Native language switching (English, Simplified Chinese, etc.).
+- [ ] **Token Usage & Analytics**: Real-time Token consumption monitoring and call history analysis powered by the local gateway.
+- [ ] **More Agent Platforms**: Continuous expansion to emerging AI coding assistants, terminal agents, and developer platforms.
+
+---
+
+## 💬 Feedback & Contribution
+
+If you encounter issues or have suggestions for new clients and protocol adaptations, feel free to open a [GitHub Issue](../../issues)!
+
+---
+
+## 🙏 Acknowledgements
+
+- [cc-switch](https://github.com/farion99/cc-switch): For pioneering exploration and inspiration in multi-tool provider switching.
+- **Antigravity Tool**: For early insights and explorations in Antigravity account and credential management.
+- [LINUX DO](https://linux.do/) Community: For active discussions, creative ideas, and technical feedback.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

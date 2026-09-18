@@ -35,10 +35,12 @@ public static class LocalProxyServer
     public static bool IsClaudeDesktopEnabled { get; private set; } = false;
     public static bool IsEnabled => IsCodexEnabled || IsClaudeCliEnabled || IsClaudeDesktopEnabled;
 
+    public static string Host { get; private set; } = "127.0.0.1";
     public static int Port { get; private set; } = 15725;
-    public static string ProxyCodexUrl => $"http://127.0.0.1:{Port}/codex/v1";
-    public static string ProxyClaudeCliUrl => $"http://127.0.0.1:{Port}/claude-cli";
-    public static string ProxyClaudeDesktopUrl => $"http://127.0.0.1:{Port}/claude-desktop";
+    public static string ClientHost => (Host is "0.0.0.0" or "*" or "+") ? "127.0.0.1" : Host;
+    public static string ProxyCodexUrl => $"http://{ClientHost}:{Port}/codex/v1";
+    public static string ProxyClaudeCliUrl => $"http://{ClientHost}:{Port}/claude-cli";
+    public static string ProxyClaudeDesktopUrl => $"http://{ClientHost}:{Port}/claude-desktop";
     public static string ProxyUrl => ProxyCodexUrl; // Legacy alias for Codex
 
     public static CodexProvider? ActiveCodexProvider { get; set; }
@@ -57,6 +59,7 @@ public static class LocalProxyServer
             IsCodexEnabled = settings.CodexEnabled;
             IsClaudeCliEnabled = settings.ClaudeCliEnabled;
             IsClaudeDesktopEnabled = settings.ClaudeDesktopEnabled;
+            Host = !string.IsNullOrWhiteSpace(settings.Host) ? settings.Host.Trim() : "127.0.0.1";
             Port = settings.Port > 0 ? settings.Port : 15725;
 
             ActiveCodexProvider = CodexCli.GetActiveProvider();
@@ -94,10 +97,11 @@ public static class LocalProxyServer
         }
     }
 
-    public static void Start(int? preferredPort = null)
+    public static void Start(int? preferredPort = null, string? preferredHost = null)
     {
         if (_isRunning) return;
 
+        string host = !string.IsNullOrWhiteSpace(preferredHost) ? preferredHost.Trim() : Host;
         int port = preferredPort ?? Port;
         bool started = false;
 
@@ -106,8 +110,12 @@ public static class LocalProxyServer
             try
             {
                 _listener = new HttpListener();
-                _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+                string prefix = (host is "0.0.0.0" or "*" or "+")
+                    ? $"http://*:{port}/"
+                    : $"http://{host}:{port}/";
+                _listener.Prefixes.Add(prefix);
                 _listener.Start();
+                Host = host;
                 Port = port;
                 _isRunning = true;
                 started = true;
@@ -115,7 +123,7 @@ public static class LocalProxyServer
                 {
                     var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
                     Directory.CreateDirectory(logDir);
-                    File.AppendAllText(Path.Combine(logDir, "proxy.log"), $"[{DateTime.Now:O}] Started successfully on port {Port}\n");
+                    File.AppendAllText(Path.Combine(logDir, "proxy.log"), $"[{DateTime.Now:O}] Started successfully on {prefix}\n");
                 }
                 catch { }
                 break;
@@ -126,7 +134,7 @@ public static class LocalProxyServer
                 {
                     var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
                     Directory.CreateDirectory(logDir);
-                    File.AppendAllText(Path.Combine(logDir, "proxy.log"), $"[{DateTime.Now:O}] Port {port} failed: {ex}\n");
+                    File.AppendAllText(Path.Combine(logDir, "proxy.log"), $"[{DateTime.Now:O}] Host {host} Port {port} failed: {ex}\n");
                 }
                 catch { }
                 try { _listener?.Close(); } catch { }
@@ -259,10 +267,58 @@ public static class LocalProxyServer
             settings.ClaudeCliEnabled = IsClaudeCliEnabled;
             settings.ClaudeDesktopEnabled = IsClaudeDesktopEnabled;
             settings.Enabled = IsEnabled;
+            settings.Host = Host;
             settings.Port = Port;
             CliStore.SaveProxySettings(settings);
         }
         catch { }
+    }
+
+    public static (bool Success, string Message) UpdateAddress(string newHost, int newPort)
+    {
+        if (newPort < 1024 || newPort > 65535)
+        {
+            return (false, "端口号必须在 1024 至 65535 之间。");
+        }
+
+        newHost = string.IsNullOrWhiteSpace(newHost) ? "127.0.0.1" : newHost.Trim();
+
+        string oldHost = Host;
+        int oldPort = Port;
+
+        StopServerOnly();
+
+        Host = newHost;
+        Port = newPort;
+
+        Start(newPort, newHost);
+
+        if (!_isRunning)
+        {
+            // Fallback to previous
+            Host = oldHost;
+            Port = oldPort;
+            Start(oldPort, oldHost);
+            return (false, $"无法监听在 http://{newHost}:{newPort}/（可能端口被占用或需要管理员权限），已回滚至原配置。");
+        }
+
+        SaveSettings();
+
+        if (IsCodexEnabled)
+        {
+            try { CodexCli.ReapplyCurrent(); } catch { }
+        }
+        if (IsClaudeCliEnabled)
+        {
+            try { ClaudeCli.ReapplyCurrent(); } catch { }
+        }
+        if (IsClaudeDesktopEnabled)
+        {
+            try { ClaudeDesktopCli.ReapplyCurrent(); } catch { }
+        }
+
+        StateChanged?.Invoke();
+        return (true, $"路由服务地址已成功更新为 http://{Host}:{Port}/ 并已热重载生效。");
     }
 
     private static async Task AcceptLoopAsync()
@@ -289,14 +345,49 @@ public static class LocalProxyServer
         }
     }
 
+    private static void Reject(HttpListenerContext ctx, int statusCode)
+    {
+        try
+        {
+            ctx.Request.InputStream.Close();
+            ctx.Response.KeepAlive = false;
+            ctx.Response.StatusCode = statusCode;
+            ctx.Response.ContentLength64 = 0;
+            ctx.Response.OutputStream.Close();
+            ctx.Response.Close();
+        }
+        catch { }
+    }
+
+    private static bool IsTrustedOrigin(string origin)
+    {
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+        if (!uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)) return false;
+        var host = uri.Host;
+        return IPAddress.TryParse(host, out var address)
+            ? IPAddress.Loopback.Equals(address)
+            : string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task HandleContextSafeAsync(HttpListenerContext ctx)
     {
         try
         {
-            // Global CORS headers
-            ctx.Response.Headers["Access-Control-Allow-Origin"] = "*";
-            ctx.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE, PATCH";
-            ctx.Response.Headers["Access-Control-Allow-Headers"] = "*";
+            // Enforce loopback even when HttpListener is bound to a wildcard address.
+            var remoteAddress = ctx.Request.RemoteEndPoint.Address;
+            if (!IPAddress.IsLoopback(remoteAddress))
+            {
+                Reject(ctx, 403);
+                return;
+            }
+
+            // Local-only CSRF guard: CLI clients do not send Origin; browsers must match the local endpoint.
+            var origin = ctx.Request.Headers["Origin"];
+            if (!string.IsNullOrEmpty(origin) && !IsTrustedOrigin(origin))
+            {
+                Reject(ctx, 403);
+                return;
+            }
 
             if (ctx.Request.HttpMethod.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase))
             {
@@ -656,11 +747,10 @@ public static class LocalProxyServer
 
         reqMsg.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
 
-        var allHeaders = string.Join("; ", reqMsg.Headers.Select(h => $"{h.Key}={string.Join(",", h.Value)}"));
         try
         {
             var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
-            File.AppendAllText(Path.Combine(logDir, "proxy.log"), $"[{DateTime.Now:O}] [Chat Translation] POST {upstreamUrl} Headers: {allHeaders} payload={chatPayload.ToJsonString()}\n");
+            File.AppendAllText(Path.Combine(logDir, "proxy.log"), $"[{DateTime.Now:O}] [Chat Translation] POST {upstreamUrl}\n");
         }
         catch { }
 
@@ -741,6 +831,8 @@ public static class LocalProxyServer
         var hasAddedReasoningItem = false;
         var accumulatedText = new StringBuilder();
         var accumulatedReasoning = new StringBuilder();
+        var toolStates = new List<(int Index, string ItemId, string CallId, string Name, StringBuilder Arguments, bool Added)>();
+        var completedToolCalls = new List<JsonObject>();
 
         using var stream = await upstreamResp.Content.ReadAsStreamAsync();
         using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -862,24 +954,42 @@ public static class LocalProxyServer
                     foreach (var tc in toolCallsArr)
                     {
                         if (tc is not JsonObject tcObj) continue;
-                        var tcId = tcObj["id"]?.GetValue<string>() ?? ("call_" + Guid.NewGuid().ToString("N"));
+                        var tcIndex = tcObj["index"]?.GetValue<int>() ?? (toolStates.Count == 1 ? 0 : toolStates.Count);
+                        var stateIdx = toolStates.FindIndex(x => x.Index == tcIndex);
+
+                        if (stateIdx < 0)
+                        {
+                            var tcId = tcObj["id"]?.GetValue<string>() ?? ("call_" + Guid.NewGuid().ToString("N"));
+                            stateIdx = toolStates.Count;
+                            toolStates.Add((tcIndex, "fc_" + tcId, tcId, "", new StringBuilder(), false));
+                        }
+
+                        var state = toolStates[stateIdx];
                         var funcObj = tcObj["function"] as JsonObject;
                         var fName = funcObj?["name"]?.GetValue<string>();
                         var fArgs = funcObj?["arguments"]?.GetValue<string>();
 
                         if (!string.IsNullOrEmpty(fName))
                         {
+                            state.Name = fName;
+                            toolStates[stateIdx] = state;
+                        }
+
+                        if (!string.IsNullOrEmpty(state.Name) && !state.Added)
+                        {
+                            state.Added = true;
+                            toolStates[stateIdx] = state;
                             await WriteSseEventAsync(writer, "response.output_item.added", new JsonObject
                             {
                                 ["type"] = "response.output_item.added",
                                 ["sequence_number"] = seq++,
-                                ["output_index"] = 2,
+                                ["output_index"] = 2 + stateIdx,
                                 ["item"] = new JsonObject
                                 {
                                     ["type"] = "function_call",
-                                    ["id"] = "fc_" + tcId,
-                                    ["call_id"] = tcId,
-                                    ["name"] = fName,
+                                    ["id"] = state.ItemId,
+                                    ["call_id"] = state.CallId,
+                                    ["name"] = state.Name,
                                     ["arguments"] = ""
                                 }
                             });
@@ -887,11 +997,14 @@ public static class LocalProxyServer
 
                         if (!string.IsNullOrEmpty(fArgs))
                         {
+                            state.Arguments.Append(fArgs);
+                            toolStates[stateIdx] = state;
                             await WriteSseEventAsync(writer, "response.function_call_arguments.delta", new JsonObject
                             {
                                 ["type"] = "response.function_call_arguments.delta",
                                 ["sequence_number"] = seq++,
-                                ["item_id"] = "fc_" + tcId,
+                                ["item_id"] = state.ItemId,
+                                ["output_index"] = 2 + stateIdx,
                                 ["delta"] = fArgs
                             });
                         }
@@ -901,6 +1014,30 @@ public static class LocalProxyServer
             catch { }
         }
 
+        // Finish tool-call items and include them in the final Responses output.
+        for (var i = 0; i < toolStates.Count; i++)
+        {
+            var state = toolStates[i];
+            if (string.IsNullOrEmpty(state.Name)) continue;
+            var item = new JsonObject
+            {
+                ["type"] = "function_call",
+                ["id"] = state.ItemId,
+                ["call_id"] = state.CallId,
+                ["name"] = state.Name,
+                ["arguments"] = state.Arguments.ToString()
+            };
+            await WriteSseEventAsync(writer, "response.output_item.done", new JsonObject
+            {
+                ["type"] = "response.output_item.done",
+                ["sequence_number"] = seq++,
+                ["output_index"] = 2 + i,
+                ["item"] = item.DeepClone()
+            });
+            completedToolCalls.Add((JsonObject)item.DeepClone());
+        }
+
+        // Finish message item
         // Finish message item
         if (hasAddedMsgItem)
         {
@@ -943,6 +1080,10 @@ public static class LocalProxyServer
 
         // Final response.completed
         var finalOutput = new JsonArray();
+        foreach (var toolItem in completedToolCalls)
+        {
+            finalOutput.Add(toolItem.DeepClone());
+        }
         if (hasAddedMsgItem)
         {
             finalOutput.Add(new JsonObject
@@ -1371,7 +1512,7 @@ public static class LocalProxyServer
             }
         }
 
-        // Extract messages
+        // Extract messages and map Anthropic tool content to OpenAI-compatible messages.
         if (reqObj["messages"] is JsonArray msgsArr)
         {
             foreach (var mNode in msgsArr)
@@ -1379,46 +1520,92 @@ public static class LocalProxyServer
                 if (mNode is not JsonObject mObj) continue;
                 var role = mObj["role"]?.GetValue<string>() ?? "user";
                 var contentNode = mObj["content"];
-                string contentText = "";
 
-                if (contentNode is JsonValue)
+                if (contentNode is JsonArray contentArr)
                 {
-                    contentText = contentNode.GetValue<string>() ?? "";
-                }
-                else if (contentNode is JsonArray cArr)
-                {
-                    var sb = new StringBuilder();
-                    foreach (var part in cArr)
+                    var text = new StringBuilder();
+                    var toolCalls = new JsonArray();
+
+                    foreach (var part in contentArr)
                     {
-                        if (part is JsonObject partObj && partObj.ContainsKey("text"))
-                            sb.Append(partObj["text"]?.GetValue<string>());
-                        else if (part != null)
-                            sb.Append(part.ToString());
-                    }
-                    contentText = sb.ToString();
-                }
+                        if (part is not JsonObject partObj) continue;
+                        var type = partObj["type"]?.GetValue<string>();
 
-                messages.Add(new JsonObject
+                        if (type == "tool_use")
+                        {
+                            toolCalls.Add(new JsonObject
+                            {
+                                ["id"] = partObj["id"]?.DeepClone(),
+                                ["type"] = "function",
+                                ["function"] = new JsonObject
+                                {
+                                    ["name"] = partObj["name"]?.DeepClone(),
+                                    ["arguments"] = partObj["input"]?.ToJsonString() ?? "{}"
+                                }
+                            });
+                        }
+                        else if (type == "tool_result")
+                        {
+                            messages.Add(new JsonObject
+                            {
+                                ["role"] = "tool",
+                                ["tool_call_id"] = partObj["tool_use_id"]?.DeepClone(),
+                                ["content"] = partObj["content"]?.DeepClone() ?? ""
+                            });
+                        }
+                        else if (partObj.ContainsKey("text"))
+                        {
+                            text.Append(partObj["text"]?.GetValue<string>());
+                        }
+                        else
+                        {
+                            text.Append(part.ToJsonString());
+                        }
+                    }
+
+                    var msg = new JsonObject { ["role"] = role };
+                    if (toolCalls.Count > 0) msg["tool_calls"] = toolCalls.DeepClone();
+                    msg["content"] = text.ToString();
+                    messages.Add(msg);
+                }
+                else
                 {
-                    ["role"] = role,
-                    ["content"] = contentText
-                });
+                    messages.Add(new JsonObject
+                    {
+                        ["role"] = role,
+                        ["content"] = contentNode?.DeepClone() ?? ""
+                    });
+                }
             }
         }
 
-        bool stream = reqObj["stream"]?.GetValue<bool>() ?? false;
-
+        // Build Chat payload
         var chatPayload = new JsonObject
         {
             ["model"] = model,
             ["messages"] = messages,
-            ["stream"] = stream
+            ["stream"] = reqObj["stream"]?.GetValue<bool>() ?? false
         };
 
-        if (reqObj.ContainsKey("temperature") && reqObj["temperature"] != null)
-            chatPayload["temperature"] = reqObj["temperature"]!.DeepClone();
-        if (reqObj.ContainsKey("max_tokens") && reqObj["max_tokens"] != null)
-            chatPayload["max_tokens"] = reqObj["max_tokens"]!.DeepClone();
+        if (reqObj["tools"] is JsonArray toolsArray && toolsArray.Count > 0)
+        {
+            var chatTools = new JsonArray();
+            foreach (var tool in toolsArray)
+            {
+                if (tool is not JsonObject toolObj || string.IsNullOrWhiteSpace(toolObj["name"]?.GetValue<string>())) continue;
+                chatTools.Add(new JsonObject
+                {
+                    ["type"] = "function",
+                    ["function"] = new JsonObject
+                    {
+                        ["name"] = toolObj["name"]!.DeepClone(),
+                        ["description"] = toolObj["description"]?.DeepClone(),
+                        ["parameters"] = toolObj["input_schema"]?.DeepClone() ?? new JsonObject { ["type"] = "object" }
+                    }
+                });
+            }
+            if (chatTools.Count > 0) chatPayload["tools"] = chatTools;
+        }
 
         var upstreamUrl = GetUpstreamEndpoint(provider.BaseUrl, "chat/completions");
         var reqMsg = new HttpRequestMessage(HttpMethod.Post, upstreamUrl)
@@ -1464,6 +1651,7 @@ public static class LocalProxyServer
             return;
         }
 
+        var stream = (bool)(chatPayload["stream"] ?? false);
         if (stream)
         {
             ctx.Response.StatusCode = 200;
@@ -1567,7 +1755,34 @@ public static class LocalProxyServer
         {
             var respStr = await upstreamResp.Content.ReadAsStringAsync();
             var respNode = JsonNode.Parse(respStr);
-            var content = respNode?["choices"]?[0]?["message"]?["content"]?.GetValue<string>() ?? "";
+            var message = respNode?["choices"]?[0]?["message"] as JsonObject;
+            var content = message?["content"]?.GetValue<string>() ?? "";
+            var anthropicContent = new JsonArray();
+            if (!string.IsNullOrEmpty(content))
+            {
+                anthropicContent.Add(new JsonObject { ["type"] = "text", ["text"] = content });
+            }
+
+            var hasToolUse = false;
+            if (message?["tool_calls"] is JsonArray responseToolCalls)
+            {
+                foreach (var call in responseToolCalls)
+                {
+                    if (call is not JsonObject callObj) continue;
+                    var function = callObj["function"] as JsonObject;
+                    JsonObject input;
+                    try { input = JsonNode.Parse(function?["arguments"]?.GetValue<string>() ?? "{}")?.AsObject() ?? new JsonObject(); }
+                    catch { input = new JsonObject(); }
+                    anthropicContent.Add(new JsonObject
+                    {
+                        ["type"] = "tool_use",
+                        ["id"] = callObj["id"]?.DeepClone() ?? ("toolu_" + Guid.NewGuid().ToString("N")),
+                        ["name"] = function?["name"]?.DeepClone(),
+                        ["input"] = input
+                    });
+                    hasToolUse = true;
+                }
+            }
 
             var anthropicResp = new JsonObject
             {
@@ -1575,15 +1790,8 @@ public static class LocalProxyServer
                 ["type"] = "message",
                 ["role"] = "assistant",
                 ["model"] = model,
-                ["content"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["type"] = "text",
-                        ["text"] = content
-                    }
-                },
-                ["stop_reason"] = "end_turn",
+                ["content"] = anthropicContent,
+                ["stop_reason"] = hasToolUse ? "tool_use" : "end_turn",
                 ["stop_sequence"] = null,
                 ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
             };

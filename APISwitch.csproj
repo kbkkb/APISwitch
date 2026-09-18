@@ -13,7 +13,7 @@
     <FileVersion>0.1.1.0</FileVersion>
     <AssemblyVersion>0.1.1.0</AssemblyVersion>
     <Product>APISwitch</Product>
-    <Description>一站式 AI 编程账号与供应商切换器</Description>
+    <Description>第三方 API 和谷歌官方订阅切换与管理</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 

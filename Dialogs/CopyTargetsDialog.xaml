@@ -5,13 +5,15 @@
         Width="380" SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="{StaticResource BgBrush}"
-        FontFamily="Segoe UI, Microsoft YaHei UI"
+        FontFamily="{StaticResource AppFontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
         Foreground="{StaticResource TextBrush}">
     <StackPanel Margin="22">
         <TextBlock x:Name="SourceText" Text="将选中的供应商复制到：" FontSize="13"
                    Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,12"/>
         <CheckBox x:Name="ClaudeCheck" Content="Claude Code (CLI)" Margin="0,0,0,8"/>
-        <CheckBox x:Name="DesktopCheck" Content="Claude 客户端" Margin="0,0,0,8"/>
+        <CheckBox x:Name="DesktopCheck" Content="Claude Desktop" Margin="0,0,0,8"/>
         <CheckBox x:Name="CodexCheck" Content="Codex" Margin="0,0,0,8"/>
         <CheckBox x:Name="OpenCodeCheck" Content="OpenCode" Margin="0,0,0,8"/>
         <CheckBox x:Name="PiCheck" Content="Pi" Margin="0,0,0,4"/>

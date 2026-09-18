@@ -41,6 +41,8 @@ public partial class ProviderDialog : Window
         _mode = mode;
         _existing = existing;
 
+        ApplyDialogTheme(mode);
+
         HeadersItemsControl.ItemsSource = HeadersList;
         OptionsItemsControl.ItemsSource = OptionsList;
         ModelsItemsControl.ItemsSource = ModelsList;
@@ -121,6 +123,134 @@ public partial class ProviderDialog : Window
         }
     }
 
+    private void ApplyDialogTheme(ProviderDialogMode mode)
+    {
+        System.Windows.Media.Color primaryColor;
+        System.Windows.Media.Color gradientEndColor;
+        System.Windows.Media.Color hoverColor;
+        System.Windows.Media.Color titleBarBgColor;
+        System.Windows.Media.Color titleBarBorderColor;
+        System.Windows.Media.Color sidebarBorderColor;
+        System.Windows.Media.Color windowBgColor;
+        System.Windows.Media.Color activeBgColor;
+        System.Windows.Media.Color activeBorderColor;
+
+        switch (mode)
+        {
+            case ProviderDialogMode.Codex:
+                // OpenAI Emerald Green
+                primaryColor = System.Windows.Media.Color.FromRgb(0x10, 0xA3, 0x7F);
+                gradientEndColor = System.Windows.Media.Color.FromRgb(0x05, 0x96, 0x69);
+                hoverColor = System.Windows.Media.Color.FromRgb(0x04, 0x78, 0x57);
+                activeBgColor = System.Windows.Media.Color.FromRgb(0xC4, 0xF3, 0xDE);
+                activeBorderColor = System.Windows.Media.Color.FromRgb(0x34, 0xD3, 0x99);
+                titleBarBgColor = System.Windows.Media.Color.FromRgb(0xD3, 0xEF, 0xE3);
+                titleBarBorderColor = System.Windows.Media.Color.FromRgb(0xB9, 0xE5, 0xD2);
+                sidebarBorderColor = System.Windows.Media.Color.FromRgb(0xBF, 0xE7, 0xD6);
+                windowBgColor = System.Windows.Media.Color.FromRgb(0xDC, 0xF4, 0xEB);
+                break;
+
+            case ProviderDialogMode.Claude:
+            case ProviderDialogMode.ClaudeDesktop:
+                // Anthropic Terracotta / Warm Sand
+                primaryColor = System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06);
+                gradientEndColor = System.Windows.Media.Color.FromRgb(0xEA, 0x58, 0x0C);
+                hoverColor = System.Windows.Media.Color.FromRgb(0xB4, 0x53, 0x09);
+                activeBgColor = System.Windows.Media.Color.FromRgb(0xFC, 0xE3, 0xCB);
+                activeBorderColor = System.Windows.Media.Color.FromRgb(0xFB, 0x92, 0x3C);
+                titleBarBgColor = System.Windows.Media.Color.FromRgb(0xF0, 0xDF, 0xCD);
+                titleBarBorderColor = System.Windows.Media.Color.FromRgb(0xE4, 0xCD, 0xAF);
+                sidebarBorderColor = System.Windows.Media.Color.FromRgb(0xE8, 0xD4, 0xBE);
+                windowBgColor = System.Windows.Media.Color.FromRgb(0xF7, 0xE8, 0xD8);
+                break;
+
+            case ProviderDialogMode.OpenCode:
+                // Cyber Sky Cyan / Tech Blue
+                primaryColor = System.Windows.Media.Color.FromRgb(0x02, 0x84, 0xC7);
+                gradientEndColor = System.Windows.Media.Color.FromRgb(0x0E, 0xA5, 0xE9);
+                hoverColor = System.Windows.Media.Color.FromRgb(0x03, 0x69, 0xA1);
+                activeBgColor = System.Windows.Media.Color.FromRgb(0xBD, 0xE3, 0xFB);
+                activeBorderColor = System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8);
+                titleBarBgColor = System.Windows.Media.Color.FromRgb(0xCC, 0xE6, 0xFA);
+                titleBarBorderColor = System.Windows.Media.Color.FromRgb(0xB0, 0xD7, 0xF6);
+                sidebarBorderColor = System.Windows.Media.Color.FromRgb(0xB9, 0xDC, 0xF7);
+                windowBgColor = System.Windows.Media.Color.FromRgb(0xD8, 0xED, 0xFC);
+                break;
+
+            case ProviderDialogMode.Pi:
+                // Math Geek Violet / Purple
+                primaryColor = System.Windows.Media.Color.FromRgb(0x7C, 0x3A, 0xED);
+                gradientEndColor = System.Windows.Media.Color.FromRgb(0x93, 0x33, 0xEA);
+                hoverColor = System.Windows.Media.Color.FromRgb(0x6D, 0x28, 0xD9);
+                activeBgColor = System.Windows.Media.Color.FromRgb(0xD9, 0xC8, 0xFB);
+                activeBorderColor = System.Windows.Media.Color.FromRgb(0xA7, 0x8B, 0xFA);
+                titleBarBgColor = System.Windows.Media.Color.FromRgb(0xDE, 0xD3, 0xFA);
+                titleBarBorderColor = System.Windows.Media.Color.FromRgb(0xC8, 0xB6, 0xF5);
+                sidebarBorderColor = System.Windows.Media.Color.FromRgb(0xD0, 0xC1, 0xF7);
+                windowBgColor = System.Windows.Media.Color.FromRgb(0xE7, 0xDC, 0xFD);
+                break;
+
+            default:
+                // Google Indigo / Tech Blue (Default Antigravity style)
+                primaryColor = System.Windows.Media.Color.FromRgb(0x4F, 0x46, 0xE5);
+                gradientEndColor = System.Windows.Media.Color.FromRgb(0x63, 0x66, 0xF1);
+                hoverColor = System.Windows.Media.Color.FromRgb(0x43, 0x38, 0xCA);
+                activeBgColor = System.Windows.Media.Color.FromRgb(0xDB, 0xE5, 0xFE);
+                activeBorderColor = System.Windows.Media.Color.FromRgb(0x81, 0x8C, 0xF8);
+                titleBarBgColor = System.Windows.Media.Color.FromRgb(0xE0, 0xE7, 0xF8);
+                titleBarBorderColor = System.Windows.Media.Color.FromRgb(0xCB, 0xD7, 0xEE);
+                sidebarBorderColor = System.Windows.Media.Color.FromRgb(0xCF, 0xDB, 0xEE);
+                windowBgColor = System.Windows.Media.Color.FromRgb(0xE8, 0xEE, 0xFB);
+                break;
+        }
+
+        Resources["WindowBgBrush"] = new SolidColorBrush(windowBgColor);
+        Resources["TitleBarBgBrush"] = new SolidColorBrush(titleBarBgColor);
+        Resources["TitleBarBorderBrush"] = new SolidColorBrush(titleBarBorderColor);
+        Resources["SidebarBorderBrush"] = new SolidColorBrush(sidebarBorderColor);
+        Resources["TabActiveBgBrush"] = new SolidColorBrush(activeBgColor);
+        Resources["TabActiveBorderBrush"] = new SolidColorBrush(activeBorderColor);
+        Resources["AccentBrush"] = new SolidColorBrush(primaryColor);
+        Resources["AccentHoverBrush"] = new SolidColorBrush(hoverColor);
+
+        var grad = new LinearGradientBrush { StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(1, 0) };
+        grad.GradientStops.Add(new GradientStop(primaryColor, 0));
+        grad.GradientStops.Add(new GradientStop(gradientEndColor, 1));
+        Resources["AccentGradient"] = grad;
+    }
+
+    private static void SelectComboByContent(System.Windows.Controls.ComboBox cb, string? targetText, int defaultIndex = 0)
+    {
+        if (string.IsNullOrWhiteSpace(targetText))
+        {
+            if (cb.Items.Count > defaultIndex) cb.SelectedIndex = defaultIndex;
+            return;
+        }
+        for (int i = 0; i < cb.Items.Count; i++)
+        {
+            if (cb.Items[i] is ComboBoxItem item)
+            {
+                var content = item.Content?.ToString();
+                if (string.Equals(content, targetText, StringComparison.OrdinalIgnoreCase))
+                {
+                    cb.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+        cb.SelectedIndex = defaultIndex;
+    }
+
+    private static string GetComboSelectedText(System.Windows.Controls.ComboBox cb, string fallback)
+    {
+        if (cb.SelectedItem is ComboBoxItem item && item.Content != null)
+        {
+            var str = item.Content.ToString();
+            if (!string.IsNullOrWhiteSpace(str)) return str.Trim();
+        }
+        return fallback;
+    }
+
     private void ConfigureMode(ProviderDialogMode mode, object? existing)
     {
         bool isEdit = existing != null;
@@ -129,8 +259,6 @@ public partial class ProviderDialog : Window
             case ProviderDialogMode.Claude:
                 DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
                 CategoryBadgeText.Text = "Claude CLI";
-                CategoryBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF3, 0xC7));
-                CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
                 KeyLabel.Text = "Auth Token (写入 ANTHROPIC_AUTH_TOKEN) *";
                 KeyHintText.Text = "系统将写入 ~/.claude/settings.json 中的 env 配置";
                 FormatPanel.Visibility = Visibility.Visible;
@@ -149,8 +277,6 @@ public partial class ProviderDialog : Window
             case ProviderDialogMode.ClaudeDesktop:
                 DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
                 CategoryBadgeText.Text = "Claude 客户端";
-                CategoryBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF3, 0xC7));
-                CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
                 KeyLabel.Text = "Auth Token (写入 inferenceGatewayApiKey) *";
                 KeyHintText.Text = "系统将写入 Claude Desktop 网关凭据与模型列表";
                 FormatPanel.Visibility = Visibility.Visible;
@@ -169,8 +295,6 @@ public partial class ProviderDialog : Window
             case ProviderDialogMode.Codex:
                 DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
                 CategoryBadgeText.Text = "Codex";
-                CategoryBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0xFC, 0xE7));
-                CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x05, 0x96, 0x69));
                 KeyLabel.Text = "API Key / 访问令牌 (Token) *";
                 KeyHintText.Text = "系统将自动写入 auth.json 与 config.toml（双轨鉴权），并配置 disable_response_storage";
                 FormatPanel.Visibility = Visibility.Visible;
@@ -188,8 +312,6 @@ public partial class ProviderDialog : Window
             case ProviderDialogMode.OpenCode:
                 DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
                 CategoryBadgeText.Text = "OpenCode";
-                CategoryBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEE, 0xF2, 0xFF));
-                CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0x46, 0xE5));
                 OfficialCheck.Visibility = Visibility.Collapsed;
                 KeyLabel.Text = "apiKey *";
                 KeyHintText.Text = "系统将写入 ~/.config/opencode/opencode.json 的 options 配置";
@@ -209,8 +331,6 @@ public partial class ProviderDialog : Window
             case ProviderDialogMode.Pi:
                 DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
                 CategoryBadgeText.Text = "Pi";
-                CategoryBadge.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF3, 0xC7));
-                CategoryBadgeText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
                 OfficialCheck.Visibility = Visibility.Collapsed;
                 KeyLabel.Text = "apiKey *";
                 KeyHintText.Text = "系统将写入 ~/.pi/agent/models.json 与 auth.json 配置";
@@ -327,7 +447,7 @@ public partial class ProviderDialog : Window
             WebsiteUrlBox.Text = oc.WebsiteUrl ?? "";
             BaseUrlBox.Text = oc.BaseUrl ?? "";
             SetKey(oc.ApiKey);
-            OcNpmCombo.Text = string.IsNullOrWhiteSpace(oc.Npm) ? "@ai-sdk/openai-compatible" : oc.Npm;
+            SelectComboByContent(OcNpmCombo, string.IsNullOrWhiteSpace(oc.Npm) ? "@ai-sdk/openai-compatible" : oc.Npm);
 
             if (oc.CustomHeaders != null)
                 foreach (var kv in oc.CustomHeaders)
@@ -372,7 +492,7 @@ public partial class ProviderDialog : Window
             WebsiteUrlBox.Text = pi.WebsiteUrl ?? "";
             BaseUrlBox.Text = pi.BaseUrl ?? "";
             SetKey(pi.ApiKey);
-            PiApiCombo.Text = string.IsNullOrWhiteSpace(pi.Api) ? "openai-completions" : pi.Api;
+            SelectComboByContent(PiApiCombo, string.IsNullOrWhiteSpace(pi.Api) ? "openai-completions" : pi.Api);
 
             if (pi.CustomHeaders != null)
                 foreach (var kv in pi.CustomHeaders)
@@ -416,11 +536,11 @@ public partial class ProviderDialog : Window
         {
             if (_mode == ProviderDialogMode.OpenCode)
             {
-                OcNpmCombo.Text = "@ai-sdk/openai-compatible";
+                SelectComboByContent(OcNpmCombo, "@ai-sdk/openai-compatible");
             }
             else if (_mode == ProviderDialogMode.Pi)
             {
-                PiApiCombo.Text = "openai-completions";
+                SelectComboByContent(PiApiCombo, "openai-completions");
             }
         }
 
@@ -446,8 +566,7 @@ public partial class ProviderDialog : Window
         KeyPasswordBox.PasswordChanged += (_, _) => UpdatePreview();
         CodexWireCombo.SelectionChanged += (_, _) => UpdatePreview();
         OcNpmCombo.SelectionChanged += (_, _) => UpdatePreview();
-        OcNpmCombo.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent,
-            new TextChangedEventHandler((_, _) => UpdatePreview()));
+        PiApiCombo.SelectionChanged += (_, _) => UpdatePreview();
     }
 
     private void SetKey(string? key)
@@ -558,7 +677,52 @@ public partial class ProviderDialog : Window
         UpdatePreview();
     }
 
+    private void ToggleAdvanced_Click(object sender, RoutedEventArgs e)
+    {
+        if (AdvancedSettingsPanel == null || AdvancedArrowRotate == null) return;
+        bool isExpanded = AdvancedSettingsPanel.Visibility == Visibility.Visible;
+        if (isExpanded)
+        {
+            AdvancedSettingsPanel.Visibility = Visibility.Collapsed;
+            AdvancedArrowRotate.Angle = 0;
+        }
+        else
+        {
+            AdvancedSettingsPanel.Visibility = Visibility.Visible;
+            AdvancedArrowRotate.Angle = 90;
+        }
+    }
+
+    private void EnsureAdvancedExpanded()
+    {
+        if (AdvancedSettingsPanel != null && AdvancedArrowRotate != null && AdvancedSettingsPanel.Visibility != Visibility.Visible)
+        {
+            AdvancedSettingsPanel.Visibility = Visibility.Visible;
+            AdvancedArrowRotate.Angle = 90;
+        }
+    }
+
     private void OnListChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems != null)
+        {
+            foreach (var item in e.NewItems.OfType<System.ComponentModel.INotifyPropertyChanged>())
+            {
+                item.PropertyChanged += OnItemPropertyChanged;
+            }
+        }
+        if (e.OldItems != null)
+        {
+            foreach (var item in e.OldItems.OfType<System.ComponentModel.INotifyPropertyChanged>())
+            {
+                item.PropertyChanged -= OnItemPropertyChanged;
+            }
+        }
+        UpdateEmptyStates();
+        UpdatePreview();
+    }
+
+    private void OnItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         UpdateEmptyStates();
         UpdatePreview();
@@ -569,10 +733,26 @@ public partial class ProviderDialog : Window
         if (EmptyHeadersText != null) EmptyHeadersText.Visibility = HeadersList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (EmptyOptionsText != null) EmptyOptionsText.Visibility = OptionsList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (EmptyModelsText != null) EmptyModelsText.Visibility = ModelsList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        int advancedCount = HeadersList.Count(h => !string.IsNullOrWhiteSpace(h.Key)) +
+                            OptionsList.Count(o => !string.IsNullOrWhiteSpace(o.Key));
+        if (AdvancedCountBadge != null && AdvancedCountText != null)
+        {
+            if (advancedCount > 0)
+            {
+                AdvancedCountBadge.Visibility = Visibility.Visible;
+                AdvancedCountText.Text = $"{advancedCount} 项已配置";
+            }
+            else
+            {
+                AdvancedCountBadge.Visibility = Visibility.Collapsed;
+            }
+        }
     }
 
     private void AddHeader_Click(object sender, RoutedEventArgs e)
     {
+        EnsureAdvancedExpanded();
         var item = new KeyValueItem();
         item.PropertyChanged += (_, _) => UpdatePreview();
         HeadersList.Add(item);
@@ -586,6 +766,7 @@ public partial class ProviderDialog : Window
 
     private void AddOption_Click(object sender, RoutedEventArgs e)
     {
+        EnsureAdvancedExpanded();
         var item = new KeyValueItem();
         item.PropertyChanged += (_, _) => UpdatePreview();
         OptionsList.Add(item);
@@ -623,6 +804,8 @@ public partial class ProviderDialog : Window
         var apiKey = GetKey().Trim();
         FetchModelsBtn.IsEnabled = false;
         FetchModelsBtnText.Text = "获取中...";
+        if (DirectFetchModelsBtn != null) DirectFetchModelsBtn.IsEnabled = false;
+        if (DirectFetchBtnText != null) DirectFetchBtnText.Text = "获取中...";
         if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = "获取中...";
         SetStatus("正在从服务器获取可用模型列表...");
 
@@ -687,6 +870,8 @@ public partial class ProviderDialog : Window
         {
             FetchModelsBtn.IsEnabled = true;
             FetchModelsBtnText.Text = "获取模型列表";
+            if (DirectFetchModelsBtn != null) DirectFetchModelsBtn.IsEnabled = true;
+            if (DirectFetchBtnText != null) DirectFetchBtnText.Text = "获取模型";
             if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = "获取模型列表";
         }
     }
@@ -754,7 +939,7 @@ public partial class ProviderDialog : Window
             {
                 var root = new JsonObject
                 {
-                    ["npm"] = string.IsNullOrWhiteSpace(OcNpmCombo.Text) ? "@ai-sdk/openai-compatible" : OcNpmCombo.Text.Trim()
+                    ["npm"] = GetComboSelectedText(OcNpmCombo, "@ai-sdk/openai-compatible")
                 };
 
                 var options = new JsonObject();
@@ -801,7 +986,7 @@ public partial class ProviderDialog : Window
                 {
                     ["name"] = name,
                     ["baseUrl"] = baseUrl,
-                    ["api"] = string.IsNullOrWhiteSpace(PiApiCombo.Text) ? "openai-completions" : PiApiCombo.Text.Trim(),
+                    ["api"] = GetComboSelectedText(PiApiCombo, "openai-completions"),
                 };
                 if (!string.IsNullOrWhiteSpace(key)) root["apiKey"] = key;
 
@@ -1079,7 +1264,7 @@ public partial class ProviderDialog : Window
         }
         else if (_mode == ProviderDialogMode.OpenCode)
         {
-            var npm = TrimOrNull(OcNpmCombo.Text) ?? "@ai-sdk/openai-compatible";
+            var npm = GetComboSelectedText(OcNpmCombo, "@ai-sdk/openai-compatible");
 
             string? modelsJson = null;
             if (modelsList.Count > 0)
@@ -1107,7 +1292,7 @@ public partial class ProviderDialog : Window
         }
         else if (_mode == ProviderDialogMode.Pi)
         {
-            var api = TrimOrNull(PiApiCombo.Text) ?? "openai-completions";
+            var api = GetComboSelectedText(PiApiCombo, "openai-completions");
 
             string? modelsJson = null;
             if (modelsList.Count > 0)

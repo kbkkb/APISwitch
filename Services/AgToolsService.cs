@@ -210,8 +210,6 @@ public static class AgToolsService
                     profile.Quota5hResetTime = null;
                     profile.Quota3p5hFraction = null;
                     profile.Quota3p5hResetTime = null;
-                    profile.Quota3pWeeklyFraction = null;
-                    profile.Quota3pWeeklyResetTime = null;
                 }
             }
         }
@@ -408,27 +406,7 @@ public static class AgToolsService
                 quotaObj["subscription_tier"] = profile.SubscriptionTier;
             }
 
-            if (!profile.IsProTier)
-            {
-                // 免费账号：回写时仅写入 Gemini Models 组与 gemini-weekly 桶，绝不写入 5H 或 3P
-                var geminiWeeklyBucket = new JsonObject
-                {
-                    ["bucket_id"] = "gemini-weekly",
-                    ["window"] = "weekly",
-                    ["remaining_fraction"] = profile.QuotaWeeklyFraction ?? 1.0,
-                    ["reset_time"] = profile.QuotaWeeklyResetTime ?? "",
-                    ["display_name"] = "Weekly Limit Remaining",
-                    ["description"] = "You have used some of your weekly limit, it will fully refresh in 6 days."
-                };
-                var geminiGroup = new JsonObject
-                {
-                    ["display_name"] = "Gemini Models",
-                    ["description"] = "Models within this group: Gemini Flash, Gemini Pro",
-                    ["buckets"] = new JsonArray { geminiWeeklyBucket }
-                };
-                quotaObj["quota_groups"] = new JsonArray { geminiGroup };
-            }
-            else if (!string.IsNullOrEmpty(quotaSummaryJson))
+            if (!string.IsNullOrEmpty(quotaSummaryJson))
             {
                 using var doc = JsonDocument.Parse(quotaSummaryJson);
                 if (doc.RootElement.TryGetProperty("groups", out var groupsElem))
@@ -463,6 +441,73 @@ public static class AgToolsService
                     }
                     quotaObj["quota_groups"] = groupsArr;
                 }
+            }
+            else
+            {
+                // 手动兜底构建配额组
+                var groupsArr = new JsonArray();
+                var geminiBuckets = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["bucket_id"] = "gemini-weekly",
+                        ["window"] = "weekly",
+                        ["remaining_fraction"] = profile.QuotaWeeklyFraction ?? 1.0,
+                        ["reset_time"] = profile.QuotaWeeklyResetTime ?? "",
+                        ["display_name"] = "Weekly Limit Remaining",
+                        ["description"] = "You have used some of your weekly limit, it will fully refresh in 6 days."
+                    }
+                };
+                if (profile.IsProTier && profile.Quota5hFraction.HasValue)
+                {
+                    geminiBuckets.Add(new JsonObject
+                    {
+                        ["bucket_id"] = "gemini-5h",
+                        ["window"] = "5h",
+                        ["remaining_fraction"] = profile.Quota5hFraction.Value,
+                        ["reset_time"] = profile.Quota5hResetTime ?? "",
+                        ["display_name"] = "Five Hour Limit Remaining"
+                    });
+                }
+                groupsArr.Add(new JsonObject
+                {
+                    ["display_name"] = "Gemini Models",
+                    ["description"] = "Models within this group: Gemini Flash, Gemini Pro",
+                    ["buckets"] = geminiBuckets
+                });
+
+                if (profile.Quota3pWeeklyFraction.HasValue)
+                {
+                    var p3Buckets = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["bucket_id"] = "3p-weekly",
+                            ["window"] = "weekly",
+                            ["remaining_fraction"] = profile.Quota3pWeeklyFraction.Value,
+                            ["reset_time"] = profile.Quota3pWeeklyResetTime ?? "",
+                            ["display_name"] = "Weekly Limit Remaining"
+                        }
+                    };
+                    if (profile.IsProTier && profile.Quota3p5hFraction.HasValue)
+                    {
+                        p3Buckets.Add(new JsonObject
+                        {
+                            ["bucket_id"] = "3p-5h",
+                            ["window"] = "5h",
+                            ["remaining_fraction"] = profile.Quota3p5hFraction.Value,
+                            ["reset_time"] = profile.Quota3p5hResetTime ?? "",
+                            ["display_name"] = "Five Hour Limit Remaining"
+                        });
+                    }
+                    groupsArr.Add(new JsonObject
+                    {
+                        ["display_name"] = "Claude and GPT models",
+                        ["description"] = "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
+                        ["buckets"] = p3Buckets
+                    });
+                }
+                quotaObj["quota_groups"] = groupsArr;
             }
 
             if (!string.IsNullOrEmpty(availableModelsJson))

@@ -79,17 +79,9 @@ public static class CliStore
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var official = list.FirstOrDefault(x => x.IsOfficial);
-        if (official != null)
-        {
-            result.Add(official);
-            seenNames.Add(official.Name);
-            if (!string.IsNullOrEmpty(official.Id)) seenIds.Add(official.Id);
-        }
-
         foreach (var item in list)
         {
-            if (item.IsOfficial) continue;
+            if (item == null) continue;
             if (seenNames.Contains(item.Name)) continue;
             if (!string.IsNullOrEmpty(item.Id) && seenIds.Contains(item.Id)) continue;
 
@@ -107,17 +99,9 @@ public static class CliStore
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var official = list.FirstOrDefault(x => x.IsOfficial);
-        if (official != null)
-        {
-            result.Add(official);
-            seenNames.Add(official.Name);
-            if (!string.IsNullOrEmpty(official.Id)) seenIds.Add(official.Id);
-        }
-
         foreach (var item in list)
         {
-            if (item.IsOfficial) continue;
+            if (item == null) continue;
             if (seenNames.Contains(item.Name)) continue;
             if (!string.IsNullOrEmpty(item.Id) && seenIds.Contains(item.Id)) continue;
 
@@ -132,13 +116,19 @@ public static class CliStore
     {
         if (list == null) return new List<OpenCodeProvider>();
         var result = new List<OpenCodeProvider>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var item in list)
         {
-            var key = !string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Name;
-            if (string.IsNullOrWhiteSpace(key)) continue;
-            if (seenIds.Contains(key)) continue;
-            seenIds.Add(key);
+            if (item == null) continue;
+            var name = item.Name?.Trim() ?? "";
+            var id = item.Id?.Trim() ?? "";
+            if (!string.IsNullOrEmpty(name) && seenNames.Contains(name)) continue;
+            if (!string.IsNullOrEmpty(id) && seenIds.Contains(id)) continue;
+
+            if (!string.IsNullOrEmpty(name)) seenNames.Add(name);
+            if (!string.IsNullOrEmpty(id)) seenIds.Add(id);
             result.Add(item);
         }
         return result;
@@ -148,13 +138,19 @@ public static class CliStore
     {
         if (list == null) return new List<PiProvider>();
         var result = new List<PiProvider>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var item in list)
         {
-            var key = !string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Name;
-            if (string.IsNullOrWhiteSpace(key)) continue;
-            if (seenIds.Contains(key)) continue;
-            seenIds.Add(key);
+            if (item == null) continue;
+            var name = item.Name?.Trim() ?? "";
+            var id = item.Id?.Trim() ?? "";
+            if (!string.IsNullOrEmpty(name) && seenNames.Contains(name)) continue;
+            if (!string.IsNullOrEmpty(id) && seenIds.Contains(id)) continue;
+
+            if (!string.IsNullOrEmpty(name)) seenNames.Add(name);
+            if (!string.IsNullOrEmpty(id)) seenIds.Add(id);
             result.Add(item);
         }
         return result;
@@ -163,32 +159,35 @@ public static class CliStore
     public static List<OpenCodeProvider> LoadOpencode()
     {
         var list = Load<List<OpenCodeProvider>>(OpenCodeFile) ?? new List<OpenCodeProvider>();
+        list = DeduplicateOpenCode(list);
         try
         {
             var fromNative = OpenCodeCli.LoadProviders();
             if (fromNative.Count > 0)
             {
-                var map = new Dictionary<string, OpenCodeProvider>(StringComparer.OrdinalIgnoreCase);
-                foreach (var item in list)
-                {
-                    var k = !string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Name;
-                    if (!string.IsNullOrWhiteSpace(k) && !map.ContainsKey(k))
-                        map[k] = item;
-                }
-
                 bool changed = false;
                 foreach (var native in fromNative)
                 {
-                    var nk = !string.IsNullOrWhiteSpace(native.Id) ? native.Id : native.Name;
-                    if (string.IsNullOrWhiteSpace(nk)) continue;
-                    if (!map.TryGetValue(nk, out var existing))
+                    if (string.IsNullOrWhiteSpace(native.Id) && string.IsNullOrWhiteSpace(native.Name)) continue;
+
+                    var existing = list.FirstOrDefault(x =>
+                        (!string.IsNullOrWhiteSpace(native.Id) && string.Equals(x.Id, native.Id, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrWhiteSpace(native.Name) && string.Equals(x.Name, native.Name, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrWhiteSpace(native.BaseUrl) && string.Equals(x.BaseUrl?.TrimEnd('/'), native.BaseUrl?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                    );
+
+                    if (existing == null)
                     {
                         list.Add(native);
-                        map[nk] = native;
                         changed = true;
                     }
                     else
                     {
+                        if (!string.IsNullOrWhiteSpace(native.Id) && existing.Id != native.Id)
+                        {
+                            existing.Id = native.Id;
+                            changed = true;
+                        }
                         if (!string.IsNullOrWhiteSpace(native.BaseUrl) && existing.BaseUrl != native.BaseUrl)
                         {
                             existing.BaseUrl = native.BaseUrl;
@@ -217,9 +216,9 @@ public static class CliStore
                         }
                     }
                 }
+                list = DeduplicateOpenCode(list);
                 if (changed || list.Count == 0)
                 {
-                    list = DeduplicateOpenCode(list);
                     SaveOpencode(list);
                 }
             }
@@ -233,32 +232,35 @@ public static class CliStore
     public static List<PiProvider> LoadPiProviders()
     {
         var list = Load<List<PiProvider>>(PiProvidersFile) ?? new List<PiProvider>();
+        list = DeduplicatePi(list);
         try
         {
             var fromNative = PiCli.LoadProviders();
             if (fromNative.Count > 0)
             {
-                var map = new Dictionary<string, PiProvider>(StringComparer.OrdinalIgnoreCase);
-                foreach (var item in list)
-                {
-                    var k = !string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Name;
-                    if (!string.IsNullOrWhiteSpace(k) && !map.ContainsKey(k))
-                        map[k] = item;
-                }
-
                 bool changed = false;
                 foreach (var native in fromNative)
                 {
-                    var nk = !string.IsNullOrWhiteSpace(native.Id) ? native.Id : native.Name;
-                    if (string.IsNullOrWhiteSpace(nk)) continue;
-                    if (!map.TryGetValue(nk, out var existing))
+                    if (string.IsNullOrWhiteSpace(native.Id) && string.IsNullOrWhiteSpace(native.Name)) continue;
+
+                    var existing = list.FirstOrDefault(x =>
+                        (!string.IsNullOrWhiteSpace(native.Id) && string.Equals(x.Id, native.Id, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrWhiteSpace(native.Name) && string.Equals(x.Name, native.Name, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrWhiteSpace(native.BaseUrl) && string.Equals(x.BaseUrl?.TrimEnd('/'), native.BaseUrl?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                    );
+
+                    if (existing == null)
                     {
                         list.Add(native);
-                        map[nk] = native;
                         changed = true;
                     }
                     else
                     {
+                        if (!string.IsNullOrWhiteSpace(native.Id) && existing.Id != native.Id)
+                        {
+                            existing.Id = native.Id;
+                            changed = true;
+                        }
                         if (!string.IsNullOrWhiteSpace(native.BaseUrl) && existing.BaseUrl != native.BaseUrl)
                         {
                             existing.BaseUrl = native.BaseUrl;
@@ -287,9 +289,9 @@ public static class CliStore
                         }
                     }
                 }
+                list = DeduplicatePi(list);
                 if (changed || list.Count == 0)
                 {
-                    list = DeduplicatePi(list);
                     SavePiProviders(list);
                 }
             }
@@ -309,6 +311,7 @@ public static class CliStore
         public bool ClaudeCliEnabled { get; set; } = false;
         public bool ClaudeDesktopEnabled { get; set; } = false;
         public int Port { get; set; } = 15725;
+        public string Host { get; set; } = "127.0.0.1";
     }
 
     public static ProxySettings LoadProxySettings() =>

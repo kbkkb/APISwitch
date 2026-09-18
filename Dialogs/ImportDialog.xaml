@@ -5,7 +5,9 @@
         Width="720" Height="540"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BgBrush}"
-        FontFamily="Segoe UI, Microsoft YaHei UI"
+        FontFamily="{StaticResource AppFontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
         Foreground="{StaticResource TextBrush}">
     <Grid Margin="18">
         <Grid.RowDefinitions>

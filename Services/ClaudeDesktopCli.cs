@@ -15,6 +15,15 @@ public static class ClaudeDesktopCli
     {
         var list = new List<string>();
 
+        // Self-test and sandboxing can redirect the desktop paths like the other managed clients.
+        var homeOverride = Environment.GetEnvironmentVariable("APISWITCH_HOME");
+        if (!string.IsNullOrWhiteSpace(homeOverride))
+        {
+            list.Add(Path.Combine(homeOverride, "Claude-3p", "claude_desktop_config.json"));
+            list.Add(Path.Combine(homeOverride, "Claude", "claude_desktop_config.json"));
+            return list;
+        }
+
         // 1. Windows 下 Claude 3P 模式的最核心主路径
         var local3p = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

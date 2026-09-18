@@ -4,8 +4,10 @@
         Title="供应商配置"
         Width="820" Height="750" MinWidth="700" MinHeight="550"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BgBrush}"
-        FontFamily="Segoe UI, -apple-system, 'Microsoft YaHei UI', 'PingFang SC', sans-serif"
+        Background="{DynamicResource WindowBgBrush}"
+        FontFamily="{StaticResource AppFontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
         Foreground="{StaticResource TextBrush}">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="12"/>
@@ -18,7 +20,7 @@
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="#CBD5E1"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Padding" Value="10,0"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Template">
@@ -28,14 +30,15 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="8">
-                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                          Focusable="False" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="#94A3B8"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -44,7 +47,7 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="12">
+    <Border Background="#FFFFFF" BorderBrush="{DynamicResource SidebarBorderBrush}" BorderThickness="1.5" CornerRadius="12">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="48"/>
@@ -53,12 +56,12 @@
             </Grid.RowDefinitions>
 
             <!-- 1. Header Bar -->
-            <Border Grid.Row="0" Background="{StaticResource BgBrush}" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" CornerRadius="12,12,0,0" MouseLeftButtonDown="Header_MouseDown">
+            <Border Grid.Row="0" Background="{DynamicResource TitleBarBgBrush}" BorderBrush="{DynamicResource TitleBarBorderBrush}" BorderThickness="0,0,0,1" CornerRadius="11,11,0,0" MouseLeftButtonDown="Header_MouseDown">
                 <Grid Margin="18,0,8,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="DialogTitleText" Text="编辑供应商" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <Border x:Name="CategoryBadge" Margin="10,0,0,0" Padding="8,2" CornerRadius="10" Background="{StaticResource AccentDimBrush}">
-                            <TextBlock x:Name="CategoryBadgeText" Text="Codex" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                        <Border x:Name="CategoryBadge" Margin="10,0,0,0" Padding="8,2" CornerRadius="10" Background="{DynamicResource TabActiveBgBrush}" BorderBrush="{DynamicResource TabActiveBorderBrush}" BorderThickness="1">
+                            <TextBlock x:Name="CategoryBadgeText" Text="Codex" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/>
                         </Border>
                     </StackPanel>
 
@@ -148,35 +151,33 @@
 
                             <!-- OpenCode Npm -->
                             <StackPanel x:Name="OpenCodeFormatPanel" Visibility="Collapsed">
-                                <TextBlock Text="接口格式 (npm 包)" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="选择 AI 服务的 API 接口格式驱动" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
-                                <ComboBox x:Name="OcNpmCombo" IsEditable="True" Height="34" Margin="0,0,0,4">
+                                <TextBlock Text="接口格式 (npm 包) *" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                <TextBlock Text="选择 AI 服务的 API 接口驱动（三选一，只读下拉不可手动篡改）" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                                <ComboBox x:Name="OcNpmCombo" IsEditable="False" Height="34" Margin="0,0,0,4">
                                     <ComboBoxItem Content="@ai-sdk/openai-compatible" IsSelected="True"/>
                                     <ComboBoxItem Content="@ai-sdk/anthropic"/>
-                                    <ComboBoxItem Content="@ai-sdk/google"/>
                                     <ComboBoxItem Content="@ai-sdk/azure"/>
                                 </ComboBox>
                             </StackPanel>
 
                             <!-- Pi Api Format -->
                             <StackPanel x:Name="PiFormatPanel" Visibility="Collapsed">
-                                <TextBlock Text="接口协议 (api)" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
-                                <TextBlock Text="选择 Pi Agent 调用的底层 API 协议" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
-                                <ComboBox x:Name="PiApiCombo" IsEditable="True" Height="34" Margin="0,0,0,4">
+                                <TextBlock Text="接口协议 (api) *" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                <TextBlock Text="选择 Pi Agent 调用的底层 API 协议（三选一，只读下拉不可手动篡改）" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                                <ComboBox x:Name="PiApiCombo" IsEditable="False" Height="34" Margin="0,0,0,4">
                                     <ComboBoxItem Content="openai-completions" IsSelected="True"/>
                                     <ComboBoxItem Content="anthropic-messages"/>
                                     <ComboBoxItem Content="openai-responses"/>
-                                    <ComboBoxItem Content="google-generative-ai"/>
                                 </ComboBox>
                             </StackPanel>
                         </StackPanel>
 
                         <!-- API Key / Token -->
                         <TextBlock x:Name="KeyLabel" Text="API Key *" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
-                        <Grid Margin="0,0,0,2">
-                            <PasswordBox x:Name="KeyPasswordBox" MinHeight="38" Padding="12,8,42,8"
+                        <Grid Height="38" Margin="0,0,0,2">
+                            <PasswordBox x:Name="KeyPasswordBox" Height="38" Padding="12,0,42,0" VerticalContentAlignment="Center"
                                          FontFamily="Consolas, Cascadia Code, Segoe UI"/>
-                            <TextBox x:Name="KeyTextBox" Tag="sk-..." MinHeight="38" Padding="12,8,42,8"
+                            <TextBox x:Name="KeyTextBox" Tag="sk-..." Height="38" Padding="12,0,42,0" VerticalContentAlignment="Center"
                                      FontFamily="Consolas, Cascadia Code, Segoe UI" Visibility="Collapsed"/>
                             <Button x:Name="ToggleKeyBtn" Style="{StaticResource IconButton}"
                                     HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -202,7 +203,16 @@
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="默认模型（可选）" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,4"/>
+                                <Grid Margin="0,0,0,4">
+                                    <TextBlock Text="默认模型（可选）" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                    <Button x:Name="DirectFetchModelsBtn" Style="{StaticResource GhostButton}" HorizontalAlignment="Right" Padding="8,2" Height="24"
+                                            Click="FetchModels_Click" ToolTip="通过 Base URL 和 API Key 自动探测并拉取可用模型列表">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconCloud}" Fill="{DynamicResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="DirectFetchBtnText" Text="获取模型" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
                                 <ComboBox x:Name="ModelCombo" IsEditable="True" Height="36"
                                           ItemsSource="{Binding FetchedModels, RelativeSource={RelativeSource AncestorType=Window}}"
                                           Tag="例如：gpt-4o、claude-3-7-sonnet"/>
@@ -216,69 +226,97 @@
                             </StackPanel>
                         </Grid>
 
-                        <Separator Background="#E2E8F0" Margin="0,4,0,14"/>
-
-                        <!-- Custom Headers Section -->
-                        <Grid Margin="0,0,0,8">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="请求头" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextBrush}"/>
-                                <TextBlock Text="随供应商请求发送的可选 HTTP 请求头，如 HTTP-Referer 或 X-Title。" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <Button HorizontalAlignment="Right" Content="+ 添加请求头" Style="{StaticResource GhostButton}" Click="AddHeader_Click"/>
-                        </Grid>
-                        <TextBlock x:Name="EmptyHeadersText" Text="暂无自定义请求头" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,4,0,10"/>
-                        <ItemsControl x:Name="HeadersItemsControl" Margin="0,0,0,12">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="220"/>
-                                            <ColumnDefinition Width="10"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="10"/>
-                                            <ColumnDefinition Width="36"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" Text="{Binding Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="Header 键名" ToolTip="Header 键名"/>
-                                        <TextBox Grid.Column="2" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="Header 键值" ToolTip="Header 键值"/>
-                                        <Button Grid.Column="4" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteHeader_Click" ToolTip="删除">
-                                            <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="12" Height="12" Stretch="Uniform"/>
-                                        </Button>
+                        <!-- Advanced Settings Collapsible Section (Default Hidden) -->
+                        <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Margin="0,4,0,14">
+                            <StackPanel>
+                                <Button x:Name="ToggleAdvancedBtn" Click="ToggleAdvanced_Click" Style="{StaticResource GhostButton}"
+                                        BorderThickness="0" Background="Transparent" Padding="14,10" HorizontalContentAlignment="Stretch">
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Path x:Name="AdvancedArrowIcon" Data="{StaticResource IconChevronRight}" Fill="{StaticResource TextDimBrush}"
+                                                  Width="9" Height="9" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                <Path.RenderTransform>
+                                                    <RotateTransform x:Name="AdvancedArrowRotate" Angle="0"/>
+                                                </Path.RenderTransform>
+                                            </Path>
+                                            <TextBlock Text="高级设置" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="（自定义请求头、额外选项）" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Border x:Name="AdvancedCountBadge" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                Background="{DynamicResource TabActiveBgBrush}" BorderBrush="{DynamicResource TabActiveBorderBrush}" BorderThickness="1"
+                                                CornerRadius="9" Padding="6,1" Visibility="Collapsed">
+                                            <TextBlock x:Name="AdvancedCountText" Text="0 项已配置" FontSize="10" FontWeight="Medium" Foreground="{DynamicResource AccentBrush}"/>
+                                        </Border>
                                     </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                                </Button>
 
-                        <Separator Background="#E2E8F0" Margin="0,4,0,14"/>
+                                <StackPanel x:Name="AdvancedSettingsPanel" Visibility="Collapsed" Margin="14,0,14,14">
+                                    <Border Height="1" Background="#E2E8F0" Margin="0,2,0,12"/>
 
-                        <!-- Extra Options Section -->
-                        <Grid Margin="0,0,0,8">
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="额外选项" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextBrush}"/>
-                                <TextBlock Text="配置额外的 SDK 选项，如 timeout、setCacheKey 等。值会自动解析类型（数字、布尔值等）。" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <Button HorizontalAlignment="Right" Content="+ 添加" Style="{StaticResource GhostButton}" Click="AddOption_Click"/>
-                        </Grid>
-                        <TextBlock x:Name="EmptyOptionsText" Text="暂无额外选项" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,4,0,10"/>
-                        <ItemsControl x:Name="OptionsItemsControl" Margin="0,0,0,12">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
+                                    <!-- Custom Headers Section -->
                                     <Grid Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="220"/>
-                                            <ColumnDefinition Width="10"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="10"/>
-                                            <ColumnDefinition Width="36"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" Text="{Binding Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="选项键名" ToolTip="选项键名"/>
-                                        <TextBox Grid.Column="2" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="选项键值" ToolTip="选项键值"/>
-                                        <Button Grid.Column="4" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteOption_Click" ToolTip="删除">
-                                            <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="12" Height="12" Stretch="Uniform"/>
-                                        </Button>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="请求头" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextBrush}"/>
+                                            <TextBlock Text="随供应商请求发送的可选 HTTP 请求头，如 HTTP-Referer 或 X-Title。" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                        <Button HorizontalAlignment="Right" Content="+ 添加请求头" Style="{StaticResource GhostButton}" Click="AddHeader_Click"/>
                                     </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                                    <TextBlock x:Name="EmptyHeadersText" Text="暂无自定义请求头" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,2,0,8"/>
+                                    <ItemsControl x:Name="HeadersItemsControl" Margin="0,0,0,12">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,0,8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="220"/>
+                                                        <ColumnDefinition Width="10"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="10"/>
+                                                        <ColumnDefinition Width="36"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox Grid.Column="0" Text="{Binding Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="Header 键名" ToolTip="Header 键名"/>
+                                                    <TextBox Grid.Column="2" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="Header 键值" ToolTip="Header 键值"/>
+                                                    <Button Grid.Column="4" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteHeader_Click" ToolTip="删除">
+                                                        <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="12" Height="12" Stretch="Uniform"/>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Border Height="1" Background="#E2E8F0" Margin="0,4,0,12"/>
+
+                                    <!-- Extra Options Section -->
+                                    <Grid Margin="0,0,0,8">
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="额外选项" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextBrush}"/>
+                                            <TextBlock Text="配置额外的 SDK 选项，如 timeout、setCacheKey 等。值会自动解析类型。" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                        <Button HorizontalAlignment="Right" Content="+ 添加" Style="{StaticResource GhostButton}" Click="AddOption_Click"/>
+                                    </Grid>
+                                    <TextBlock x:Name="EmptyOptionsText" Text="暂无额外选项" Foreground="{StaticResource TextMutedBrush}" FontSize="11" Margin="0,2,0,8"/>
+                                    <ItemsControl x:Name="OptionsItemsControl" Margin="0,0,0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,0,8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="220"/>
+                                                        <ColumnDefinition Width="10"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="10"/>
+                                                        <ColumnDefinition Width="36"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox Grid.Column="0" Text="{Binding Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="选项键名" ToolTip="选项键名"/>
+                                                    <TextBox Grid.Column="2" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="选项键值" ToolTip="选项键值"/>
+                                                    <Button Grid.Column="4" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteOption_Click" ToolTip="删除">
+                                                        <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="12" Height="12" Stretch="Uniform"/>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                         <Separator Background="#E2E8F0" Margin="0,4,0,14"/>
 

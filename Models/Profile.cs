@@ -144,7 +144,7 @@ public class Profile
     {
         get
         {
-            if (!IsProTier) return "免费版无5H限制";
+            if (!IsProTier) return "无5H限制";
             if (!Quota5hFraction.HasValue) return "未激活";
             if (string.IsNullOrEmpty(Quota5hResetTime)) return "满额待命";
             if (DateTime.TryParse(Quota5hResetTime, out var dt))
@@ -190,7 +190,7 @@ public class Profile
     }
 
     [JsonIgnore]
-    public bool Has3pQuota => IsProTier && (Quota3p5hFraction.HasValue || Quota3pWeeklyFraction.HasValue);
+    public bool Has3pQuota => Quota3p5hFraction.HasValue || Quota3pWeeklyFraction.HasValue;
 
     [JsonIgnore]
     public double Quota3p5hPercentValue
@@ -207,7 +207,7 @@ public class Profile
     {
         get
         {
-            if (!IsProTier) return "免费版仅限Gemini";
+            if (!IsProTier) return "无5H限制";
             if (!Quota3p5hFraction.HasValue) return "未激活";
             if (string.IsNullOrEmpty(Quota3p5hResetTime)) return "满额待命";
             if (DateTime.TryParse(Quota3p5hResetTime, out var dt))
@@ -224,19 +224,18 @@ public class Profile
     [JsonIgnore]
     public double Quota3pWeeklyPercentValue
     {
-        get => (IsProTier && Quota3pWeeklyFraction.HasValue) ? Math.Round(Quota3pWeeklyFraction.Value * 100.0, 1) : 0.0;
+        get => Quota3pWeeklyFraction.HasValue ? Math.Round(Quota3pWeeklyFraction.Value * 100.0, 1) : (IsProTier ? 100.0 : 0.0);
         set { }
     }
 
     [JsonIgnore]
-    public string Quota3pWeeklyPercentText => (IsProTier && Quota3pWeeklyFraction.HasValue) ? $"{Math.Round(Quota3pWeeklyFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
+    public string Quota3pWeeklyPercentText => Quota3pWeeklyFraction.HasValue ? $"{Math.Round(Quota3pWeeklyFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
     public string Quota3pWeeklyCountdown
     {
         get
         {
-            if (!IsProTier) return "仅Pro订阅可用";
             if (string.IsNullOrEmpty(Quota3pWeeklyResetTime)) return "";
             if (DateTime.TryParse(Quota3pWeeklyResetTime, out var dt))
             {

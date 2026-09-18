@@ -72,8 +72,8 @@ public partial class UpdateDialog : Window
 
         _cts = new CancellationTokenSource();
 
-        var assetName = string.IsNullOrEmpty(_info.AssetName) ? "APISwitch_Update.zip" : _info.AssetName;
-        var tempDir = Path.Combine(Path.GetTempPath(), "APISwitch_Update");
+        var assetName = string.IsNullOrEmpty(_info.AssetName) ? "APISwitch_Update.zip" : Path.GetFileName(_info.AssetName);
+        var tempDir = Path.Combine(Path.GetTempPath(), "APISwitch_Update", Guid.NewGuid().ToString("N"));
         var destFile = Path.Combine(tempDir, assetName);
 
         var progress = new Progress<(long downloaded, long total, double percent)>(p =>

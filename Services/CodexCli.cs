@@ -105,7 +105,15 @@ public static class CodexCli
     {
         var text = FileUtil.ReadTextIfExists(ConfigPath) ?? "";
         TomlTable model;
-        try { model = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable(); } catch { model = new TomlTable(); }
+        try
+        {
+            model = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+        }
+        catch
+        {
+            // Preserve non-APISwitch settings if the active file is malformed but the automatic backup is valid.
+            model = TomlSerializer.Deserialize<TomlTable>(FileUtil.ReadTextIfExists(ConfigPath + ".bak") ?? "") ?? new TomlTable();
+        }
 
         if (p.IsOfficial)
         {
