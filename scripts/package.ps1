@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     APISwitch 一键发布打包脚本：生成绿色便携版 ZIP 与 Windows 安装包 Setup.exe
 #>
@@ -17,17 +17,21 @@ $version = $proj.Project.PropertyGroup.Version
 if (-not $version) { $version = "0.1.1" }
 Write-Host "📦 目标版本: v$version" -ForegroundColor Green
 
-# 2. 执行独立单文件发布 (内置 .NET 运行时，免安装即用)
-$publishDir = "$root\bin\publish_single"
+# 2. 执行多文件发布 (框架依赖模式，安装后展示清晰的 DLL 模块结构)
+$publishDir = "$root\bin\publish"
 $releaseDir = "$root\Release_Package"
 
 if (-not (Test-Path $releaseDir)) {
     New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 }
 
-Write-Host "`n🔨 正在编译生成独立单文件 EXE (self-contained)..." -ForegroundColor Yellow
-dotnet publish "$root\APISwitch.csproj" -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+if (Test-Path $publishDir) {
+    Remove-Item $publishDir -Recurse -Force
+}
+
+Write-Host "`n🔨 正在编译生成多文件发布版本 (Framework-Dependent)..." -ForegroundColor Yellow
+dotnet publish "$root\APISwitch.csproj" -c Release -r win-x64 --self-contained false `
+    -p:PublishSingleFile=false `
     -o $publishDir
 
 if ($LASTEXITCODE -ne 0) {
@@ -41,15 +45,12 @@ if (-not (Test-Path $mainExe)) {
     exit 1
 }
 
-# 3. 生成独立 EXE 与便携 ZIP 包
-$portableExe = "$releaseDir\APISwitch-v$version-win-x64.exe"
+# 3. 生成便携 ZIP 包 (包含完整的应用和所有依赖 DLL)
 $portableZip = "$releaseDir\APISwitch-v$version-win-x64.zip"
 
 Write-Host "`n📁 正在准备便携包..." -ForegroundColor Yellow
-Copy-Item $mainExe $portableExe -Force
-
 if (Test-Path $portableZip) { Remove-Item $portableZip -Force }
-Compress-Archive -Path $portableExe -DestinationPath $portableZip -Force
+Compress-Archive -Path "$publishDir\*" -DestinationPath $portableZip -Force
 Write-Host "✔ 便携压缩包已生成: $portableZip ($([Math]::Round((Get-Item $portableZip).Length / 1MB, 1)) MB)" -ForegroundColor Green
 
 # 4. 尝试检测 Inno Setup 编译器并生成安装包
