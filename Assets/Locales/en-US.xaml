@@ -168,6 +168,8 @@
     <sys:String x:Key="Common.OfficialNoEndpoint">Official login (no custom endpoint)</sys:String>
     <sys:String x:Key="Common.ClaudeClient">Claude client</sys:String>
     <sys:String x:Key="Common.ListSep">, </sys:String>
+    <sys:String x:Key="Common.DefaultLabel">Default: </sys:String>
+    <sys:String x:Key="Common.NotSet">Not set</sys:String>
     <sys:String x:Key="Msg.DeletedProviderFmt">Deleted provider "{0}"</sys:String>
     <sys:String x:Key="Common.NeedRouterOn">⚡ Router required</sys:String>
     <sys:String x:Key="Common.NeedRouterOff">⚠️ Router required (off)</sys:String>
@@ -261,6 +263,8 @@
     <sys:String x:Key="Pi.OpenDirBtn">Open Pi folder</sys:String>
     <sys:String x:Key="Pi.CaptureBtn">Capture Snapshot</sys:String>
     <sys:String x:Key="Pi.EmptyTitle">No Pi providers yet</sys:String>
+    <sys:String x:Key="Pi.DefaultTip">Pi's current default model comes from defaultProvider + defaultModel in ~/.pi/agent/settings.json; open any provider's Edit dialog and set Default Model to switch it</sys:String>
+    <sys:String x:Key="Oc.DefaultTip">OpenCode's current default model comes from the top-level "model" = "provider/model" in opencode.json; open any provider's Edit dialog and set Default Model to switch it</sys:String>
 
     <!-- ==================== Runtime Messages ==================== -->
     <sys:String x:Key="Msg.OfficialCurrent">Official (no custom endpoint)</sys:String>
@@ -396,6 +400,14 @@
     <sys:String x:Key="PD.FetchModelsBtn">Fetch Models</sys:String>
     <sys:String x:Key="PD.FetchModelsTip">Auto-detect and fetch the model list via Base URL ＆ API key</sys:String>
     <sys:String x:Key="PD.ModelTag">e.g. gpt-4o, claude-3-7-sonnet</sys:String>
+    <sys:String x:Key="PD.DefaultModelTipOc">Leave empty to keep the current default (no change to opencode.json top-level "model"); a value is saved as "model" = "provider-id/model-id" in opencode.json and applies on next OpenCode start</sys:String>
+    <sys:String x:Key="PD.DefaultModelTipPi">Leave empty to keep the current default (no change to ~/.pi/agent/settings.json); a value is saved as defaultProvider + defaultModel in settings.json and applies on next Pi start</sys:String>
+    <sys:String x:Key="PD.ThinkingLabel">Reasoning effort</sys:String>
+    <sys:String x:Key="PD.ThinkingFollow">Follow default (write nothing)</sys:String>
+    <sys:String x:Key="PD.Thinking_low">Low</sys:String>
+    <sys:String x:Key="PD.Thinking_medium">Medium</sys:String>
+    <sys:String x:Key="PD.Thinking_high">High</sys:String>
+    <sys:String x:Key="PD.Thinking_xhigh">Extra high</sys:String>
     <sys:String x:Key="PD.SmallFastLabel">Small / Fast Model (optional)</sys:String>
     <sys:String x:Key="PD.SmallFastTag">e.g. claude-3-5-haiku</sys:String>
     <sys:String x:Key="PD.AdvancedTitle">Advanced</sys:String>
@@ -421,6 +433,8 @@
     <sys:String x:Key="PD.ColDisplayName">Display Name</sys:String>
     <sys:String x:Key="PD.ColModel">Actual Model</sys:String>
     <sys:String x:Key="PD.Col1m">1M Support</sys:String>
+    <sys:String x:Key="PD.ColThinking">Thinking</sys:String>
+    <sys:String x:Key="PD.ColThinkingTip">Reasoning effort for this model (per-model): thinking budget for Claude, reasoning effort for OpenAI-compatible, thinking level for Pi; Follow default leaves this model untouched</sys:String>
     <sys:String x:Key="PD.DisplayNameTag">display name</sys:String>
     <sys:String x:Key="PD.DisplayNameTip">Friendly name shown in client/CLI menus</sys:String>
     <sys:String x:Key="PD.ModelComboTag">Type or pick the actual model</sys:String>

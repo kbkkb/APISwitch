@@ -123,6 +123,7 @@ public static class ClaudeCli
         if (p.IsOfficial)
         {
             LocalProxyServer.ActiveClaudeCliProvider = null;
+            env.Remove("MAX_THINKING_TOKENS");
         }
         else
         {
@@ -141,6 +142,15 @@ public static class ClaudeCli
 
             SetIf(env, "ANTHROPIC_BASE_URL", effectiveBaseUrl);
             SetIf(env, "ANTHROPIC_AUTH_TOKEN", p.AuthToken);
+
+            // 思考强度（Claude 预算制）：per-model 由本地代理按映射模型注入；
+            // env 写全局兜底（各档位中的最高预算）：low=4096 / medium=10240 / high=32768
+            var effort = ThinkingEffort.MaxOf(p.ModelMappings?.Select(m => m.ThinkingEffort) ?? Enumerable.Empty<string?>());
+            var budget = ThinkingEffort.ToClaudeBudgetTokens(effort);
+            if (budget.HasValue)
+                SetIf(env, "MAX_THINKING_TOKENS", budget.Value.ToString());
+            else
+                env.Remove("MAX_THINKING_TOKENS");
 
             if ((p.ModelMappings == null || p.ModelMappings.Count == 0) && p.ExtraEnv != null && p.ExtraEnv.Any(k => k.Key.StartsWith("ANTHROPIC_DEFAULT_")))
             {

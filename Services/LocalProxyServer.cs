@@ -502,6 +502,20 @@ public static class LocalProxyServer
                 }
                 else
                 {
+                    // 思考强度按请求模型注入（Responses 协议 reasoning.effort；用户已显式携带则不覆盖）
+                    var codexEffort = ThinkingEffort.ToOpenAiReasoningEffort(CodexEffortFor(active, reqBody));
+                    if (!string.IsNullOrEmpty(codexEffort))
+                    {
+                        try
+                        {
+                            if (JsonNode.Parse(reqBody) is JsonObject rObj && rObj["reasoning"] == null)
+                            {
+                                rObj["reasoning"] = new JsonObject { ["effort"] = codexEffort };
+                                reqBody = rObj.ToJsonString();
+                            }
+                        }
+                        catch { }
+                    }
                     var upstreamUrl = GetUpstreamEndpoint(active.BaseUrl, "responses");
                     await ForwardRequestAsync(ctx, upstreamUrl, reqBody, active);
                     return;
@@ -541,6 +555,37 @@ public static class LocalProxyServer
         {
             try { ctx.Response.Close(); } catch { }
         }
+    }
+
+    /// <summary>按映射后的实际模型查找该档位配置的思考强度（Claude 模型映射表）。</summary>
+    private static string? ClaudeEffortFor(ClaudeProvider provider, string? rewrittenModel)
+    {
+        if (string.IsNullOrEmpty(rewrittenModel) || provider.ModelMappings == null) return null;
+        return provider.ModelMappings
+            .FirstOrDefault(m => string.Equals(m.Model?.Trim(), rewrittenModel, StringComparison.OrdinalIgnoreCase))
+            ?.ThinkingEffort;
+    }
+
+    /// <summary>ClaudeEffortFor 的预算制换算。</summary>
+    private static long? ClaudeThinkingBudgetFor(ClaudeProvider provider, string? rewrittenModel) =>
+        ThinkingEffort.ToClaudeBudgetTokens(ClaudeEffortFor(provider, rewrittenModel));
+
+    /// <summary>按请求体中的模型 ID 查找 Codex 供应商模型列表配置的思考强度。</summary>
+    private static string? CodexEffortFor(CodexProvider provider, string? reqBody)
+    {
+        if (string.IsNullOrEmpty(reqBody) || provider.CustomModels == null) return null;
+        try
+        {
+            if (JsonNode.Parse(reqBody) is JsonObject obj &&
+                obj["model"]?.GetValue<string>() is { } modelId && !string.IsNullOrWhiteSpace(modelId))
+            {
+                return provider.CustomModels
+                    .FirstOrDefault(m => string.Equals(m.Id?.Trim(), modelId.Trim(), StringComparison.OrdinalIgnoreCase))
+                    ?.ThinkingEffort;
+            }
+        }
+        catch { }
+        return null;
     }
 
     private static async Task HandleResponsesToChatAsync(HttpListenerContext ctx, string reqBody, CodexProvider provider)
@@ -671,6 +716,11 @@ public static class LocalProxyServer
             ["messages"] = messages,
             ["stream"] = true
         };
+
+        // 思考强度按请求模型注入（Chat Completions reasoning_effort；用户已显式携带则不覆盖）
+        var r2cEffort = ThinkingEffort.ToOpenAiReasoningEffort(CodexEffortFor(provider, reqBody));
+        if (!string.IsNullOrEmpty(r2cEffort) && reqObj["reasoning_effort"] == null)
+            chatPayload["reasoning_effort"] = r2cEffort;
 
         if (reqObj.ContainsKey("temperature") && reqObj["temperature"] != null)
             chatPayload["temperature"] = reqObj["temperature"]!.DeepClone();
@@ -1257,6 +1307,7 @@ public static class LocalProxyServer
                 if (jsonNode is JsonObject reqObj && reqObj.ContainsKey("model"))
                 {
                     var origModel = reqObj["model"]?.GetValue<string>();
+                    string? effectiveModel = origModel;
                     if (!string.IsNullOrEmpty(origModel))
                     {
                         var rewritten = RewriteClaudeModel(origModel, provider);
@@ -1265,6 +1316,22 @@ public static class LocalProxyServer
                             reqObj["model"] = rewritten;
                             reqBody = reqObj.ToJsonString();
                         }
+                        effectiveModel = rewritten;
+                    }
+
+                    // 原生 Anthropic 协议：注入 thinking.budget_tokens（用户已显式携带则不覆盖）；
+                    // chat/responses 转译路径在各自 Handler 内注入，不在此处理。
+                    var isNativeWire = !string.Equals(provider.WireApi, "chat", StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(provider.WireApi, "responses", StringComparison.OrdinalIgnoreCase);
+                    var budget = ClaudeThinkingBudgetFor(provider, effectiveModel);
+                    if (isNativeWire && budget.HasValue && reqObj["thinking"] == null)
+                    {
+                        reqObj["thinking"] = new JsonObject
+                        {
+                            ["type"] = "enabled",
+                            ["budget_tokens"] = budget.Value,
+                        };
+                        reqBody = reqObj.ToJsonString();
                     }
                 }
             }
@@ -1587,6 +1654,12 @@ public static class LocalProxyServer
             ["stream"] = reqObj["stream"]?.GetValue<bool>() ?? false
         };
 
+        // 思考强度注入（用户请求已显式携带则不覆盖）——按映射后的模型取档位
+        var chatEffort = ThinkingEffort.ToOpenAiReasoningEffort(
+            ClaudeEffortFor(provider, model));
+        if (!string.IsNullOrEmpty(chatEffort) && reqObj["reasoning_effort"] == null)
+            chatPayload["reasoning_effort"] = chatEffort;
+
         if (reqObj["tools"] is JsonArray toolsArray && toolsArray.Count > 0)
         {
             var chatTools = new JsonArray();
@@ -1896,6 +1969,12 @@ public static class LocalProxyServer
             ["input"] = inputArr,
             ["stream"] = stream
         };
+
+        // 思考强度注入（Responses 协议 reasoning.effort；用户已显式携带则不覆盖）——按映射后的模型取档位
+        var respEffort = ThinkingEffort.ToOpenAiReasoningEffort(
+            ClaudeEffortFor(provider, model));
+        if (!string.IsNullOrEmpty(respEffort) && responsesPayload["reasoning"] == null)
+            responsesPayload["reasoning"] = new JsonObject { ["effort"] = respEffort };
 
         var upstreamUrl = GetUpstreamEndpoint(provider.BaseUrl, "responses");
         var reqMsg = new HttpRequestMessage(HttpMethod.Post, upstreamUrl)

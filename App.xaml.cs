@@ -344,6 +344,51 @@ public partial class App : System.Windows.Application
         Services.PiCli.Restore(acc);
         sb.AppendLine("pi_after_restore=" + Services.PiCli.CurrentDefaults().Provider + "/" + Services.PiCli.CurrentDefaults().Model);
 
+        // Pi 默认模型 + contextWindow 写入链路断言
+        try
+        {
+            Services.PiCli.SaveProvider(new Models.PiProvider
+            {
+                Id = "test-pi",
+                Name = "Test Pi",
+                BaseUrl = "https://pi.test/v1",
+                ApiKey = "sk-pi",
+                Api = "openai-completions",
+                CustomModels = new List<Models.ProviderModelEntry>
+                {
+                    new() { Id = "m1", Name = "M1", ContextWindow = "1m" },
+                    new() { Id = "m2", Name = "M2", ContextWindow = "128k" },
+                },
+                DefaultModel = "m1",
+            }, setDefaultModel: true, defaultModelId: "m1");
+
+            var piModelsJson = File.ReadAllText(Services.PiCli.ModelsPath);
+            sb.AppendLine("pi_save_has_default=" + piModelsJson.Contains("test-pi"));
+            sb.AppendLine("pi_models_ctx_1m=" + piModelsJson.Contains("1048576"));
+            sb.AppendLine("pi_models_ctx_128k=" + piModelsJson.Contains("131072"));
+
+            var (piProv, piModel) = Services.PiCli.CurrentDefaults();
+            sb.AppendLine("pi_default_model=" + piProv + "/" + piModel);
+
+            // OpenCode 默认模型写入链路断言
+            Services.OpenCodeCli.SaveProvider(new Models.OpenCodeProvider
+            {
+                Id = "test-oc",
+                Name = "Test OC",
+                Npm = "@ai-sdk/openai-compatible",
+                BaseUrl = "https://oc.test/v1",
+                ApiKey = "sk-oc",
+                DefaultModel = "model-a",
+            }, setDefaultModel: true, defaultModelId: "model-a");
+
+            var ocCur = Services.OpenCodeCli.CurrentModel();
+            sb.AppendLine("oc_default_model=" + (ocCur ?? "unset"));
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("pi_oc_default_model_err=" + ex.Message);
+        }
+
         try
         {
             var mw = new MainWindow { Visibility = Visibility.Hidden };
@@ -358,6 +403,128 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             sb.AppendLine("ui_tabs_render_err=" + ex);
+        }
+        // ===== 思考强度（模型级）写入断言 =====
+        try
+        {
+            // 1) Codex：全局兜底 = 各模型最高档（per-model 由代理按请求模型注入）
+            Services.CodexCli.Apply(new Models.CodexProvider
+            {
+                Id = "test-codex-think",
+                Name = "Test Codex Think",
+                BaseUrl = "https://codex.test/v1",
+                WireApi = "responses",
+                ApiKey = "sk-cx",
+                Model = "gpt-5",
+                CustomModels = new List<Models.ProviderModelEntry>
+                {
+                    new() { Id = "gpt-5", Name = "GPT-5", ThinkingEffort = "low" },
+                    new() { Id = "gpt-5-mini", Name = "GPT-5 mini", ThinkingEffort = "high" },
+                },
+            });
+            var codexCfg = File.ReadAllText(Services.CodexCli.ConfigPath);
+            sb.AppendLine("think_codex_written=" + codexCfg.Contains("model_reasoning_effort = \"high\""));
+            Services.CodexCli.Apply(new Models.CodexProvider { Name = "官方", IsOfficial = true });
+            sb.AppendLine("think_codex_cleared=" + !File.ReadAllText(Services.CodexCli.ConfigPath).Contains("model_reasoning_effort"));
+
+            // 2) Claude CLI：env 兜底 = 映射表最高预算（low=4096 / high=32768）
+            Services.ClaudeCli.Apply(new Models.ClaudeProvider
+            {
+                Name = "TestClaudeThink",
+                BaseUrl = "https://claude.test",
+                AuthToken = "sk-t",
+                WireApi = "anthropic",
+                AccessMode = "mapping",
+                ModelMappings = new List<Models.ClaudeModelMapping>
+                {
+                    new() { Role = "Sonnet", Model = "claude-sonnet-x", ThinkingEffort = "low" },
+                    new() { Role = "Opus", Model = "claude-opus-x", ThinkingEffort = "high" },
+                },
+            });
+            var claudeSettings = File.ReadAllText(Services.ClaudeCli.SettingsPath);
+            sb.AppendLine("think_claude_written=" + claudeSettings.Contains("\"MAX_THINKING_TOKENS\": \"32768\""));
+            Services.ClaudeCli.Apply(new Models.ClaudeProvider { Name = "官方", IsOfficial = true });
+            sb.AppendLine("think_claude_cleared=" + !File.ReadAllText(Services.ClaudeCli.SettingsPath).Contains("MAX_THINKING_TOKENS"));
+
+            // 3) Pi：models[] 按模型 reasoning + settings modelThinkingLevels
+            Services.PiCli.SaveProvider(new Models.PiProvider
+            {
+                Id = "test-pi-think",
+                Name = "Test Pi Think",
+                BaseUrl = "https://pi.test/v1",
+                ApiKey = "sk-pi",
+                CustomModels = new List<Models.ProviderModelEntry>
+                {
+                    new() { Id = "m1", Name = "M1", ContextWindow = "1m", ThinkingEffort = "medium" },
+                    new() { Id = "m2", Name = "M2", ContextWindow = "1m" },
+                },
+            });
+            var piModels = File.ReadAllText(Services.PiCli.ModelsPath);
+            sb.AppendLine("think_pi_reasoning=" + piModels.Contains("\"reasoning\": true"));
+            var piSettings = File.ReadAllText(Services.PiCli.SettingsPath);
+            sb.AppendLine("think_pi_level_map=" + piSettings.Contains("\"test-pi-think/m1\": \"medium\""));
+
+            // 4) OpenCode：per-model options（仅配置了的模型带 options）
+            Services.OpenCodeCli.SaveProvider(new Models.OpenCodeProvider
+            {
+                Id = "test-oc-think",
+                Name = "Test OC Think",
+                Npm = "@ai-sdk/openai-compatible",
+                BaseUrl = "https://oc.test/v1",
+                ApiKey = "sk-oc",
+                CustomModels = new List<Models.ProviderModelEntry>
+                {
+                    new() { Id = "m1", Name = "M1", ThinkingEffort = "high" },
+                    new() { Id = "m2", Name = "M2" },
+                },
+            });
+            var ocCfg = File.ReadAllText(Services.OpenCodeCli.ConfigPath);
+            sb.AppendLine("think_oc_reasoning_effort=" + ocCfg.Contains("\"reasoningEffort\": \"high\""));
+            sb.AppendLine("think_oc_no_effort_model_clean=" + (ocCfg.Split("\"m2\"").Length <= 2));
+
+            Services.OpenCodeCli.SaveProvider(new Models.OpenCodeProvider
+            {
+                Id = "test-oc-think-anth",
+                Name = "Test OC Think Anth",
+                Npm = "@ai-sdk/anthropic",
+                BaseUrl = "https://oc2.test/v1",
+                ApiKey = "sk-oc2",
+                CustomModels = new List<Models.ProviderModelEntry>
+                {
+                    new() { Id = "m1", Name = "M1", ThinkingEffort = "low" },
+                },
+            });
+            var ocCfg2 = File.ReadAllText(Services.OpenCodeCli.ConfigPath);
+            sb.AppendLine("think_oc_thinking_budget=" + ocCfg2.Contains("\"budgetTokens\": 4096"));
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("think_channels_err=" + ex.Message);
+        }
+        // ProviderDialog 各模式的默认模型区可见性断言（防回归）
+        try
+        {
+            foreach (var mode in new Dialogs.ProviderDialogMode[]
+            {
+                Dialogs.ProviderDialogMode.Pi,
+                Dialogs.ProviderDialogMode.OpenCode,
+                Dialogs.ProviderDialogMode.Codex,
+                Dialogs.ProviderDialogMode.Claude,
+            })
+            {
+                var dlg = new Dialogs.ProviderDialog(mode, null);
+                var panel = dlg.FindName("DirectModelPanel");
+                var combo = dlg.FindName("ModelCombo");
+                var vis = (panel is System.Windows.UIElement el && el.Visibility == Visibility.Visible) ? "visible" : "hidden";
+                sb.AppendLine("pd_" + mode + "_default_model_panel=" + vis);
+                sb.AppendLine("pd_" + mode + "_model_combo=" + (combo != null ? "yes" : "no"));
+                dlg.Close();
+            }
+            sb.AppendLine("pd_dialog_probe=ok");
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("pd_dialog_probe_err=" + ex.Message);
         }
 
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "apiswitch-selftest.txt"), sb.ToString());

@@ -15,6 +15,8 @@ public class OpenCodeProvider
     public Dictionary<string, string> ExtraOptions { get; set; } = new();
     public List<ProviderModelEntry> CustomModels { get; set; } = new();
     public string? ModelsJson { get; set; }
+    /// <summary>默认模型 ID；null 表示不写入默认模型（不动用户既有配置）</summary>
+    public string? DefaultModel { get; set; }
 }
 
 public class PiAccount
@@ -52,4 +54,6 @@ public class PiProvider
     public Dictionary<string, string> CustomHeaders { get; set; } = new();
     public List<ProviderModelEntry> CustomModels { get; set; } = new();
     public string? ModelsJson { get; set; }
+    /// <summary>默认模型 ID；null 表示不写入默认模型（不动用户既有 settings.json）</summary>
+    public string? DefaultModel { get; set; }
 }

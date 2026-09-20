@@ -1176,14 +1176,20 @@
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
                             <TextBlock Text="{DynamicResource Oc.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="OcPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
+                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                 <Border Style="{StaticResource Chip}">
+                                     <StackPanel Orientation="Horizontal">
+                                         <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                         <TextBlock x:Name="OcPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                     </StackPanel>
+                                 </Border>
+                                 <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Oc.DefaultTip}">
+                                     <StackPanel Orientation="Horizontal">
+                                         <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                         <TextBlock x:Name="OcDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                     </StackPanel>
+                                 </Border>
+                             </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1357,14 +1363,20 @@
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
                             <TextBlock Text="{DynamicResource Pi.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="PiPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
+                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                 <Border Style="{StaticResource Chip}">
+                                     <StackPanel Orientation="Horizontal">
+                                         <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                         <TextBlock x:Name="PiPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                     </StackPanel>
+                                 </Border>
+                                 <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Pi.DefaultTip}">
+                                     <StackPanel Orientation="Horizontal">
+                                         <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                         <TextBlock x:Name="PiDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                     </StackPanel>
+                                 </Border>
+                             </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>

@@ -29,6 +29,14 @@ public class ProviderModelEntry : INotifyPropertyChanged
         set { if (_contextWindow != value) { _contextWindow = value; OnPropertyChanged(); } }
     }
 
+    private string _thinkingEffort = "";
+    /// <summary>思考强度：""=跟随默认；low/medium/high</summary>
+    public string ThinkingEffort
+    {
+        get => _thinkingEffort;
+        set { if (_thinkingEffort != value) { _thinkingEffort = value ?? ""; OnPropertyChanged(); } }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -97,6 +105,14 @@ public class ClaudeModelMapping : INotifyPropertyChanged
     {
         get => _supports1m;
         set { if (_supports1m != value) { _supports1m = value; OnPropertyChanged(); } }
+    }
+
+    private string _thinkingEffort = "";
+    /// <summary>思考强度：""=跟随默认；low/medium/high</summary>
+    public string ThinkingEffort
+    {
+        get => _thinkingEffort;
+        set { if (_thinkingEffort != value) { _thinkingEffort = value ?? ""; OnPropertyChanged(); } }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

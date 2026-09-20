@@ -120,10 +120,28 @@ public static class OpenCodeCli
         if (p.CustomModels != null && p.CustomModels.Count > 0)
         {
             var mObj = new JsonObject();
+            var isAnthropic = p.Npm?.Contains("anthropic", StringComparison.OrdinalIgnoreCase) == true;
             foreach (var m in p.CustomModels)
             {
                 if (string.IsNullOrWhiteSpace(m.Id)) continue;
-                mObj[m.Id.Trim()] = new JsonObject { ["name"] = m.Name ?? "" };
+                var mNode = new JsonObject { ["name"] = m.Name ?? "" };
+                // 思考强度按模型注入（opencode.ai/docs/models：per-model options）
+                if (isAnthropic)
+                {
+                    var budget = ThinkingEffort.ToOpenCodeAnthropicBudget(m.ThinkingEffort);
+                    if (budget.HasValue)
+                        mNode["options"] = new JsonObject
+                        {
+                            ["thinking"] = new JsonObject { ["type"] = "enabled", ["budgetTokens"] = budget.Value },
+                        };
+                }
+                else
+                {
+                    var effort = ThinkingEffort.ToOpenAiReasoningEffort(m.ThinkingEffort);
+                    if (!string.IsNullOrEmpty(effort))
+                        mNode["options"] = new JsonObject { ["reasoningEffort"] = effort };
+                }
+                mObj[m.Id.Trim()] = mNode;
             }
             entry["models"] = mObj;
         }
@@ -348,9 +366,36 @@ public static class PiCli
         return result;
     }
 
-    public static void SaveProvider(PiProvider p, bool setDefaultModel = false, string? defaultModelId = null)
+    /// <summary>
+    /// 将 "1m"/"128k"/纯数字 等上下文窗口写法换算为 token 数值。
+    /// 返回 false 表示无法解析（调用方不写该字段）。
+    /// </summary>
+    public static bool TryParseContextWindow(string? raw, out long tokens)
     {
-        var root = LoadModels();
+        tokens = 0;
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var s = raw.Trim().ToLowerInvariant();
+
+        if (s.EndsWith('k') && double.TryParse(s[..^1], out var kv))
+        {
+            tokens = (long)(kv * 1024);
+            return tokens > 0;
+        }
+        if (s.EndsWith('m') && double.TryParse(s[..^1], out var mv))
+        {
+            tokens = (long)(mv * 1024 * 1024);
+            return tokens > 0;
+        }
+        if (long.TryParse(s, out var n))
+        {
+            tokens = n;
+            return n > 0;
+        }
+        return false;
+    }
+
+    public static void SaveProvider(PiProvider p, bool setDefaultModel = false, string? defaultModelId = null)
+    {        var root = LoadModels();
         var providers = root["providers"]?.AsObject();
         if (providers == null)
         {
@@ -383,11 +428,17 @@ public static class PiCli
             foreach (var m in p.CustomModels)
             {
                 if (string.IsNullOrWhiteSpace(m.Id)) continue;
-                mArr.Add(new JsonObject
+                var mObj = new JsonObject
                 {
                     ["id"] = m.Id.Trim(),
                     ["name"] = string.IsNullOrWhiteSpace(m.Name) ? m.Id.Trim() : m.Name.Trim(),
-                });
+                };
+                if (TryParseContextWindow(m.ContextWindow, out var cw))
+                    mObj["contextWindow"] = cw;
+                // pi 只有在模型上声明 reasoning:true 才会暴露思考/effort 选项（按模型）
+                if (ThinkingEffort.ToPi(m.ThinkingEffort) != null)
+                    mObj["reasoning"] = true;
+                mArr.Add(mObj);
             }
             entry["models"] = mArr;
         }
@@ -441,6 +492,48 @@ public static class PiCli
         {
             SetDefaultModel(p.Id, defaultModelId);
         }
+
+        // 按模型写入思考等级（settings.json modelThinkingLevels: "provider/modelId" → level）
+        if (p.CustomModels != null && p.CustomModels.Any(m => ThinkingEffort.ToPi(m.ThinkingEffort) != null))
+        {
+            SetModelThinkingLevels(p.Id, p.CustomModels);
+        }
+    }
+
+    /// <summary>
+    /// 写入 pi 的 per-model 启动思考等级（settings.json modelThinkingLevels，键为 "provider/modelId"）。
+    /// 仅覆盖本 provider 的键，其他 provider 的条目保持不动。
+    /// </summary>
+    public static void SetModelThinkingLevels(string providerId, List<Models.ProviderModelEntry> models)
+    {
+        try
+        {
+            var text = FileUtil.ReadTextIfExists(SettingsPath);
+            var s = string.IsNullOrWhiteSpace(text) ? new JsonObject() : JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject() ?? new JsonObject();
+
+            var map = s["modelThinkingLevels"]?.AsObject() is { } existing
+                ? existing
+                : new JsonObject();
+            var prefix = providerId + "/";
+            var staleKeys = map.Select(kv => kv.Key)
+                .Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            foreach (var k in staleKeys)
+                map.Remove(k);
+
+            foreach (var m in models)
+            {
+                var lv = ThinkingEffort.ToPi(m.ThinkingEffort);
+                if (lv != null && !string.IsNullOrWhiteSpace(m.Id))
+                    map[providerId + "/" + m.Id.Trim()] = lv;
+            }
+
+            if (map.Count > 0)
+                s["modelThinkingLevels"] = map;
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            FileUtil.AtomicWriteText(SettingsPath, s.ToJsonString(WriteOpts));
+        }
+        catch { }
     }
 
     public static void DeleteProvider(string id)
@@ -507,6 +600,44 @@ public static class PiCli
         catch { }
     }
 
+    /// <summary>写入 Pi 启动默认思考等级（off/minimal/low/medium/high/xhigh/max）。</summary>
+    public static void SetDefaultThinking(string level)
+    {
+        try
+        {
+            var text = FileUtil.ReadTextIfExists(SettingsPath);
+            var s = string.IsNullOrWhiteSpace(text) ? new JsonObject() : JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject() ?? new JsonObject();
+            s["defaultThinkingLevel"] = level;
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            FileUtil.AtomicWriteText(SettingsPath, s.ToJsonString(WriteOpts));
+        }
+        catch { }
+    }
+
+    public static void ClearDefaultThinking()
+    {
+        try
+        {
+            var text = FileUtil.ReadTextIfExists(SettingsPath);
+            if (string.IsNullOrWhiteSpace(text)) return;
+            if (JsonNode.Parse(text, nodeOptions: null, DocOpts)?.AsObject() is { } s && s.ContainsKey("defaultThinkingLevel"))
+            {
+                s.Remove("defaultThinkingLevel");
+                FileUtil.AtomicWriteText(SettingsPath, s.ToJsonString(WriteOpts));
+            }
+        }
+        catch { }
+    }
+
+    public static string? CurrentThinkingLevel()
+    {
+        try
+        {
+            var s = JsonNode.Parse(ReadOrCreate(SettingsPath, "{}"))?.AsObject();
+            return Str(s, "defaultThinkingLevel");
+        }
+        catch { return null; }
+    }
     public static (string? Provider, string? Model) CurrentDefaults()
     {
         try

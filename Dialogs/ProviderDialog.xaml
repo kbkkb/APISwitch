@@ -346,11 +346,14 @@
                                     <ColumnDefinition Width="2*"/>
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="70"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{DynamicResource PD.ColRole}" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                 <TextBlock Grid.Column="2" Text="{DynamicResource PD.ColDisplayName}" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                 <TextBlock Grid.Column="4" Text="{DynamicResource PD.ColModel}" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                <TextBlock Grid.Column="6" Text="{DynamicResource PD.Col1m}" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Column="6" Text="{DynamicResource PD.ColThinking}" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                <TextBlock Grid.Column="8" Text="{DynamicResource PD.Col1m}" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
                             </Grid>
 
                             <!-- 4 Fixed Mapping Rows ItemsControl -->
@@ -366,6 +369,8 @@
                                                 <ColumnDefinition Width="2*"/>
                                                 <ColumnDefinition Width="8"/>
                                                 <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="70"/>
                                             </Grid.ColumnDefinitions>
 
                                             <!-- Role Badge -->
@@ -386,8 +391,18 @@
                                                       SelectionChanged="ClaudeModelCombo_SelectionChanged"
                                                       Tag="{DynamicResource PD.ModelComboTag}" ToolTip="{DynamicResource PD.ModelComboTip}"/>
 
+                                            <!-- Thinking Effort ComboBox -->
+                                            <ComboBox Grid.Column="6" Height="34" SelectedValuePath="Tag"
+                                                      SelectedValue="{Binding ThinkingEffort, Mode=TwoWay}"
+                                                      ToolTip="{DynamicResource PD.ColThinkingTip}">
+                                                <ComboBoxItem Tag="" Content="{DynamicResource PD.ThinkingFollow}"/>
+                                                <ComboBoxItem Tag="low" Content="{DynamicResource PD.Thinking_low}"/>
+                                                <ComboBoxItem Tag="medium" Content="{DynamicResource PD.Thinking_medium}"/>
+                                                <ComboBoxItem Tag="high" Content="{DynamicResource PD.Thinking_high}"/>
+                                            </ComboBox>
+
                                             <!-- Supports 1M CheckBox -->
-                                            <CheckBox Grid.Column="6" Content="1M" IsChecked="{Binding Supports1m, Mode=TwoWay}"
+                                            <CheckBox Grid.Column="8" Content="1M" IsChecked="{Binding Supports1m, Mode=TwoWay}"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       ToolTip="{DynamicResource PD.Supported1mTip}"/>
                                         </Grid>
@@ -455,7 +470,9 @@
                                                 <ColumnDefinition Width="8"/>
                                                 <ColumnDefinition Width="1.5*"/>
                                                 <ColumnDefinition Width="8"/>
-                                                <ColumnDefinition Width="110"/>
+                                                <ColumnDefinition Width="100"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="90"/>
                                                 <ColumnDefinition Width="8"/>
                                                 <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
@@ -466,7 +483,15 @@
                                                        Tag="{DynamicResource PD.ModelIdTag}" ToolTip="{DynamicResource PD.ModelIdTip}"/>
                                             <TextBox Grid.Column="3" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="{DynamicResource PD.ShowNameTag}" ToolTip="{DynamicResource PD.ShowNameTip}"/>
                                             <TextBox Grid.Column="5" Text="{Binding ContextWindow, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="{DynamicResource PD.ContextTag}" ToolTip="{DynamicResource PD.ContextTip}"/>
-                                            <Button Grid.Column="7" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteModel_Click" ToolTip="{DynamicResource PD.DeleteModelTip}">
+                                            <ComboBox Grid.Column="7" Height="34" SelectedValuePath="Tag"
+                                                      SelectedValue="{Binding ThinkingEffort, Mode=TwoWay}"
+                                                      ToolTip="{DynamicResource PD.ColThinkingTip}">
+                                                <ComboBoxItem Tag="" Content="{DynamicResource PD.ThinkingFollow}"/>
+                                                <ComboBoxItem Tag="low" Content="{DynamicResource PD.Thinking_low}"/>
+                                                <ComboBoxItem Tag="medium" Content="{DynamicResource PD.Thinking_medium}"/>
+                                                <ComboBoxItem Tag="high" Content="{DynamicResource PD.Thinking_high}"/>
+                                            </ComboBox>
+                                            <Button Grid.Column="9" Style="{StaticResource DangerButton}" Padding="0" Click="DeleteModel_Click" ToolTip="{DynamicResource PD.DeleteModelTip}">
                                                 <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="12" Height="12" Stretch="Uniform"/>
                                             </Button>
                                         </Grid>

@@ -2505,6 +2505,7 @@ public partial class MainWindow : Window
         int inPoolCount = _openCodeProviders.Count(p => (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name)));
         if (OcPoolCountText != null)
             OcPoolCountText.Text = I18nService.F("Common.PoolCountFmt", inPoolCount, _openCodeProviders.Count);
+        UpdateOcDefaultModelText();
 
         var rows = _openCodeProviders.Select(p =>
         {
@@ -2537,7 +2538,8 @@ public partial class MainWindow : Window
         if ((sender as FrameworkElement)?.DataContext is not OpenCodeRow row) return;
         try
         {
-            OpenCodeCli.SaveProvider(row.P);
+            OpenCodeCli.SaveProvider(row.P,
+                setDefaultModel: !string.IsNullOrEmpty(row.P.DefaultModel), row.P.DefaultModel);
             RefreshOpencode();
             ShowToast(I18nService.F("Msg.OcAddedFmt", row.Name));
         }
@@ -2650,7 +2652,8 @@ public partial class MainWindow : Window
             var liveIds = new HashSet<string>(OpenCodeCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
             if ((existing != null && liveIds.Contains(existing.Id)) || liveIds.Contains(p.Id))
             {
-                OpenCodeCli.SaveProvider(p);
+                OpenCodeCli.SaveProvider(p, setDefaultModel: !string.IsNullOrEmpty(p.DefaultModel), p.DefaultModel);
+            // OpenCode 思考强度随 models[] options 一并写出（SaveProvider 内部处理）
             }
 
             RefreshOpencode();
@@ -2732,6 +2735,7 @@ public partial class MainWindow : Window
         int inPoolCount = _piProviders.Count(p => (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name)));
         if (PiPoolCountText != null)
             PiPoolCountText.Text = I18nService.F("Common.PoolCountFmt", inPoolCount, _piProviders.Count);
+        UpdatePiDefaultModelText();
 
         var rows = _piProviders.Select(p =>
         {
@@ -2764,7 +2768,8 @@ public partial class MainWindow : Window
         if ((sender as FrameworkElement)?.DataContext is not PiRow row) return;
         try
         {
-            PiCli.SaveProvider(row.P);
+            PiCli.SaveProvider(row.P,
+                setDefaultModel: !string.IsNullOrEmpty(row.P.DefaultModel), row.P.DefaultModel);
             RefreshPi();
             ShowToast(I18nService.F("Msg.PiAddedFmt", row.Name));
         }
@@ -2872,7 +2877,7 @@ public partial class MainWindow : Window
             var liveIds = new HashSet<string>(PiCli.ProviderIds(), StringComparer.OrdinalIgnoreCase);
             if ((existing != null && liveIds.Contains(existing.Id)) || liveIds.Contains(p.Id))
             {
-                PiCli.SaveProvider(p);
+                PiCli.SaveProvider(p, setDefaultModel: !string.IsNullOrEmpty(p.DefaultModel), p.DefaultModel);
             }
 
             RefreshPi();
@@ -2885,6 +2890,38 @@ public partial class MainWindow : Window
     {
         RefreshPi();
         ShowToast(I18nService.F("Msg.PiRefreshedFmt", _piProviders.Count));
+    }
+
+    /// <summary>从 ~/.pi/agent/settings.json 实时读取默认 provider/model 显示在英雄卡。</summary>
+    void UpdatePiDefaultModelText()
+    {
+        if (PiDefaultModelText == null) return;
+        try
+        {
+            var (prov, model) = PiCli.CurrentDefaults();
+            PiDefaultModelText.Text = string.IsNullOrEmpty(prov) && string.IsNullOrEmpty(model)
+                ? I18nService.T("Common.NotSet")
+                : string.Join(" / ", new[] { prov, model }.Where(s => !string.IsNullOrEmpty(s)));
+        }
+        catch
+        {
+            PiDefaultModelText.Text = I18nService.T("Common.NotSet");
+        }
+    }
+
+    /// <summary>从 opencode.json 顶层 model ("provider/model") 实时读取默认模型显示在英雄卡。</summary>
+    void UpdateOcDefaultModelText()
+    {
+        if (OcDefaultModelText == null) return;
+        try
+        {
+            var cur = OpenCodeCli.CurrentModel();
+            OcDefaultModelText.Text = string.IsNullOrEmpty(cur) ? I18nService.T("Common.NotSet") : cur;
+        }
+        catch
+        {
+            OcDefaultModelText.Text = I18nService.T("Common.NotSet");
+        }
     }
 
     void OnOpenPiModels(object sender, RoutedEventArgs e) => OpenFile(PiCli.ModelsPath);

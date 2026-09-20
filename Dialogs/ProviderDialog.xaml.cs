@@ -353,7 +353,16 @@ public partial class ProviderDialog : Window
             IdBox.IsEnabled = false;
             IdHintText.Text = I18nService.T("PD.IdLocked");
         }
-    }
+
+        // 默认模型写入位置因客户端而异，逐模式给出精确 tooltip
+        ModelCombo.ToolTip = mode switch
+        {
+            ProviderDialogMode.OpenCode => I18nService.T("PD.DefaultModelTipOc"),
+            ProviderDialogMode.Pi => I18nService.T("PD.DefaultModelTipPi"),
+            _ => null,
+        };
+
+        }
 
     private void LoadExisting(object? existing)
     {
@@ -449,6 +458,18 @@ public partial class ProviderDialog : Window
             SetKey(oc.ApiKey);
             SelectComboByContent(OcNpmCombo, string.IsNullOrWhiteSpace(oc.Npm) ? "@ai-sdk/openai-compatible" : oc.Npm);
 
+            // OpenCode 默认模型 = opencode.json 顶层 "provider/model"；以实时读取为准
+            var ocDefault = OpenCodeCli.CurrentModel();
+            if (!string.IsNullOrEmpty(ocDefault))
+            {
+                var slashIdx = ocDefault.IndexOf('/');
+                if (slashIdx > 0 && slashIdx < ocDefault.Length - 1 &&
+                    string.Equals(ocDefault[..slashIdx], oc.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    ModelCombo.Text = ocDefault[(slashIdx + 1)..];
+                }
+            }
+
             if (oc.CustomHeaders != null)
                 foreach (var kv in oc.CustomHeaders)
                     HeadersList.Add(new KeyValueItem { Key = kv.Key, Value = kv.Value });
@@ -493,6 +514,7 @@ public partial class ProviderDialog : Window
             BaseUrlBox.Text = pi.BaseUrl ?? "";
             SetKey(pi.ApiKey);
             SelectComboByContent(PiApiCombo, string.IsNullOrWhiteSpace(pi.Api) ? "openai-completions" : pi.Api);
+            ModelCombo.Text = pi.DefaultModel ?? "";
 
             if (pi.CustomHeaders != null)
                 foreach (var kv in pi.CustomHeaders)
@@ -530,6 +552,15 @@ public partial class ProviderDialog : Window
                     }
                 }
                 catch { }
+            }
+
+            // Pi 默认模型存于 ~/.pi/agent/settings.json；对话框加载时可能晚于 settings 落盘探测，
+            // 此处始终以实时读取为准，避免依赖 cli-store 的 DefaultModel 快照。
+            var (curPiProv, curPiModel) = PiCli.CurrentDefaults();
+            if (!string.IsNullOrEmpty(curPiModel) &&
+                string.Equals(curPiProv, pi.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                ModelCombo.Text = curPiModel;
             }
         }
         else
@@ -1192,7 +1223,8 @@ public partial class ProviderDialog : Window
                 Role = m.Role,
                 DisplayName = string.IsNullOrWhiteSpace(m.DisplayName) ? (m.Model ?? "") : m.DisplayName.Trim(),
                 Model = m.Model?.Trim() ?? "",
-                Supports1m = m.Supports1m
+                Supports1m = m.Supports1m,
+                ThinkingEffort = m.ThinkingEffort
             }).ToList();
 
             var sonnetModel = claudeMappings.FirstOrDefault(m => m.Role == "Sonnet")?.Model;
@@ -1288,6 +1320,7 @@ public partial class ProviderDialog : Window
                 ExtraOptions = optionsDict,
                 CustomModels = modelsList,
                 ModelsJson = modelsJson,
+                DefaultModel = TrimOrNull(ModelCombo.Text),
             };
         }
         else if (_mode == ProviderDialogMode.Pi)
@@ -1321,6 +1354,7 @@ public partial class ProviderDialog : Window
                 CustomHeaders = headersDict,
                 CustomModels = modelsList,
                 ModelsJson = modelsJson,
+                DefaultModel = TrimOrNull(ModelCombo.Text),
             };
         }
 

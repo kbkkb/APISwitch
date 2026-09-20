@@ -168,6 +168,8 @@
     <sys:String x:Key="Common.OfficialNoEndpoint">官方登录（无自定义端点）</sys:String>
     <sys:String x:Key="Common.ClaudeClient">Claude 客户端</sys:String>
     <sys:String x:Key="Common.ListSep">、</sys:String>
+    <sys:String x:Key="Common.DefaultLabel">当前默认：</sys:String>
+    <sys:String x:Key="Common.NotSet">未设置</sys:String>
     <sys:String x:Key="Msg.DeletedProviderFmt">已删除供应商「{0}」</sys:String>
     <sys:String x:Key="Common.NeedRouterOn">⚡ 需开启路由</sys:String>
     <sys:String x:Key="Common.NeedRouterOff">⚠️ 需开启路由 (未开启)</sys:String>
@@ -261,6 +263,8 @@
     <sys:String x:Key="Pi.OpenDirBtn">打开 Pi 目录</sys:String>
     <sys:String x:Key="Pi.CaptureBtn">抓取快照</sys:String>
     <sys:String x:Key="Pi.EmptyTitle">还没有 Pi 供应商</sys:String>
+    <sys:String x:Key="Pi.DefaultTip">Pi 当前默认模型来自 ~/.pi/agent/settings.json 的 defaultProvider + defaultModel；打开任意供应商「编辑」→「默认模型」即可改设为该供应商的模型</sys:String>
+    <sys:String x:Key="Oc.DefaultTip">OpenCode 当前默认模型来自 opencode.json 顶层 "model" = "provider/model"；打开任意供应商「编辑」→「默认模型」即可改设为该供应商的模型</sys:String>
 
     <!-- ==================== Runtime Messages ==================== -->
     <sys:String x:Key="Msg.OfficialCurrent">官方（无自定义端点）</sys:String>
@@ -396,6 +400,14 @@
     <sys:String x:Key="PD.FetchModelsBtn">获取模型</sys:String>
     <sys:String x:Key="PD.FetchModelsTip">通过 Base URL 和 API Key 自动探测并拉取可用模型列表</sys:String>
     <sys:String x:Key="PD.ModelTag">例如：gpt-4o、claude-3-7-sonnet</sys:String>
+    <sys:String x:Key="PD.DefaultModelTipOc">留空则不设置默认模型（不动现有 opencode.json 顶层 model）；填写后保存将写入 opencode.json 的 "model" = "provider-id/模型 ID"，OpenCode 下次启动生效</sys:String>
+    <sys:String x:Key="PD.DefaultModelTipPi">留空则不设置默认模型（不动现有 ~/.pi/agent/settings.json）；填写后保存将写入 settings.json 的 defaultProvider + defaultModel，Pi 下次启动生效</sys:String>
+    <sys:String x:Key="PD.ThinkingLabel">思考强度</sys:String>
+    <sys:String x:Key="PD.ThinkingFollow">跟随默认（不写入配置）</sys:String>
+    <sys:String x:Key="PD.Thinking_low">低</sys:String>
+    <sys:String x:Key="PD.Thinking_medium">中</sys:String>
+    <sys:String x:Key="PD.Thinking_high">高</sys:String>
+    <sys:String x:Key="PD.Thinking_xhigh">最高</sys:String>
     <sys:String x:Key="PD.SmallFastLabel">Small / Fast 模型（可选）</sys:String>
     <sys:String x:Key="PD.SmallFastTag">例如：claude-3-5-haiku</sys:String>
     <sys:String x:Key="PD.AdvancedTitle">高级设置</sys:String>
@@ -421,6 +433,8 @@
     <sys:String x:Key="PD.ColDisplayName">菜单显示名</sys:String>
     <sys:String x:Key="PD.ColModel">实际请求模型</sys:String>
     <sys:String x:Key="PD.Col1m">声明支持 1M</sys:String>
+    <sys:String x:Key="PD.ColThinking">思考</sys:String>
+    <sys:String x:Key="PD.ColThinkingTip">该模型的思考强度（按模型生效）：Claude 为思考预算、OpenAI 兼容为 reasoning effort、Pi 为思考等级；随默认则不改动该模型</sys:String>
     <sys:String x:Key="PD.DisplayNameTag">菜单显示名</sys:String>
     <sys:String x:Key="PD.DisplayNameTip">在客户端/CLI 菜单中显示的友好名称</sys:String>
     <sys:String x:Key="PD.ModelComboTag">输入或下拉选择实际请求模型</sys:String>

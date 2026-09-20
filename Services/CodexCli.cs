@@ -122,6 +122,7 @@ public static class CodexCli
             model.Remove("apiswitch_provider_id");
             model.Remove("model_catalog_json");
             model.Remove("model");
+            model.Remove("model_reasoning_effort");
 
             // Clean up custom providers from model_providers table so no stale endpoints remain
             if (model.TryGetValue("model_providers", out var mp) && mp is TomlTable providers)
@@ -149,6 +150,13 @@ public static class CodexCli
             model["apiswitch_provider_id"] = p.Id;
             model["disable_response_storage"] = true;
 
+            // 思考强度：per-model 由本地代理按请求模型注入；此处写全局兜底（各模型最高档）
+            var effort = ThinkingEffort.ToCodex(ThinkingEffort.MaxOf(
+                p.CustomModels?.Select(m => m.ThinkingEffort) ?? Enumerable.Empty<string?>()));
+            if (!string.IsNullOrEmpty(effort))
+                model["model_reasoning_effort"] = effort;
+            else
+                model.Remove("model_reasoning_effort");
             var providers = model.TryGetValue("model_providers", out var mp) && mp is TomlTable t
                 ? t
                 : new TomlTable();
