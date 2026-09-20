@@ -257,13 +257,13 @@ public partial class ProviderDialog : Window
         switch (mode)
         {
             case ProviderDialogMode.Claude:
-                DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
-                CategoryBadgeText.Text = "Claude CLI";
-                KeyLabel.Text = "Auth Token (写入 ANTHROPIC_AUTH_TOKEN) *";
-                KeyHintText.Text = "系统将写入 ~/.claude/settings.json 中的 env 配置";
+                DialogTitleText.Text = I18nService.T(isEdit ? "PD.EditTitle" : "PD.NewTitle");
+                CategoryBadgeText.Text = I18nService.T("PD.CategoryClaude");
+                KeyLabel.Text = I18nService.T("PD.KeyLabelClaude");
+                KeyHintText.Text = I18nService.T("PD.KeyHintClaude");
                 FormatPanel.Visibility = Visibility.Visible;
                 ClaudeConfigPanel.Visibility = Visibility.Visible;
-                ClaudeConfigDescText.Text = "为 Claude Code CLI 配置模型映射与上游格式。留空的档会自动沿用 Sonnet 模型，确保子 agent 调用的 Haiku 始终可用。";
+                ClaudeConfigDescText.Text = I18nService.T("PD.ClaudeDescCli");
                 CodexWirePanel.Visibility = Visibility.Collapsed;
                 OpenCodeFormatPanel.Visibility = Visibility.Collapsed;
                 DirectModelPanel.Visibility = Visibility.Collapsed;
@@ -275,13 +275,13 @@ public partial class ProviderDialog : Window
                 break;
 
             case ProviderDialogMode.ClaudeDesktop:
-                DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
-                CategoryBadgeText.Text = "Claude 客户端";
-                KeyLabel.Text = "Auth Token (写入 inferenceGatewayApiKey) *";
-                KeyHintText.Text = "系统将写入 Claude Desktop 网关凭据与模型列表";
+                DialogTitleText.Text = I18nService.T(isEdit ? "PD.EditTitle" : "PD.NewTitle");
+                CategoryBadgeText.Text = I18nService.T("Common.ClaudeClient");
+                KeyLabel.Text = I18nService.T("PD.KeyLabelDesktop");
+                KeyHintText.Text = I18nService.T("PD.KeyHintDesktop");
                 FormatPanel.Visibility = Visibility.Visible;
                 ClaudeConfigPanel.Visibility = Visibility.Visible;
-                ClaudeConfigDescText.Text = "Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 三档角色 ID。选择模型映射后，CC Switch 会把这三档映射到供应商的实际模型，并在使用期间保持本地路由开启。";
+                ClaudeConfigDescText.Text = I18nService.T("PD.ClaudeDescDesktop");
                 CodexWirePanel.Visibility = Visibility.Collapsed;
                 OpenCodeFormatPanel.Visibility = Visibility.Collapsed;
                 DirectModelPanel.Visibility = Visibility.Collapsed;
@@ -293,10 +293,10 @@ public partial class ProviderDialog : Window
                 break;
 
             case ProviderDialogMode.Codex:
-                DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
+                DialogTitleText.Text = I18nService.T(isEdit ? "PD.EditTitle" : "PD.NewTitle");
                 CategoryBadgeText.Text = "Codex";
-                KeyLabel.Text = "API Key / 访问令牌 (Token) *";
-                KeyHintText.Text = "系统将自动写入 auth.json 与 config.toml（双轨鉴权），并配置 disable_response_storage";
+                KeyLabel.Text = I18nService.T("PD.KeyLabelCodex");
+                KeyHintText.Text = I18nService.T("PD.KeyHintCodex");
                 FormatPanel.Visibility = Visibility.Visible;
                 ClaudeConfigPanel.Visibility = Visibility.Collapsed;
                 CodexWirePanel.Visibility = Visibility.Visible;
@@ -310,11 +310,11 @@ public partial class ProviderDialog : Window
                 break;
 
             case ProviderDialogMode.OpenCode:
-                DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
+                DialogTitleText.Text = I18nService.T(isEdit ? "PD.EditTitle" : "PD.NewTitle");
                 CategoryBadgeText.Text = "OpenCode";
                 OfficialCheck.Visibility = Visibility.Collapsed;
-                KeyLabel.Text = "apiKey *";
-                KeyHintText.Text = "系统将写入 ~/.config/opencode/opencode.json 的 options 配置";
+                KeyLabel.Text = I18nService.T("PD.KeyLabelPlain");
+                KeyHintText.Text = I18nService.T("PD.KeyHintOc");
                 FormatPanel.Visibility = Visibility.Visible;
                 ClaudeConfigPanel.Visibility = Visibility.Collapsed;
                 CodexWirePanel.Visibility = Visibility.Collapsed;
@@ -329,11 +329,11 @@ public partial class ProviderDialog : Window
                 break;
 
             case ProviderDialogMode.Pi:
-                DialogTitleText.Text = isEdit ? "编辑供应商" : "添加供应商";
+                DialogTitleText.Text = I18nService.T(isEdit ? "PD.EditTitle" : "PD.NewTitle");
                 CategoryBadgeText.Text = "Pi";
                 OfficialCheck.Visibility = Visibility.Collapsed;
-                KeyLabel.Text = "apiKey *";
-                KeyHintText.Text = "系统将写入 ~/.pi/agent/models.json 与 auth.json 配置";
+                KeyLabel.Text = I18nService.T("PD.KeyLabelPlain");
+                KeyHintText.Text = I18nService.T("PD.KeyHintPi");
                 FormatPanel.Visibility = Visibility.Visible;
                 ClaudeConfigPanel.Visibility = Visibility.Collapsed;
                 CodexWirePanel.Visibility = Visibility.Collapsed;
@@ -351,7 +351,7 @@ public partial class ProviderDialog : Window
         if (isEdit)
         {
             IdBox.IsEnabled = false;
-            IdHintText.Text = "该供应商已添加到应用配置中，供应商标识不可修改";
+            IdHintText.Text = I18nService.T("PD.IdLocked");
         }
     }
 
@@ -741,7 +741,7 @@ public partial class ProviderDialog : Window
             if (advancedCount > 0)
             {
                 AdvancedCountBadge.Visibility = Visibility.Visible;
-                AdvancedCountText.Text = $"{advancedCount} 项已配置";
+                AdvancedCountText.Text = I18nService.F("PD.AdvancedCountFmt", advancedCount);
             }
             else
             {
@@ -796,18 +796,18 @@ public partial class ProviderDialog : Window
         var baseUrl = BaseUrlBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            SetStatus("请先填写 Base URL", isError: true);
+            SetStatus(I18nService.T("PD.StatusNeedBaseUrl"), isError: true);
             BaseUrlBox.Focus();
             return;
         }
 
         var apiKey = GetKey().Trim();
         FetchModelsBtn.IsEnabled = false;
-        FetchModelsBtnText.Text = "获取中...";
+        FetchModelsBtnText.Text = I18nService.T("PD.FetchingBtn");
         if (DirectFetchModelsBtn != null) DirectFetchModelsBtn.IsEnabled = false;
-        if (DirectFetchBtnText != null) DirectFetchBtnText.Text = "获取中...";
-        if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = "获取中...";
-        SetStatus("正在从服务器获取可用模型列表...");
+        if (DirectFetchBtnText != null) DirectFetchBtnText.Text = I18nService.T("PD.FetchingBtn");
+        if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = I18nService.T("PD.FetchingBtn");
+        SetStatus(I18nService.T("PD.StatusFetching"));
 
         try
         {
@@ -829,8 +829,8 @@ public partial class ProviderDialog : Window
                                        (ClaudeAccessModeCombo?.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "direct";
 
                 FetchedModelsBar.Visibility = isClaudeMapping ? Visibility.Collapsed : Visibility.Visible;
-                FetchedModelsTitleText.Text = $"已从端点暂存 {models.Count} 个可用模型";
-                AddAllFetchedBtn.Content = $"一键全部添加 ({models.Count})";
+                FetchedModelsTitleText.Text = I18nService.F("PD.FetchedTitleFmt", models.Count);
+                AddAllFetchedBtn.Content = I18nService.F("PD.AddAllCountFmt", models.Count);
 
                 if (SelectModelToAddCombo.SelectedItem == null && FetchedModels.Count > 0)
                 {
@@ -852,11 +852,11 @@ public partial class ProviderDialog : Window
                     }
                 }
 
-                SetStatus($"成功获取 {models.Count} 个模型，可直接在各档模型下拉选择", isError: false);
+                SetStatus(I18nService.F("PD.StatusFetchOkFmt", models.Count), isError: false);
             }
             else
             {
-                SetStatus("端点未返回可用模型", isError: true);
+                SetStatus(I18nService.T("PD.StatusFetchEmpty"), isError: true);
             }
 
             UpdateEmptyStates();
@@ -864,15 +864,15 @@ public partial class ProviderDialog : Window
         }
         catch (Exception ex)
         {
-            SetStatus($"获取失败：{ex.Message}", isError: true);
+            SetStatus(I18nService.F("PD.StatusFetchFailFmt", ex.Message), isError: true);
         }
         finally
         {
             FetchModelsBtn.IsEnabled = true;
-            FetchModelsBtnText.Text = "获取模型列表";
+            FetchModelsBtnText.Text = I18nService.T("PD.FetchListBtn");
             if (DirectFetchModelsBtn != null) DirectFetchModelsBtn.IsEnabled = true;
-            if (DirectFetchBtnText != null) DirectFetchBtnText.Text = "获取模型";
-            if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = "获取模型列表";
+            if (DirectFetchBtnText != null) DirectFetchBtnText.Text = I18nService.T("PD.FetchModelsBtn");
+            if (ClaudeFetchModelsBtnText != null) ClaudeFetchModelsBtnText.Text = I18nService.T("PD.FetchListBtn");
         }
     }
 
@@ -881,13 +881,13 @@ public partial class ProviderDialog : Window
         var modelId = SelectModelToAddCombo.Text.Trim();
         if (string.IsNullOrWhiteSpace(modelId))
         {
-            SetStatus("请先在下拉框中选择要添加的模型", isError: true);
+            SetStatus(I18nService.T("PD.StatusSelectFirst"), isError: true);
             return;
         }
 
         if (ModelsList.Any(existing => string.Equals(existing.Id, modelId, StringComparison.OrdinalIgnoreCase)))
         {
-            SetStatus($"模型 {modelId} 已在列表中", isError: true);
+            SetStatus(I18nService.F("PD.StatusModelExistsFmt", modelId), isError: true);
             return;
         }
 
@@ -896,7 +896,7 @@ public partial class ProviderDialog : Window
         ModelsList.Add(entry);
         UpdateEmptyStates();
         UpdatePreview();
-        SetStatus($"已添加模型 {modelId}", isError: false);
+        SetStatus(I18nService.F("PD.StatusModelAddedFmt", modelId), isError: false);
     }
 
     private void AddAllFetchedModels_Click(object sender, RoutedEventArgs e)
@@ -914,7 +914,7 @@ public partial class ProviderDialog : Window
         }
         UpdateEmptyStates();
         UpdatePreview();
-        SetStatus($"已将暂存的 {added} 个新模型添加到配置列表", isError: false);
+        SetStatus(I18nService.F("PD.StatusBatchAddedFmt", added), isError: false);
     }
 
     private void SetStatus(string msg, bool isError = false)
@@ -1125,7 +1125,7 @@ public partial class ProviderDialog : Window
         }
         catch (Exception ex)
         {
-            JsonPreviewBox.Text = $"// 预览生成异常：{ex.Message}";
+            JsonPreviewBox.Text = I18nService.F("PD.PreviewErrorFmt", ex.Message);
         }
     }
 
@@ -1147,7 +1147,7 @@ public partial class ProviderDialog : Window
         var name = NameBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            MessageBox.Show("请填写供应商名称", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(I18nService.T("PD.NameRequired"), I18nService.T("PD.MsgPrompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
             NameBox.Focus();
             return;
         }

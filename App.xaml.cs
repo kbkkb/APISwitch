@@ -43,6 +43,20 @@ public partial class App : System.Windows.Application
         };
     }
 
+    static void OnComboBoxPreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox cb && !cb.IsDropDownOpen)
+        {
+            // 未展开下拉时：不切换选中项，让事件冒泡给外层 ScrollViewer 滚动页面
+            e.Handled = true;
+            var parent = System.Windows.Media.VisualTreeHelper.GetParent(cb) as UIElement;
+            parent?.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+            {
+                RoutedEvent = UIElement.MouseWheelEvent,
+                Source = sender,
+            });
+        }
+    }
     public static void LogStartup(string msg)
     {
         try
@@ -168,6 +182,16 @@ public partial class App : System.Windows.Application
 
         LocalProxyServer.Initialize();
         LogStartup("LocalProxyServer initialized.");
+        I18nService.Initialize();
+        LogStartup($"I18n initialized, language={I18nService.ResolvedLanguage}.");
+
+        // 修复：ComboBox 聚焦（未展开下拉）时滚轮会误切换选中项。
+        // 在隧道阶段拦截（Combo 自身的 OnMouseWheel 在冒泡阶段），未展开时把滚轮
+        // 重新以冒泡事件抛回，让外层 ScrollViewer 正常滚动页面。
+        EventManager.RegisterClassHandler(typeof(System.Windows.Controls.ComboBox),
+            UIElement.PreviewMouseWheelEvent,
+            new System.Windows.Input.MouseWheelEventHandler(OnComboBoxPreviewMouseWheel));
+        base.OnStartup(e);
         base.OnStartup(e);
 
         LogStartup("Creating MainWindow...");

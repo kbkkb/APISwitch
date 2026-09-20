@@ -72,6 +72,7 @@ public partial class MainWindow : Window
             App.LogStartup("MainWindow Loaded: start");
             ApplyTabTheme((Tabs.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity");
             LocalProxyServer.StateChanged += () => Dispatcher.Invoke(UpdateRouterUI);
+            I18nService.LanguageChanged += RebuildTrayMenu;
             RefreshAll();
             UpdateRouterUI();
             if (AppSettingsService.Current.AutoCheckUpdate)
@@ -199,7 +200,7 @@ public partial class MainWindow : Window
     void RefreshAntigravity()
     {
         var db = AgPaths.FindStateDb();
-        DbPathText.Text = db ?? "未找到 Antigravity 数据目录（请先安装并至少启动一次 Antigravity）";
+        DbPathText.Text = db ?? I18nService.T("Ag.DbNotFound");
 
         string? email = null, plan = null, state = null;
 
@@ -251,22 +252,22 @@ public partial class MainWindow : Window
             }
             catch (Exception ex)
             {
-                if (email == null) DbPathText.Text = db + "  （读取失败: " + ex.Message + "）";
+                if (email == null) DbPathText.Text = I18nService.F("Msg.DbReadFailFmt", db, ex.Message);
             }
         }
 
-        CurrentAccountText.Text = email ?? "未登录 / 未检测到";
+        CurrentAccountText.Text = email ?? I18nService.T("Ag.NoAccount");
         StateChip.Text = state switch
         {
-            "signedIn" => "已登录",
-            "signedOut" => "已登出",
-            null => "状态未知",
+            "signedIn" => I18nService.T("Ag.SignedIn"),
+            "signedOut" => I18nService.T("Ag.SignedOut"),
+            null => I18nService.T("Ag.StateUnknown"),
             _ => state,
         };
         PlanChip.Text = string.IsNullOrEmpty(plan) ? "—" : plan;
 
         var running = AgProcess.IsRunning();
-        IdeChip.Text = running ? "IDE 运行中" : "IDE 未运行";
+        IdeChip.Text = running ? I18nService.T("Ag.IdeRunning") : I18nService.T("Ag.IdeNotRunning");
         IdeChip.Foreground = running ? System.Windows.Media.Brushes.LightGreen : null;
 
         var loaded = ProfileStore.Load();
@@ -309,51 +310,51 @@ public partial class MainWindow : Window
 
     async void OnImportFromAgTools(object sender, RoutedEventArgs e)
     {
-        SetBusy("正在从 Antigravity Tools 导入账号及配额…");
+        SetBusy(I18nService.T("Msg.AgImporting"));
         try
         {
             var imported = await AgToolsService.ImportAccountsAsync();
             ClearBusy();
             RefreshAntigravity();
             if (imported.Count > 0)
-                ShowToast($"已成功导入 {imported.Count} 个账号与最新配额");
+                ShowToast(I18nService.F("Msg.AgImportedFmt", imported.Count));
             else
-                ShowToast("未在 Antigravity Tools 中找到可用账号", isError: true);
+                ShowToast(I18nService.T("Msg.AgImportNone"), isError: true);
         }
         catch (Exception ex)
         {
             ClearBusy();
-            ShowToast("导入异常: " + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.AgImportFailFmt", ex.Message), isError: true);
         }
     }
 
     async void OnNewAccountLogin(object sender, RoutedEventArgs e)
     {
-        SetBusy("正在打开浏览器进行 Google 授权…");
+        SetBusy(I18nService.T("Msg.AgLoginBusy"));
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
             var profile = await AgAuthFlow.StartGoogleLoginAsync(cts.Token);
             ClearBusy();
             RefreshAntigravity();
-            ShowToast($"Google 账号 {profile.Email} 授权成功并已存档！");
+            ShowToast(I18nService.F("Msg.AgLoginOkFmt", profile.Email));
         }
         catch (OperationCanceledException)
         {
             ClearBusy();
-            ShowToast("已取消登录或授权超时", isError: true);
+            ShowToast(I18nService.T("Msg.AgLoginCanceled"), isError: true);
         }
         catch (Exception ex)
         {
             ClearBusy();
-            ShowToast("登录失败: " + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.AgLoginFailFmt", ex.Message), isError: true);
         }
     }
 
     async void OnCardActivateQuota(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Profile target) return;
-        SetBusy($"正在向 Google 发送激活消息并刷新 {target.Email} 的限额…");
+        SetBusy(I18nService.F("Msg.AgActivatingFmt", target.Email));
         try
         {
             var (ok, latencyMs, msg) = await AgQuotaService.ActivateAccountQuotaAsync(target);
@@ -361,17 +362,17 @@ public partial class MainWindow : Window
             RefreshAntigravity();
             if (ok)
             {
-                ShowToast($"⚡ {target.Email} 账号限额已激活并刷新 (延迟 {latencyMs}ms)");
+                ShowToast(I18nService.F("Msg.AgActivatedFmt", target.Email, latencyMs));
             }
             else
             {
-                ShowToast($"激活限额失败: {msg}", isError: true);
+                ShowToast(I18nService.F("Msg.AgActivateFailFmt", msg), isError: true);
             }
         }
         catch (Exception ex)
         {
             ClearBusy();
-            ShowToast("激活限额异常: " + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.AgActivateErrorFmt", ex.Message), isError: true);
         }
     }
 
@@ -379,7 +380,7 @@ public partial class MainWindow : Window
     {
         if (_profiles.Count == 0)
         {
-            ShowToast("当前没有账号存档可供激活", isError: true);
+            ShowToast(I18nService.T("Msg.AgBatchEmpty"), isError: true);
             return;
         }
 
@@ -390,7 +391,7 @@ public partial class MainWindow : Window
         for (int i = 0; i < _profiles.Count; i++)
         {
             var p = _profiles[i];
-            SetBusy($"正在批量发送消息激活限额 ({i + 1}/{count}): {p.Email}…");
+            SetBusy(I18nService.F("Msg.AgBatchProgressFmt", i + 1, count, p.Email));
 
             try
             {
@@ -411,14 +412,14 @@ public partial class MainWindow : Window
             if (i < _profiles.Count - 1)
             {
                 var delay = Random.Shared.Next(1500, 3000);
-                SetBusy($"已完成 ({i + 1}/{count})，安全冷却中 {delay / 1000.0:F1}s…");
+                SetBusy(I18nService.F("Msg.AgBatchCooldownFmt", i + 1, count, delay / 1000.0));
                 await Task.Delay(delay);
             }
         }
 
         ClearBusy();
         RefreshAntigravity();
-        ShowToast($"⚡ 批量限额激活完成！成功 {successCount} 个，失败 {failCount} 个");
+        ShowToast(I18nService.F("Msg.AgBatchDoneFmt", successCount, failCount));
     }
 
     async void OnCardRefreshQuota(object sender, RoutedEventArgs e)
@@ -431,18 +432,18 @@ public partial class MainWindow : Window
             if (ok)
             {
                 if (target.IsProTier)
-                    ShowToast($"已同时刷新 {target.Email} 的 Gemini 与 GPT/Claude 配额");
+                    ShowToast(I18nService.F("Msg.AgRefreshQuotaProFmt", target.Email));
                 else
-                    ShowToast($"已刷新 {target.Email} 的 Gemini 与 Claude/GPT 周配额");
+                    ShowToast(I18nService.F("Msg.AgRefreshQuotaFmt", target.Email));
             }
             else
             {
-                ShowToast($"获取 {target.Email} 配额失败，请确认网络连接正常", isError: true);
+                ShowToast(I18nService.F("Msg.AgRefreshQuotaFailFmt", target.Email), isError: true);
             }
         }
         catch (Exception ex)
         {
-            ShowToast("配额刷新失败: " + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.AgRefreshQuotaErrorFmt", ex.Message), isError: true);
         }
     }
 
@@ -453,14 +454,14 @@ public partial class MainWindow : Window
 
     async Task SwitchToProfile(Profile target)
     {
-        SetBusy($"正在切换到账号 {target.Email}…");
+        SetBusy(I18nService.F("Msg.AgSwitchingFmt", target.Email));
         try
         {
             var stopped = await Task.Run(AgProcess.StopIdeAsync);
             if (!stopped)
             {
                 ClearBusy();
-                ShowToast("无法自动关闭 Antigravity，请手动退出后重试", isError: true);
+                ShowToast(I18nService.T("Msg.AgSwitchIdeCloseFail"), isError: true);
                 return;
             }
 
@@ -499,27 +500,27 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ClearBusy();
-            ShowToast("切换失败：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.AgSwitchFailFmt", ex.Message), isError: true);
             return;
         }
 
         if (AutoRestartCheck.IsChecked == true)
         {
             try { AgProcess.StartIde(); }
-            catch (Exception ex) { ClearBusy(); ShowToast("已激活凭据，但重启 IDE 失败：" + ex.Message, isError: true); return; }
+            catch (Exception ex) { ClearBusy(); ShowToast(I18nService.F("Msg.AgIdeRestartFailFmt", ex.Message), isError: true); return; }
         }
 
         ClearBusy();
         RefreshAntigravity();
-        ShowToast($"已成功切换到账号 {target.Email}" + (AutoRestartCheck.IsChecked == true ? "（已重启 IDE）" : ""));
+        ShowToast((AutoRestartCheck.IsChecked == true ? I18nService.F("Msg.AgSwitchedRestartFmt", target.Email) : I18nService.F("Msg.AgSwitchedFmt", target.Email)));
     }
 
     void OnCardDeleteAntigravity(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Profile target) return;
-        if (!Confirm($"删除账号存档 {target.Email}？\n（仅删除本地存档，不影响 Google 账号本身）")) return;
+        if (!Confirm(I18nService.F("Common.DeleteArchiveConfirmFmt", target.Email))) return;
         try { ProfileStore.Delete(target); }
-        catch (Exception ex) { Warn("删除失败：" + ex.Message); return; }
+        catch (Exception ex) { Warn(I18nService.F("Common.DeleteFailFmt", ex.Message)); return; }
         RefreshAntigravity();
     }
 
@@ -534,7 +535,7 @@ public partial class MainWindow : Window
 
             if (_profiles.Count == 0)
             {
-                if (!silent) ShowToast("当前没有账号存档可供刷新配额");
+                if (!silent) ShowToast(I18nService.T("Msg.AgRefreshNone"));
                 return;
             }
 
@@ -569,7 +570,7 @@ public partial class MainWindow : Window
                 ProfileList.Items.Refresh();
                 if (!silent)
                 {
-                    ShowToast($"已刷新全部 {_profiles.Count} 个账号的最新配额");
+                    ShowToast(I18nService.F("Msg.AgRefreshAllDoneFmt", _profiles.Count));
                 }
             });
         }
@@ -584,7 +585,7 @@ public partial class MainWindow : Window
     void OnLaunchIde(object sender, RoutedEventArgs e)
     {
         try { AgProcess.StartIde(); }
-        catch (Exception ex) { Warn("启动失败：" + ex.Message); }
+        catch (Exception ex) { Warn(I18nService.F("Common.LaunchIdeFailFmt", ex.Message)); }
     }
 
     void OnOpenFolder(object sender, RoutedEventArgs e)
@@ -1356,7 +1357,7 @@ public partial class MainWindow : Window
         "desktop" => "Claude Desktop",
         "opencode" => "OpenCode",
         "pi" => "Pi",
-        _ => tab.Header?.ToString() ?? "应用"
+        _ => tab.Header?.ToString() ?? I18nService.T("Common.AppFallback")
     };
 
     void ApplyTabTheme(string tag)
@@ -1550,7 +1551,7 @@ public partial class MainWindow : Window
         public bool IsDesktop { get; init; }
         public string Name => P.Name;
         public string Initial => Name.Length > 0 ? Name.Substring(0, 1).ToUpperInvariant() : "?";
-        public string BaseUrl => P.IsOfficial ? "官方登录（无自定义端点）" : (string.IsNullOrEmpty(P.BaseUrl) ? "—" : P.BaseUrl!);
+        public string BaseUrl => P.IsOfficial ? I18nService.T("Common.OfficialNoEndpoint") : (string.IsNullOrEmpty(P.BaseUrl) ? "—" : P.BaseUrl!);
         public string Model => string.IsNullOrEmpty(P.Model) ? "—" : P.Model!;
 
         public bool RequiresRouter => !P.IsOfficial && (
@@ -1564,23 +1565,22 @@ public partial class MainWindow : Window
 
         public bool IsRouterActive => IsDesktop ? LocalProxyServer.IsClaudeDesktopEnabled : LocalProxyServer.IsClaudeCliEnabled;
 
-        public string RouterBadgeText => IsRouterActive ? "⚡ 需开启路由" : "⚠️ 需开启路由 (未开启)";
+        public string RouterBadgeText => IsRouterActive ? I18nService.T("Common.NeedRouterOn") : I18nService.T("Common.NeedRouterOff");
 
         public string RouterBadgeTooltip => IsRouterActive
             ? (string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase)
-                ? "此供应商上游通信协议为 Chat Completions，必须通过本地路由进行协议转译（当前本地路由已就绪）"
+                ? I18nService.T("Row.TipChatActive")
                 : (string.Equals(P.WireApi, "responses", StringComparison.OrdinalIgnoreCase)
-                    ? "此供应商上游通信协议为 OpenAI Responses，必须通过本地路由进行协议转译（当前本地路由已就绪）"
+                    ? I18nService.T("Row.TipResponsesActive")
                     : (IsDesktop && string.Equals(P.AccessMode, "mapping", StringComparison.OrdinalIgnoreCase)
-                        ? "Claude Desktop 采用模型映射机制，必须通过本地路由重写模型请求（当前本地路由已就绪）"
-                        : "此供应商配置了 1M 长上下文，已通过本地路由自动剥离 [1M] 转发上游（当前本地路由已就绪）")))
-            : (string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase)
-                ? "此供应商上游通信协议为 Chat Completions，必须开启本地路由进行协议转译才能正常使用（当前本地路由未开启）"
+                        ? I18nService.T("Row.TipMappingActive")
+                        : I18nService.T("Row.Tip1mActive"))))
+            : (string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase)                ? I18nService.T("Row.TipChatInactive")
                 : (string.Equals(P.WireApi, "responses", StringComparison.OrdinalIgnoreCase)
-                    ? "此供应商上游通信协议为 OpenAI Responses，必须开启本地路由进行协议转译才能正常使用（当前本地路由未开启）"
+                    ? I18nService.T("Row.TipResponsesInactive")
                     : (IsDesktop && string.Equals(P.AccessMode, "mapping", StringComparison.OrdinalIgnoreCase)
-                        ? "Claude Desktop 采用模型映射机制，必须开启本地路由才能将标准模型重写映射到目标模型（当前本地路由未开启）"
-                        : "此供应商配置了 1M 长上下文，建议开启本地路由以自动剥离 [1M] 并转发上游；当前未开启本地路由，将以纯净模型名直连上游")));
+                        ? I18nService.T("Row.TipMappingInactive")
+                        : I18nService.T("Row.Tip1mInactive"))));
 
         public System.Windows.Media.Brush RouterBadgeBackground => IsRouterActive
             ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEE, 0xF2, 0xFF))
@@ -1598,17 +1598,17 @@ public partial class MainWindow : Window
         {
             get
             {
-                if (P.IsOfficial) return "官方登录（无自定义端点）";
+                if (P.IsOfficial) return I18nService.T("Common.OfficialNoEndpoint");
 
                 var parts = new List<string?> { string.IsNullOrEmpty(P.BaseUrl) ? "—" : P.BaseUrl };
 
                 if (string.Equals(P.WireApi, "chat", StringComparison.OrdinalIgnoreCase))
                 {
-                    parts.Add("Chat 格式 (需路由)");
+                    parts.Add(I18nService.T("Row.SubChatNeedsRouter"));
                 }
                 else if (string.Equals(P.WireApi, "responses", StringComparison.OrdinalIgnoreCase))
                 {
-                    parts.Add("Responses 格式 (需路由)");
+                    parts.Add(I18nService.T("Row.SubResponsesNeedsRouter"));
                 }
 
                 if (P.ModelMappings != null && P.ModelMappings.Count > 0)
@@ -1623,19 +1623,19 @@ public partial class MainWindow : Window
                     }
                     else if (!string.IsNullOrEmpty(P.Model))
                     {
-                        parts.Add("模型 " + P.Model);
+                        parts.Add(I18nService.F("Row.SubModelFmt", P.Model));
                     }
                 }
                 else if (!string.IsNullOrEmpty(P.Model))
                 {
-                    parts.Add("模型 " + P.Model);
+                    parts.Add(I18nService.F("Row.SubModelFmt", P.Model));
                 }
 
                 return string.Join("   ·   ", parts.Where(s => !string.IsNullOrWhiteSpace(s)));
             }
         }
 
-        public string Status => IsCurrent ? "● 当前" : "";
+        public string Status => IsCurrent ? I18nService.T("Row.StatusCurrent") : "";
     }
 
     public class CodexRow
@@ -1644,7 +1644,7 @@ public partial class MainWindow : Window
         public bool IsCurrent { get; init; }
         public string Name => P.Name;
         public string Initial => Name.Length > 0 ? Name.Substring(0, 1).ToUpperInvariant() : "?";
-        public string BaseUrl => P.IsOfficial ? "官方登录（无自定义端点）" : (string.IsNullOrEmpty(P.BaseUrl) ? "—" : P.BaseUrl!);
+        public string BaseUrl => P.IsOfficial ? I18nService.T("Common.OfficialNoEndpoint") : (string.IsNullOrEmpty(P.BaseUrl) ? "—" : P.BaseUrl!);
         public string WireApi => P.IsOfficial ? "—" : P.WireApi;
 
         public bool RequiresRouter => !P.IsOfficial && (
@@ -1656,11 +1656,11 @@ public partial class MainWindow : Window
 
         public bool IsRouterActive => LocalProxyServer.IsCodexEnabled;
 
-        public string RouterBadgeText => IsRouterActive ? "⚡ 需开启路由" : "⚠️ 需开启路由 (未开启)";
+        public string RouterBadgeText => IsRouterActive ? I18nService.T("Common.NeedRouterOn") : I18nService.T("Common.NeedRouterOff");
 
         public string RouterBadgeTooltip => IsRouterActive
-            ? "此供应商上游通信协议为 " + (P.WireApi == "chat" ? "Chat Completions" : (P.WireApi == "anthropic" ? "Anthropic Messages" : P.WireApi)) + "，必须通过 APISwitch 本地路由进行协议转译（当前本地路由已就绪）"
-            : "此供应商上游通信协议为 " + (P.WireApi == "chat" ? "Chat Completions" : (P.WireApi == "anthropic" ? "Anthropic Messages" : P.WireApi)) + "，必须开启 Codex 本地路由才能正常通信（当前本地路由未开启）";
+            ? I18nService.F("Row.TipCodexActiveFmt", P.WireApi == "chat" ? "Chat Completions" : (P.WireApi == "anthropic" ? "Anthropic Messages" : P.WireApi))
+            : I18nService.F("Row.TipCodexInactiveFmt", P.WireApi == "chat" ? "Chat Completions" : (P.WireApi == "anthropic" ? "Anthropic Messages" : P.WireApi));
 
         public System.Windows.Media.Brush RouterBadgeBackground => IsRouterActive
             ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEE, 0xF2, 0xFF))
@@ -1678,12 +1678,12 @@ public partial class MainWindow : Window
         {
             get
             {
-                if (P.IsOfficial) return "官方登录（无自定义端点）";
+                if (P.IsOfficial) return I18nService.T("Common.OfficialNoEndpoint");
                 string wireDesc = P.WireApi switch
                 {
-                    "chat" => "Chat 格式 (需路由转译)",
-                    "anthropic" => "Anthropic 格式 (需路由转译)",
-                    "responses" => "Responses 原生",
+                    "chat" => I18nService.T("Row.SubChatNeedsTranslate"),
+                    "anthropic" => I18nService.T("Row.SubAnthropicNeedsTranslate"),
+                    "responses" => I18nService.T("Row.SubResponsesNative"),
                     _ => P.WireApi
                 };
                 return string.Join("   ·   ",
@@ -1729,7 +1729,7 @@ public partial class MainWindow : Window
         var active = rows.FirstOrDefault(r => r.IsCurrent);
         ClaudeCurrentText.Text = active != null
             ? active.Name + (active.P.IsOfficial ? "" : "  (" + active.P.BaseUrl + ")")
-            : (!string.IsNullOrEmpty(currentName) ? currentName : (string.IsNullOrEmpty(currentUrl) ? "官方（无自定义端点）" : "未收录的端点: " + currentUrl));
+            : (!string.IsNullOrEmpty(currentName) ? currentName : (string.IsNullOrEmpty(currentUrl) ? I18nService.T("Msg.OfficialCurrent") : I18nService.F("Msg.UnlistedEndpointFmt", currentUrl)));
 
         ClaudeEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateRouterUI();
@@ -1750,7 +1750,7 @@ public partial class MainWindow : Window
     void OnCardDeleteClaude(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not ClaudeRow row) return;
-        if (!Confirm($"删除供应商「{row.Name}」？（仅删除本地存档）")) return;
+        if (!Confirm(I18nService.F("Common.DeleteProviderConfirmFmt", row.Name))) return;
         _claudeProviders.RemoveAll(x => x.Name == row.P.Name);
         CliStore.SaveClaude(_claudeProviders);
         RefreshClaude();
@@ -1771,17 +1771,17 @@ public partial class MainWindow : Window
         }
 
         try { ClaudeCli.Apply(row.P); }
-        catch (Exception ex) { ShowToast("应用失败：" + ex.Message, isError: true); return; }
+        catch (Exception ex) { ShowToast(I18nService.F("Common.ApplyFailFmt", ex.Message), isError: true); return; }
         RefreshClaude();
         if (LocalProxyServer.IsClaudeCliEnabled && !row.P.IsOfficial)
         {
             ShowToast(autoEnabled
-                ? $"Claude CLI 已切换到「{row.Name}」（已自动开启本地路由）"
-                : $"Claude CLI 已切换到「{row.Name}」（本地路由已接管）");
+                ? I18nService.F("Msg.SwitchedRouterAutoFmt", "Claude CLI", row.Name)
+                : I18nService.F("Msg.SwitchedRouterFmt", "Claude CLI", row.Name));
         }
         else
         {
-            ShowToast($"Claude CLI 已切换到「{row.Name}」");
+            ShowToast(I18nService.F("Msg.SwitchedPlainFmt", "Claude CLI", row.Name));
         }
     }
 
@@ -1791,7 +1791,7 @@ public partial class MainWindow : Window
         {
             _activeProviderDialog.Activate();
             _activeProviderDialog.Focus();
-            ShowToast("已有正在编辑的供应商窗口，请先保存或关闭该窗口");
+            ShowToast(I18nService.T("Msg.EditorBusy"));
             return;
         }
 
@@ -1861,7 +1861,7 @@ public partial class MainWindow : Window
         }
 
         RefreshClaude();
-        ShowToast(isCurrent ? $"已保存并同步生效当前配置「{p.Name}」" : $"已保存供应商「{p.Name}」");
+        ShowToast(isCurrent ? I18nService.F("Msg.SavedCurrentFmt", p.Name) : I18nService.F("Msg.SavedProviderFmt", p.Name));
     }
 
     void OnRefreshClaude(object sender, RoutedEventArgs e) => RefreshClaude();
@@ -1901,7 +1901,7 @@ public partial class MainWindow : Window
         var active = rows.FirstOrDefault(r => r.IsCurrent);
         DesktopCurrentText.Text = active != null
             ? active.Name + (active.P.IsOfficial ? "" : "  (" + active.P.BaseUrl + ")")
-            : (!string.IsNullOrEmpty(currentName) ? currentName : (string.IsNullOrEmpty(currentUrl) ? "官方（无自定义网关）" : "未收录的网关: " + currentUrl));
+            : (!string.IsNullOrEmpty(currentName) ? currentName : (string.IsNullOrEmpty(currentUrl) ? I18nService.T("Msg.OfficialGatewayCurrent") : I18nService.F("Msg.UnlistedGatewayFmt", currentUrl)));
 
         DesktopEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateRouterUI();
@@ -1922,7 +1922,7 @@ public partial class MainWindow : Window
     void OnCardDeleteDesktop(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not ClaudeRow row) return;
-        if (!Confirm($"删除供应商「{row.Name}」？（仅删除本地存档）")) return;
+        if (!Confirm(I18nService.F("Common.DeleteProviderConfirmFmt", row.Name))) return;
         _desktopProviders.RemoveAll(x => x.Name == row.P.Name);
         CliStore.SaveClaudeDesktop(_desktopProviders);
         RefreshDesktop();
@@ -1943,17 +1943,17 @@ public partial class MainWindow : Window
         }
 
         try { ClaudeDesktopCli.Apply(row.P); }
-        catch (Exception ex) { ShowToast("应用失败：" + ex.Message, isError: true); return; }
+        catch (Exception ex) { ShowToast(I18nService.F("Common.ApplyFailFmt", ex.Message), isError: true); return; }
         RefreshDesktop();
         if (LocalProxyServer.IsClaudeDesktopEnabled && !row.P.IsOfficial)
         {
             ShowToast(autoEnabled
-                ? $"Claude 客户端已切换到「{row.Name}」（已自动开启本地路由）"
-                : $"Claude 客户端已切换到「{row.Name}」（本地路由已接管）");
+                ? I18nService.F("Msg.SwitchedRouterAutoFmt", I18nService.T("Common.ClaudeClient"), row.Name)
+                : I18nService.F("Msg.SwitchedRouterFmt", I18nService.T("Common.ClaudeClient"), row.Name));
         }
         else
         {
-            ShowToast($"Claude 客户端已切换到「{row.Name}」（需重启生效）");
+            ShowToast(I18nService.F("Msg.DesktopSwitchedNeedRestartFmt", row.Name));
         }
     }
 
@@ -1963,7 +1963,7 @@ public partial class MainWindow : Window
         {
             _activeProviderDialog.Activate();
             _activeProviderDialog.Focus();
-            ShowToast("已有正在编辑的供应商窗口，请先保存或关闭该窗口");
+            ShowToast(I18nService.T("Msg.EditorBusy"));
             return;
         }
 
@@ -2033,20 +2033,20 @@ public partial class MainWindow : Window
         }
 
         RefreshDesktop();
-        ShowToast(isCurrent ? $"已保存并同步更新当前客户端配置「{p.Name}」（需重启 Claude 生效）" : $"已保存供应商「{p.Name}」");
+        ShowToast(isCurrent ? I18nService.F("Msg.SavedDesktopCurrentFmt", p.Name) : I18nService.F("Msg.SavedProviderFmt", p.Name));
     }
 
     async void OnRestartClaudeDesktop(object sender, RoutedEventArgs e)
     {
-        ShowToast("正在重启 Claude 客户端…");
+        ShowToast(I18nService.F("Msg.RestartingFmt", "Claude"));
         try
         {
             await ClaudeProcess.RestartClaudeAsync();
-            ShowToast("Claude 客户端已重启");
+            ShowToast(I18nService.F("Msg.RestartedFmt", "Claude"));
         }
         catch (Exception ex)
         {
-            ShowToast("重启 Claude 失败：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.RestartFailFmt", "Claude", ex.Message), isError: true);
         }
     }
 
@@ -2085,7 +2085,7 @@ public partial class MainWindow : Window
         var active = rows.FirstOrDefault(r => r.IsCurrent);
         CodexCurrentText.Text = active != null
             ? active.Name + (active.P.IsOfficial ? "" : "  (" + active.P.BaseUrl + ")")
-            : (string.IsNullOrEmpty(current) ? "官方（无自定义端点）" : "未收录的供应商: " + current);
+            : (string.IsNullOrEmpty(current) ? I18nService.T("Msg.OfficialCurrent") : I18nService.F("Msg.UnlistedProviderFmt", current));
 
         CodexEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateRouterUI();
@@ -2123,7 +2123,7 @@ public partial class MainWindow : Window
         if (RouterStatusDot != null) RouterStatusDot.Fill = activeCount > 0 ? onBrush : offBrush;
         if (RouterStatusText != null)
         {
-            RouterStatusText.Text = activeCount > 0 ? $"⚡ 本地路由 :{port} ({activeCount}/3)" : "本地路由: 已停用";
+            RouterStatusText.Text = activeCount > 0 ? I18nService.F("Router.TitleOnFmt", port, activeCount) : I18nService.T("Main.RouterOff");
             RouterStatusText.Foreground = activeCount > 0 ? activeFg : inactiveFg;
             RouterStatusText.FontWeight = activeCount > 0 ? FontWeights.SemiBold : FontWeights.Normal;
         }
@@ -2137,7 +2137,7 @@ public partial class MainWindow : Window
         if (CodexToolbarRouterDot != null) CodexToolbarRouterDot.Fill = isCodex ? onBrush : offBrush;
         if (CodexToolbarRouterText != null)
         {
-            CodexToolbarRouterText.Text = isCodex ? $"⚡ 本地路由：已开启 (:{port})" : "本地路由：已停用";
+            CodexToolbarRouterText.Text = isCodex ? I18nService.F("Router.ToolbarOnFmt", port) : I18nService.T("Router.ToolbarOff");
             CodexToolbarRouterText.Foreground = isCodex ? activeFg : inactiveFg;
             CodexToolbarRouterText.FontWeight = isCodex ? FontWeights.SemiBold : FontWeights.Normal;
         }
@@ -2155,14 +2155,14 @@ public partial class MainWindow : Window
             if (active != null && !active.IsOfficial)
             {
                 var wire = (active.WireApi ?? "").Trim().ToLowerInvariant();
-                var modeDesc = wire == "chat" ? "协议转译 (Chat↔Responses)" : "透明转发";
+                var modeDesc = wire == "chat" ? I18nService.T("Router.ModeTranslate") : I18nService.T("Router.ModeTransparent");
                 CodexRouterChipText.Text = isCodex
-                    ? $"本地路由已接管 (:{port} · {modeDesc} · 免重启)"
-                    : "直连直通模式（未开启路由）";
+                    ? I18nService.F("Router.TakeoverFmt", port, modeDesc)
+                    : I18nService.T("Router.DirectModeNoRouter");
             }
             else
             {
-                CodexRouterChipText.Text = isCodex ? $"本地路由待命中 (:{port})" : "直连直通模式";
+                CodexRouterChipText.Text = isCodex ? I18nService.F("Router.StandbyFmt", port) : I18nService.T("Router.DirectMode");
             }
         }
 
@@ -2175,7 +2175,7 @@ public partial class MainWindow : Window
         if (ClaudeToolbarRouterDot != null) ClaudeToolbarRouterDot.Fill = isClaudeCli ? onBrush : offBrush;
         if (ClaudeToolbarRouterText != null)
         {
-            ClaudeToolbarRouterText.Text = isClaudeCli ? $"⚡ 本地路由：已开启 (:{port})" : "本地路由：已停用";
+            ClaudeToolbarRouterText.Text = isClaudeCli ? I18nService.F("Router.ToolbarOnFmt", port) : I18nService.T("Router.ToolbarOff");
             ClaudeToolbarRouterText.Foreground = isClaudeCli ? activeFg : inactiveFg;
             ClaudeToolbarRouterText.FontWeight = isClaudeCli ? FontWeights.SemiBold : FontWeights.Normal;
         }
@@ -2193,12 +2193,12 @@ public partial class MainWindow : Window
             if (active != null && !active.IsOfficial)
             {
                 ClaudeRouterChipText.Text = isClaudeCli
-                    ? $"本地路由已接管 (:{port} · 透明转发)"
-                    : "直连直通模式（未开启路由）";
+                    ? I18nService.F("Router.TakeoverTransparentFmt", port)
+                    : I18nService.T("Router.DirectModeNoRouter");
             }
             else
             {
-                ClaudeRouterChipText.Text = isClaudeCli ? $"本地路由待命中 (:{port})" : "直连直通模式";
+                ClaudeRouterChipText.Text = isClaudeCli ? I18nService.F("Router.StandbyFmt", port) : I18nService.T("Router.DirectMode");
             }
         }
 
@@ -2211,7 +2211,7 @@ public partial class MainWindow : Window
         if (DesktopToolbarRouterDot != null) DesktopToolbarRouterDot.Fill = isClaudeDesktop ? onBrush : offBrush;
         if (DesktopToolbarRouterText != null)
         {
-            DesktopToolbarRouterText.Text = isClaudeDesktop ? $"⚡ 本地路由：已开启 (:{port})" : "本地路由：已停用";
+            DesktopToolbarRouterText.Text = isClaudeDesktop ? I18nService.F("Router.ToolbarOnFmt", port) : I18nService.T("Router.ToolbarOff");
             DesktopToolbarRouterText.Foreground = isClaudeDesktop ? activeFg : inactiveFg;
             DesktopToolbarRouterText.FontWeight = isClaudeDesktop ? FontWeights.SemiBold : FontWeights.Normal;
         }
@@ -2229,12 +2229,12 @@ public partial class MainWindow : Window
             if (active != null && !active.IsOfficial)
             {
                 DesktopRouterChipText.Text = isClaudeDesktop
-                    ? $"本地路由已接管 (:{port} · 透明转发)"
-                    : "直连直通模式（未开启路由）";
+                    ? I18nService.F("Router.TakeoverTransparentFmt", port)
+                    : I18nService.T("Router.DirectModeNoRouter");
             }
             else
             {
-                DesktopRouterChipText.Text = isClaudeDesktop ? $"本地路由待命中 (:{port})" : "直连直通模式";
+                DesktopRouterChipText.Text = isClaudeDesktop ? I18nService.F("Router.StandbyFmt", port) : I18nService.T("Router.DirectMode");
             }
         }
     }
@@ -2246,11 +2246,11 @@ public partial class MainWindow : Window
         RefreshCodex();
         if (newState)
         {
-            ShowToast($"Codex 本地路由已开启 (端口 :{LocalProxyServer.Port})，已接管 Codex 请求");
+            ShowToast(I18nService.F("Router.CodexOnFmt", LocalProxyServer.Port));
         }
         else
         {
-            ShowToast("Codex 本地路由已停用，Codex 已切回直连模式");
+            ShowToast(I18nService.T("Router.CodexOff"));
         }
     }
 
@@ -2261,11 +2261,11 @@ public partial class MainWindow : Window
         RefreshClaude();
         if (newState)
         {
-            ShowToast($"Claude CLI 本地路由已开启 (端口 :{LocalProxyServer.Port})，已接管 Claude CLI 请求");
+            ShowToast(I18nService.F("Router.CliOnFmt", LocalProxyServer.Port));
         }
         else
         {
-            ShowToast("Claude CLI 本地路由已停用，Claude CLI 已切回直连模式");
+            ShowToast(I18nService.T("Router.CliOff"));
         }
     }
 
@@ -2276,11 +2276,11 @@ public partial class MainWindow : Window
         RefreshDesktop();
         if (newState)
         {
-            ShowToast($"Claude 客户端本地路由已开启 (端口 :{LocalProxyServer.Port})，已接管 Claude 客户端请求");
+            ShowToast(I18nService.F("Router.DesktopOnFmt", LocalProxyServer.Port));
         }
         else
         {
-            ShowToast("Claude 客户端本地路由已停用，Claude 客户端已切回直连模式");
+            ShowToast(I18nService.T("Router.DesktopOff"));
         }
     }
 
@@ -2293,11 +2293,11 @@ public partial class MainWindow : Window
         RefreshDesktop();
         if (newState)
         {
-            ShowToast($"全部本地路由已开启 (端口 :{LocalProxyServer.Port})");
+            ShowToast(I18nService.F("Router.AllOnFmt", LocalProxyServer.Port));
         }
         else
         {
-            ShowToast("全部本地路由已停用，各应用已切回直连模式");
+            ShowToast(I18nService.T("Router.AllOff"));
         }
     }
 
@@ -2316,7 +2316,7 @@ public partial class MainWindow : Window
     void OnCardDeleteCodex(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not CodexRow row) return;
-        if (!Confirm($"删除供应商「{row.Name}」？（仅删除本地存档）")) return;
+        if (!Confirm(I18nService.F("Common.DeleteProviderConfirmFmt", row.Name))) return;
         _codexProviders.RemoveAll(x => x.Name == row.P.Name);
         CliStore.SaveCodex(_codexProviders);
         RefreshCodex();
@@ -2337,17 +2337,17 @@ public partial class MainWindow : Window
         }
 
         try { CodexCli.Apply(row.P); }
-        catch (Exception ex) { ShowToast("应用失败：" + ex.Message, isError: true); return; }
+        catch (Exception ex) { ShowToast(I18nService.F("Common.ApplyFailFmt", ex.Message), isError: true); return; }
         RefreshCodex();
         if (LocalProxyServer.IsCodexEnabled && !row.P.IsOfficial)
         {
             ShowToast(autoEnabled
-                ? $"Codex 已切换到「{row.Name}」（已自动开启本地路由转译）"
-                : $"Codex 已热切换到「{row.Name}」（本地路由已接管，无需重启客户端）");
+                ? I18nService.F("Msg.CodexSwitchedAutoFmt", row.Name)
+                : I18nService.F("Msg.CodexSwitchedHotFmt", row.Name));
         }
         else
         {
-            ShowToast($"Codex 已切换到「{row.Name}」（若客户端已开，请重启生效）");
+            ShowToast(I18nService.F("Msg.CodexSwitchedRestartFmt", row.Name));
         }
     }
 
@@ -2357,7 +2357,7 @@ public partial class MainWindow : Window
         {
             _activeProviderDialog.Activate();
             _activeProviderDialog.Focus();
-            ShowToast("已有正在编辑的供应商窗口，请先保存或关闭该窗口");
+            ShowToast(I18nService.T("Msg.EditorBusy"));
             return;
         }
 
@@ -2426,21 +2426,21 @@ public partial class MainWindow : Window
         }
 
         RefreshCodex();
-        ShowToast(isCurrent ? $"已保存并同步生效当前配置「{p.Name}」" : $"已保存供应商「{p.Name}」");
+        ShowToast(isCurrent ? I18nService.F("Msg.SavedCurrentFmt", p.Name) : I18nService.F("Msg.SavedProviderFmt", p.Name));
     }
 
 
     async void OnRestartCodex(object sender, RoutedEventArgs e)
     {
-        ShowToast("正在重启 Codex 客户端…");
+        ShowToast(I18nService.F("Msg.RestartingFmt", "Codex"));
         try
         {
             await CodexProcess.RestartCodexAsync();
-            ShowToast("Codex 客户端已重启");
+            ShowToast(I18nService.F("Msg.RestartedFmt", "Codex"));
         }
         catch (Exception ex)
         {
-            ShowToast("重启 Codex 失败：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.RestartFailFmt", "Codex", ex.Message), isError: true);
         }
     }
 
@@ -2481,18 +2481,18 @@ public partial class MainWindow : Window
             try
             {
                 if (P.CustomModels != null && P.CustomModels.Count > 0)
-                    return P.CustomModels.Count + " 个模型";
-                if (string.IsNullOrWhiteSpace(P.ModelsJson)) return "未配置模型";
+                    return I18nService.F("Common.ModelsCountFmt", P.CustomModels.Count);
+                if (string.IsNullOrWhiteSpace(P.ModelsJson)) return I18nService.T("Common.NoModels");
                 if (JsonNode.Parse(P.ModelsJson) is JsonObject models)
                 {
                     var count = models.Count;
-                    return count == 0 ? "未配置模型" : count + " 个模型";
+                    return count == 0 ? I18nService.T("Common.NoModels") : I18nService.F("Common.ModelsCountFmt", count);
                 }
-                return "未配置模型";
+                return I18nService.T("Common.NoModels");
             }
             catch
             {
-                return "未配置模型";
+                return I18nService.T("Common.NoModels");
             }
         }
     }
@@ -2504,7 +2504,7 @@ public partial class MainWindow : Window
 
         int inPoolCount = _openCodeProviders.Count(p => (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name)));
         if (OcPoolCountText != null)
-            OcPoolCountText.Text = $"{inPoolCount} / {_openCodeProviders.Count} 个供应商";
+            OcPoolCountText.Text = I18nService.F("Common.PoolCountFmt", inPoolCount, _openCodeProviders.Count);
 
         var rows = _openCodeProviders.Select(p =>
         {
@@ -2539,11 +2539,11 @@ public partial class MainWindow : Window
         {
             OpenCodeCli.SaveProvider(row.P);
             RefreshOpencode();
-            ShowToast($"已将「{row.Name}」加入 OpenCode 配置池");
+            ShowToast(I18nService.F("Msg.OcAddedFmt", row.Name));
         }
         catch (Exception ex)
         {
-            ShowToast("添加失败：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Common.AddFailFmt", ex.Message), isError: true);
         }
     }
 
@@ -2554,11 +2554,11 @@ public partial class MainWindow : Window
         {
             OpenCodeCli.DeleteProvider(row.P.Id);
             RefreshOpencode();
-            ShowToast($"已从 OpenCode 配置池移除「{row.Name}」");
+            ShowToast(I18nService.F("Msg.OcRemovedFmt", row.Name));
         }
         catch (Exception ex)
         {
-            ShowToast("移除失败：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Common.RemoveFailFmt", ex.Message), isError: true);
         }
     }
 
@@ -2570,7 +2570,7 @@ public partial class MainWindow : Window
     void OnCardDeleteOc(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not OpenCodeRow row) return;
-        if (!Confirm($"彻底删除供应商「{row.Name}」？\n（将从列表及 opencode.json 中移除）")) return;
+        if (!Confirm(I18nService.F("Common.DeleteForeverFmt", row.Name, "opencode.json"))) return;
         try
         {
             _openCodeProviders.RemoveAll(x => string.Equals(x.Id, row.P.Id, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Name, row.P.Name, StringComparison.OrdinalIgnoreCase));
@@ -2582,9 +2582,9 @@ public partial class MainWindow : Window
                 OpenCodeCli.ClearDefaultModel();
             }
             RefreshOpencode();
-            ShowToast($"已删除供应商「{row.Name}」");
+            ShowToast(I18nService.F("Msg.DeletedProviderFmt", row.Name));
         }
-        catch (Exception ex) { ShowToast("删除失败：" + ex.Message, isError: true); }
+        catch (Exception ex) { ShowToast(I18nService.F("Common.DeleteFailFmt", ex.Message), isError: true); }
     }
 
     void OnCardCopyOc(object sender, RoutedEventArgs e)
@@ -2603,7 +2603,7 @@ public partial class MainWindow : Window
                     break;
                 case CopyTarget.ClaudeDesktop:
                     UpsertDesktop(ProviderConvert.ToClaude(row.P));
-                    done.Add("Claude 客户端");
+                    done.Add(I18nService.T("Common.ClaudeClient"));
                     break;
                 case CopyTarget.Codex:
                     UpsertCodex(ProviderConvert.ToCodex(row.P));
@@ -2616,7 +2616,7 @@ public partial class MainWindow : Window
             }
         }
         RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshPi();
-        ShowToast($"已复制「{row.P.Id}」到: {string.Join("、", done)}");
+        ShowToast(I18nService.F("Msg.CopiedTargetsFmt", row.P.Id, string.Join(I18nService.T("Common.ListSep"), done)));
     }
 
     async void EditOpencode(OpenCodeProvider? existing)
@@ -2625,7 +2625,7 @@ public partial class MainWindow : Window
         {
             _activeProviderDialog.Activate();
             _activeProviderDialog.Focus();
-            ShowToast("已有正在编辑的供应商窗口，请先保存或关闭该窗口");
+            ShowToast(I18nService.T("Msg.EditorBusy"));
             return;
         }
 
@@ -2654,15 +2654,15 @@ public partial class MainWindow : Window
             }
 
             RefreshOpencode();
-            ShowToast($"已保存供应商「{p.Id}」");
+            ShowToast(I18nService.F("Msg.SavedProviderFmt", p.Id));
         }
-        catch (Exception ex) { ShowToast("保存失败：" + ex.Message, isError: true); }
+        catch (Exception ex) { ShowToast(I18nService.F("Common.SaveFailFmt", ex.Message), isError: true); }
     }
 
     void OnRefreshOpencode(object sender, RoutedEventArgs e)
     {
         RefreshOpencode();
-        ShowToast($"已同步并刷新 OpenCode 配置 (共 {_openCodeProviders.Count} 个供应商)");
+        ShowToast(I18nService.F("Msg.OcRefreshedFmt", _openCodeProviders.Count));
     }
 
     void OnOpenOcConfig(object sender, RoutedEventArgs e) => OpenFile(OpenCodeCli.ConfigPath);
@@ -2709,17 +2709,17 @@ public partial class MainWindow : Window
             try
             {
                 if (P.CustomModels != null && P.CustomModels.Count > 0)
-                    return P.CustomModels.Count + " 个模型";
-                if (string.IsNullOrWhiteSpace(P.ModelsJson)) return "未配置模型";
+                    return I18nService.F("Common.ModelsCountFmt", P.CustomModels.Count);
+                if (string.IsNullOrWhiteSpace(P.ModelsJson)) return I18nService.T("Common.NoModels");
                 if (JsonNode.Parse(P.ModelsJson) is JsonArray arr)
-                    return arr.Count == 0 ? "未配置模型" : arr.Count + " 个模型";
+                    return arr.Count == 0 ? I18nService.T("Common.NoModels") : I18nService.F("Common.ModelsCountFmt", arr.Count);
                 if (JsonNode.Parse(P.ModelsJson) is JsonObject obj)
-                    return obj.Count == 0 ? "未配置模型" : obj.Count + " 个模型";
-                return "未配置模型";
+                    return obj.Count == 0 ? I18nService.T("Common.NoModels") : I18nService.F("Common.ModelsCountFmt", obj.Count);
+                return I18nService.T("Common.NoModels");
             }
             catch
             {
-                return "未配置模型";
+                return I18nService.T("Common.NoModels");
             }
         }
     }
@@ -2731,7 +2731,7 @@ public partial class MainWindow : Window
 
         int inPoolCount = _piProviders.Count(p => (!string.IsNullOrEmpty(p.Id) && liveIds.Contains(p.Id)) || (!string.IsNullOrEmpty(p.Name) && liveIds.Contains(p.Name)));
         if (PiPoolCountText != null)
-            PiPoolCountText.Text = $"{inPoolCount} / {_piProviders.Count} 个供应商";
+            PiPoolCountText.Text = I18nService.F("Common.PoolCountFmt", inPoolCount, _piProviders.Count);
 
         var rows = _piProviders.Select(p =>
         {
@@ -2766,11 +2766,11 @@ public partial class MainWindow : Window
         {
             PiCli.SaveProvider(row.P);
             RefreshPi();
-            ShowToast($"已将「{row.Name}」加入 Pi 配置池");
+            ShowToast(I18nService.F("Msg.PiAddedFmt", row.Name));
         }
         catch (Exception ex)
         {
-            ShowToast("添加失败：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Common.AddFailFmt", ex.Message), isError: true);
         }
     }
 
@@ -2781,11 +2781,11 @@ public partial class MainWindow : Window
         {
             PiCli.DeleteProvider(row.P.Id);
             RefreshPi();
-            ShowToast($"已从 Pi 配置池移除「{row.Name}」");
+            ShowToast(I18nService.F("Msg.PiRemovedFmt", row.Name));
         }
         catch (Exception ex)
         {
-            ShowToast("移除失败：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Common.RemoveFailFmt", ex.Message), isError: true);
         }
     }
 
@@ -2797,16 +2797,16 @@ public partial class MainWindow : Window
     void OnCardDeletePi(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not PiRow row) return;
-        if (!Confirm($"彻底删除供应商「{row.Name}」？\n（将从列表及 models.json 中移除）")) return;
+        if (!Confirm(I18nService.F("Common.DeleteForeverFmt", row.Name, "models.json"))) return;
         try
         {
             _piProviders.RemoveAll(x => string.Equals(x.Id, row.P.Id, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Name, row.P.Name, StringComparison.OrdinalIgnoreCase));
             CliStore.SavePiProviders(_piProviders);
             PiCli.DeleteProvider(row.P.Id);
             RefreshPi();
-            ShowToast($"已删除供应商「{row.Name}」");
+            ShowToast(I18nService.F("Msg.DeletedProviderFmt", row.Name));
         }
-        catch (Exception ex) { ShowToast("删除失败：" + ex.Message, isError: true); }
+        catch (Exception ex) { ShowToast(I18nService.F("Common.DeleteFailFmt", ex.Message), isError: true); }
     }
 
     void OnCardCopyPi(object sender, RoutedEventArgs e)
@@ -2825,7 +2825,7 @@ public partial class MainWindow : Window
                     break;
                 case CopyTarget.ClaudeDesktop:
                     UpsertDesktop(ProviderConvert.ToClaude(row.P));
-                    done.Add("Claude 客户端");
+                    done.Add(I18nService.T("Common.ClaudeClient"));
                     break;
                 case CopyTarget.Codex:
                     UpsertCodex(ProviderConvert.ToCodex(row.P));
@@ -2838,7 +2838,7 @@ public partial class MainWindow : Window
             }
         }
         RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode();
-        ShowToast($"已复制「{row.Name}」到: {string.Join("、", done)}");
+        ShowToast(I18nService.F("Msg.CopiedTargetsFmt", row.Name, string.Join(I18nService.T("Common.ListSep"), done)));
     }
 
     async void EditPi(PiProvider? existing)
@@ -2847,7 +2847,7 @@ public partial class MainWindow : Window
         {
             _activeProviderDialog.Activate();
             _activeProviderDialog.Focus();
-            ShowToast("已有正在编辑的供应商窗口，请先保存或关闭该窗口");
+            ShowToast(I18nService.T("Msg.EditorBusy"));
             return;
         }
 
@@ -2876,15 +2876,15 @@ public partial class MainWindow : Window
             }
 
             RefreshPi();
-            ShowToast($"已保存供应商「{p.Name ?? p.Id}」");
+            ShowToast(I18nService.F("Msg.SavedProviderFmt", p.Name ?? p.Id));
         }
-        catch (Exception ex) { ShowToast("保存失败：" + ex.Message, isError: true); }
+        catch (Exception ex) { ShowToast(I18nService.F("Common.SaveFailFmt", ex.Message), isError: true); }
     }
 
     void OnRefreshPi(object sender, RoutedEventArgs e)
     {
         RefreshPi();
-        ShowToast($"已同步并刷新 Pi 配置 (共 {_piProviders.Count} 个供应商)");
+        ShowToast(I18nService.F("Msg.PiRefreshedFmt", _piProviders.Count));
     }
 
     void OnOpenPiModels(object sender, RoutedEventArgs e) => OpenFile(PiCli.ModelsPath);
@@ -2892,13 +2892,13 @@ public partial class MainWindow : Window
     void OnOpenPiDir(object sender, RoutedEventArgs e)
     {
         var dir = Path.GetDirectoryName(PiCli.AuthPath);
-        if (dir == null || !Directory.Exists(dir)) { ShowToast("未找到 Pi 目录", isError: true); return; }
+        if (dir == null || !Directory.Exists(dir)) { ShowToast(I18nService.T("Msg.PiDirNotFound"), isError: true); return; }
         Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
     }
 
     void OnCapturePi(object sender, RoutedEventArgs e)
     {
-        if (!PiCli.IsInstalled) { ShowToast("未检测到 Pi（~/.pi/agent 不存在）", isError: true); return; }
+        if (!PiCli.IsInstalled) { ShowToast(I18nService.T("Msg.PiNotInstalled"), isError: true); return; }
         var (prov, _) = PiCli.CurrentDefaults();
         var name = $"pi-{prov ?? "default"}-{DateTime.Now:yyyyMMdd-HHmmss}";
         try
@@ -2907,9 +2907,9 @@ public partial class MainWindow : Window
             var idx = _piAccounts.FindIndex(a => a.Name == name);
             if (idx >= 0) _piAccounts[idx] = account; else _piAccounts.Add(account);
             CliStore.SavePi(_piAccounts);
-            ShowToast($"已抓取快照 {name}");
+            ShowToast(I18nService.F("Msg.PiCapturedFmt", name));
         }
-        catch (Exception ex) { ShowToast("抓取失败：" + ex.Message, isError: true); }
+        catch (Exception ex) { ShowToast(I18nService.F("Msg.PiCaptureFailFmt", ex.Message), isError: true); }
     }
 
     void UpsertPi(PiProvider p)
@@ -2938,7 +2938,7 @@ public partial class MainWindow : Window
                     break;
                 case CopyTarget.ClaudeDesktop:
                     UpsertDesktop(ProviderConvert.Clone(src));
-                    done.Add("Claude 客户端");
+                    done.Add(I18nService.T("Common.ClaudeClient"));
                     break;
                 case CopyTarget.Codex:
                     UpsertCodex(ProviderConvert.ToCodex(src));
@@ -2955,7 +2955,7 @@ public partial class MainWindow : Window
             }
         }
         RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
-        ShowToast($"已复制「{src.Name}」到: {string.Join("、", done)}");
+        ShowToast(I18nService.F("Msg.CopiedTargetsFmt", src.Name, string.Join(I18nService.T("Common.ListSep"), done)));
     }
 
     void CopyCodexProvider(CodexProvider src)
@@ -2974,7 +2974,7 @@ public partial class MainWindow : Window
                     break;
                 case CopyTarget.ClaudeDesktop:
                     UpsertDesktop(ProviderConvert.ToClaude(src));
-                    done.Add("Claude 客户端");
+                    done.Add(I18nService.T("Common.ClaudeClient"));
                     break;
                 case CopyTarget.Codex:
                     UpsertCodex(src);
@@ -2991,7 +2991,7 @@ public partial class MainWindow : Window
             }
         }
         RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
-        ShowToast($"已复制「{src.Name}」到: {string.Join("、", done)}");
+        ShowToast(I18nService.F("Msg.CopiedTargetsFmt", src.Name, string.Join(I18nService.T("Common.ListSep"), done)));
     }
 
     void UpsertClaude(ClaudeProvider p)
@@ -3024,7 +3024,7 @@ public partial class MainWindow : Window
     {
         if (!CcSwitchImport.IsAvailable)
         {
-            ShowToast("未找到 cc-switch 数据库（~/.cc-switch/cc-switch.db）", isError: true);
+            ShowToast(I18nService.T("Msg.CcNotFound"), isError: true);
             return;
         }
         var dlg = new ImportDialog { Owner = this };
@@ -3033,10 +3033,10 @@ public partial class MainWindow : Window
             if (dlg.ShowDialog() == true)
             {
                 RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
-                ShowToast("已从 cc-switch 导入供应商");
+                ShowToast(I18nService.T("Msg.CcImported"));
             }
         }
-        catch (Exception ex) { ShowToast("读取 cc-switch 数据失败：" + ex.Message, isError: true); return; }
+        catch (Exception ex) { ShowToast(I18nService.F("Msg.CcReadFailFmt", ex.Message), isError: true); return; }
         RefreshClaude(); RefreshDesktop(); RefreshCodex(); RefreshOpencode(); RefreshPi();
     }
 
@@ -3049,6 +3049,36 @@ public partial class MainWindow : Window
             sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta);
             e.Handled = true;
         }
+    }
+
+    void RebuildTrayMenu()
+    {
+        try
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (_notifyIcon != null && _notifyIcon.ContextMenuStrip is IDisposable old)
+                {
+                    _notifyIcon.ContextMenuStrip = null;
+                    old.Dispose();
+                }
+                if (_notifyIcon != null)
+                {
+                    _notifyIcon.ContextMenuStrip = ModernTrayMenu.Create(
+                        onShow: RestoreFromTray,
+                        onRefresh: () => Dispatcher.Invoke(() => _ = RefreshAllAgQuotasAsync(silent: false)),
+                        onLaunchIde: () => Dispatcher.Invoke(() =>
+                        {
+                            try { AgProcess.StartIde(); }
+                            catch (Exception ex) { ShowToast(I18nService.F("Common.LaunchIdeFailFmt", ex.Message), isError: true); }
+                        }),
+                        onExit: ExitApp,
+                        version: AppVersionText?.Text ?? "v0.1.1"
+                    );
+                }
+            });
+        }
+        catch { }
     }
 
     void InitTrayIcon()
@@ -3100,7 +3130,7 @@ public partial class MainWindow : Window
                 onLaunchIde: () => Dispatcher.Invoke(() =>
                 {
                     try { AgProcess.StartIde(); }
-                    catch (Exception ex) { ShowToast("启动 IDE 失败：" + ex.Message, isError: true); }
+                    catch (Exception ex) { ShowToast(I18nService.F("Common.LaunchIdeFailFmt", ex.Message), isError: true); }
                 }),
                 onExit: ExitApp,
                 version: AppVersionText?.Text ?? "v0.1.1"
@@ -3232,7 +3262,7 @@ public partial class MainWindow : Window
 
     static void OpenFile(string path)
     {
-        if (!File.Exists(path)) { Warn("文件不存在：" + path); return; }
+        if (!File.Exists(path)) { Warn(I18nService.F("Common.FileNotFoundFmt", path)); return; }
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
 
@@ -3267,7 +3297,7 @@ public partial class MainWindow : Window
         {
             if (UpdateCheckBtn != null) UpdateCheckBtn.Visibility = Visibility.Visible;
             if (AppVersionText != null) AppVersionText.Text = $"v{info.LatestVersion}";
-            if (UpdateBadgeText != null) UpdateBadgeText.Text = "升级";
+            if (UpdateBadgeText != null) UpdateBadgeText.Text = I18nService.T("Main.Upgrade");
         }
         else
         {
@@ -3283,14 +3313,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        ShowToast("正在检查最新版本…", isInfo: true);
+        ShowToast(I18nService.T("Msg.CheckingUpdate"), isInfo: true);
         try
         {
             var info = await UpdateService.CheckForUpdatesAsync();
 
             if (info == null)
             {
-                ShowToast("检查更新失败，请确认网络连接或稍后重试", isError: true);
+                ShowToast(I18nService.T("Msg.CheckUpdateFail"), isError: true);
                 return;
             }
 
@@ -3301,12 +3331,12 @@ public partial class MainWindow : Window
             }
             else
             {
-                ShowToast($"当前已是最新版本 ({info.CurrentVersion})");
+                ShowToast(I18nService.F("Msg.LatestVersion", info.CurrentVersion));
             }
         }
         catch (Exception ex)
         {
-            ShowToast("检查更新异常：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.CheckUpdateError", ex.Message), isError: true);
         }
     }
 
@@ -3322,7 +3352,7 @@ public partial class MainWindow : Window
                 Dispatcher.Invoke(() =>
                 {
                     UpdateBadge.Visibility = Visibility.Visible;
-                    ShowToast($"⚡ 发现新版本 {info.LatestVersion}，点击右上角版本号查看更新");
+                    ShowToast(I18nService.F("Msg.NewVersionClickTip", info.LatestVersion));
                 });
             }
         }

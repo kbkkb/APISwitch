@@ -1,4 +1,5 @@
 using System.Windows;
+using APISwitch.Services;
 
 namespace APISwitch.Dialogs;
 
@@ -11,7 +12,7 @@ public partial class CopyTargetsDialog : Window
     public CopyTargetsDialog(string sourceName, CopyTarget exclude)
     {
         InitializeComponent();
-        SourceText.Text = $"将「{sourceName}」复制到：";
+        SourceText.Text = I18nService.F("CD.SourceFmt", sourceName);
         if (exclude == CopyTarget.ClaudeCli) ClaudeCheck.Visibility = Visibility.Collapsed;
         if (exclude == CopyTarget.ClaudeDesktop) DesktopCheck.Visibility = Visibility.Collapsed;
         if (exclude == CopyTarget.Codex) CodexCheck.Visibility = Visibility.Collapsed;
@@ -30,7 +31,7 @@ public partial class CopyTargetsDialog : Window
         if (PiCheck.IsChecked == true) Targets.Add(CopyTarget.Pi);
         if (Targets.Count == 0)
         {
-            MessageBox.Show("请至少选择一个目标。", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(I18nService.T("CD.SelectOne"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         DialogResult = true;

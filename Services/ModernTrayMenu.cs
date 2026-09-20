@@ -50,7 +50,7 @@ public static class ModernTrayMenu
         menu.Items.Add(new ToolStripSeparator());
 
         // Show Main Window
-        var showItem = new ToolStripMenuItem("显示主窗口")
+        var showItem = new ToolStripMenuItem(I18nService.T("Tray.Show"))
         {
             Image = TrayIcons.CreateWindowIcon(),
             ImageScaling = ToolStripItemImageScaling.None,
@@ -61,7 +61,7 @@ public static class ModernTrayMenu
         menu.Items.Add(showItem);
 
         // Refresh Quotas
-        var refreshItem = new ToolStripMenuItem("刷新全部配额")
+        var refreshItem = new ToolStripMenuItem(I18nService.T("Tray.Refresh"))
         {
             Image = TrayIcons.CreateLightningIcon(),
             ImageScaling = ToolStripItemImageScaling.None,
@@ -71,7 +71,7 @@ public static class ModernTrayMenu
         menu.Items.Add(refreshItem);
 
         // Launch IDE
-        var launchItem = new ToolStripMenuItem("启动 Antigravity")
+        var launchItem = new ToolStripMenuItem(I18nService.T("Tray.Launch"))
         {
             Image = TrayIcons.CreateRocketIcon(),
             ImageScaling = ToolStripItemImageScaling.None,
@@ -83,7 +83,7 @@ public static class ModernTrayMenu
         menu.Items.Add(new ToolStripSeparator());
 
         // Exit
-        var exitItem = new ToolStripMenuItem("退出 APISwitch")
+        var exitItem = new ToolStripMenuItem(I18nService.T("Tray.Exit"))
         {
             Tag = "danger",
             Image = TrayIcons.CreateExitIcon(),

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using APISwitch.Services;
 
 namespace APISwitch.Models;
 
@@ -55,14 +56,14 @@ public class Profile
             if (IsActivated == true)
             {
                 if (ActivationLatencyMs.HasValue && ActivationLatencyMs.Value > 0)
-                    return $"● 已激活 ({ActivationLatencyMs.Value}ms)";
-                return "● 已激活";
+                    return I18nService.F("Ag.ActivatedLatencyFmt", ActivationLatencyMs.Value);
+                return I18nService.T("Ag.Activated");
             }
             if (IsActivated == false)
             {
-                return "● 激活失败";
+                return I18nService.T("Ag.ActivationFailed");
             }
-            return "○ 待激活";
+            return I18nService.T("Ag.PendingActivation");
         }
     }
 
@@ -74,13 +75,13 @@ public class Profile
             if (IsActivated == true)
             {
                 var time = ActivatedAt.HasValue ? ActivatedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "";
-                return $"官方协议握手激活成功\n响应耗时: {ActivationLatencyMs}ms\n激活时间: {time}";
+                return I18nService.F("Ag.ActTipOkFmt", ActivationLatencyMs ?? 0, time);
             }
             if (IsActivated == false)
             {
-                return $"握手失败: {ActivationError ?? "未知错误"}";
+                return I18nService.F("Ag.ActTipFailFmt", ActivationError ?? I18nService.T("Ag.ActUnknownError"));
             }
-            return "尚未执行握手激活，可点击卡片右侧「激活」或顶部「批量激活」";
+            return I18nService.T("Ag.ActTipPending");
         }
     }
 
@@ -106,18 +107,18 @@ public class Profile
         {
             if (!string.IsNullOrEmpty(SubscriptionTier))
             {
-                if (SubscriptionTier.Contains("Starter", StringComparison.OrdinalIgnoreCase)) return "Starter 免费版";
-                if (SubscriptionTier.Contains("Pro", StringComparison.OrdinalIgnoreCase)) return "Google AI Pro";
-                if (SubscriptionTier.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) return "Google AI Ultra";
+                if (SubscriptionTier.Contains("Starter", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierStarterFree");
+                if (SubscriptionTier.Contains("Pro", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierPro");
+                if (SubscriptionTier.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierUltra");
                 return SubscriptionTier;
             }
             if (!string.IsNullOrEmpty(Plan))
             {
-                if (Plan.Contains("Starter", StringComparison.OrdinalIgnoreCase)) return "Starter 免费版";
-                if (Plan.Contains("Pro", StringComparison.OrdinalIgnoreCase)) return "Google AI Pro";
+                if (Plan.Contains("Starter", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierStarterFree");
+                if (Plan.Contains("Pro", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierPro");
                 return Plan;
             }
-            return "Starter 免费版";
+            return I18nService.T("Ag.TierStarterFree");
         }
     }
 
@@ -144,16 +145,16 @@ public class Profile
     {
         get
         {
-            if (!IsProTier) return "无5H限制";
-            if (!Quota5hFraction.HasValue) return "未激活";
-            if (string.IsNullOrEmpty(Quota5hResetTime)) return "满额待命";
+            if (!IsProTier) return I18nService.T("Ag.No5hLimit");
+            if (!Quota5hFraction.HasValue) return I18nService.T("Ag.NotActivatedShort");
+            if (string.IsNullOrEmpty(Quota5hResetTime)) return I18nService.T("Ag.FullStandby");
             if (DateTime.TryParse(Quota5hResetTime, out var dt))
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return "已重置";
+                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
                 if (diff.TotalHours >= 1)
-                    return $"剩 {(int)diff.TotalHours}h {diff.Minutes}m";
-                return $"剩 {diff.Minutes}m";
+                    return I18nService.F("Ag.LeftHoursMinFmt", (int)diff.TotalHours, diff.Minutes);
+                return I18nService.F("Ag.LeftMinutesFmt", diff.Minutes);
             }
             return "";
         }
@@ -178,12 +179,12 @@ public class Profile
             if (DateTime.TryParse(QuotaWeeklyResetTime, out var dt))
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return "已刷新";
+                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");
                 if (diff.TotalDays >= 1)
-                    return $"剩 {(int)diff.TotalDays}天{diff.Hours}小时";
+                    return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
                 if (diff.TotalHours >= 1)
-                    return $"剩 {(int)diff.TotalHours}小时";
-                return $"剩 {diff.Minutes}分钟";
+                    return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
+                return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
             }
             return "";
         }
@@ -207,15 +208,15 @@ public class Profile
     {
         get
         {
-            if (!IsProTier) return "无5H限制";
-            if (!Quota3p5hFraction.HasValue) return "未激活";
-            if (string.IsNullOrEmpty(Quota3p5hResetTime)) return "满额待命";
+            if (!IsProTier) return I18nService.T("Ag.No5hLimit");
+            if (!Quota3p5hFraction.HasValue) return I18nService.T("Ag.NotActivatedShort");
+            if (string.IsNullOrEmpty(Quota3p5hResetTime)) return I18nService.T("Ag.FullStandby");
             if (DateTime.TryParse(Quota3p5hResetTime, out var dt))
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return "已重置";
-                if (diff.TotalHours >= 1) return $"剩 {(int)diff.TotalHours}h {diff.Minutes}m";
-                return $"剩 {diff.Minutes}m";
+                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
+                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursMinFmt", (int)diff.TotalHours, diff.Minutes);
+                return I18nService.F("Ag.LeftMinutesFmt", diff.Minutes);
             }
             return "";
         }
@@ -240,10 +241,10 @@ public class Profile
             if (DateTime.TryParse(Quota3pWeeklyResetTime, out var dt))
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return "已刷新";
-                if (diff.TotalDays >= 1) return $"剩 {(int)diff.TotalDays}天{diff.Hours}小时";
-                if (diff.TotalHours >= 1) return $"剩 {(int)diff.TotalHours}小时";
-                return $"剩 {diff.Minutes}分钟";
+                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");
+                if (diff.TotalDays >= 1) return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
+                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
+                return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
             }
             return "";
         }
@@ -254,12 +255,12 @@ public class Profile
     {
         get
         {
-            if (!QuotaUpdatedAt.HasValue) return "未同步";
+            if (!QuotaUpdatedAt.HasValue) return I18nService.T("Ag.NotSynced");
             var diff = DateTime.UtcNow - QuotaUpdatedAt.Value;
-            if (diff.TotalMinutes < 1) return "刚刚更新";
-            if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}分钟前更新";
-            if (diff.TotalDays < 1) return QuotaUpdatedAt.Value.ToLocalTime().ToString("HH:mm") + " 更新";
-            return QuotaUpdatedAt.Value.ToLocalTime().ToString("MM-dd HH:mm") + " 更新";
+            if (diff.TotalMinutes < 1) return I18nService.T("Ag.UpdatedJustNow");
+            if (diff.TotalHours < 1) return I18nService.F("Ag.UpdatedMinutesAgoFmt", (int)diff.TotalMinutes);
+            if (diff.TotalDays < 1) return I18nService.F("Ag.UpdatedAtTimeFmt", QuotaUpdatedAt.Value.ToLocalTime().ToString("HH:mm"));
+            return I18nService.F("Ag.UpdatedAtTimeFmt", QuotaUpdatedAt.Value.ToLocalTime().ToString("MM-dd HH:mm"));
         }
     }
 }

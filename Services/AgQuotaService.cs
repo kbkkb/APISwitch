@@ -95,7 +95,7 @@ public static class AgQuotaService
         if (string.IsNullOrEmpty(profile.RefreshToken) && string.IsNullOrEmpty(profile.AccessToken))
         {
             profile.IsActivated = false;
-            profile.ActivationError = "凭据缺失，请重新登录";
+            profile.ActivationError = I18nService.T("AgQ.ErrNoCredentials");
             ProfileStore.Save(profile);
             return (false, 0, profile.ActivationError);
         }
@@ -105,7 +105,7 @@ public static class AgQuotaService
         if (!tokenOk || string.IsNullOrEmpty(profile.AccessToken))
         {
             profile.IsActivated = false;
-            profile.ActivationError = "Token 刷新失败，请重新登录";
+            profile.ActivationError = I18nService.T("AgQ.ErrTokenRefresh");
             ProfileStore.Save(profile);
             return (false, 0, profile.ActivationError);
         }
@@ -146,7 +146,7 @@ public static class AgQuotaService
                 }
                 else
                 {
-                    profile.ActivationError = $"服务初始化响应 {(int)resp.StatusCode}";
+                    profile.ActivationError = I18nService.F("AgQ.ErrInitRespFmt", (int)resp.StatusCode);
                 }
             }
             catch (Exception ex)
@@ -161,7 +161,7 @@ public static class AgQuotaService
             profile.IsActivated = false;
             profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
             ProfileStore.Save(profile);
-            return (false, sw.ElapsedMilliseconds, profile.ActivationError ?? "连接 Google 失败");
+            return (false, sw.ElapsedMilliseconds, profile.ActivationError ?? I18nService.T("AgQ.ErrConnect"));
         }
 
         // 3. Complete handshake by fetching models / quotas (initializes quota buckets)
@@ -176,13 +176,13 @@ public static class AgQuotaService
             profile.ActivationError = null;
             ProfileStore.Save(profile);
             var projInfo = !string.IsNullOrEmpty(companionProject) ? $" [{companionProject}]" : "";
-            return (true, sw.ElapsedMilliseconds, $"握手激活成功{projInfo}（阶梯：{profile.TierDisplay}）");
+            return (true, sw.ElapsedMilliseconds, I18nService.F("AgQ.OkHandshakeFmt", projInfo, profile.TierDisplay));
         }
         else
         {
             profile.IsActivated = false;
             profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
-            profile.ActivationError = "配额初始化端点无响应";
+            profile.ActivationError = I18nService.T("AgQ.ErrQuotaEndpoint");
             ProfileStore.Save(profile);
             return (false, sw.ElapsedMilliseconds, profile.ActivationError);
         }
@@ -316,7 +316,7 @@ public static class AgQuotaService
         if (string.IsNullOrEmpty(profile.RefreshToken) && string.IsNullOrEmpty(profile.AccessToken))
         {
             profile.IsActivated = false;
-            profile.ActivationError = "凭据缺失，请重新登录";
+            profile.ActivationError = I18nService.T("AgQ.ErrNoCredentials");
             ProfileStore.Save(profile);
             return (false, 0, profile.ActivationError);
         }
@@ -326,7 +326,7 @@ public static class AgQuotaService
         if (!tokenOk || string.IsNullOrEmpty(profile.AccessToken))
         {
             profile.IsActivated = false;
-            profile.ActivationError = "Token 刷新失败，请重新登录";
+            profile.ActivationError = I18nService.T("AgQ.ErrTokenRefresh");
             ProfileStore.Save(profile);
             return (false, 0, profile.ActivationError);
         }
@@ -424,13 +424,13 @@ public static class AgQuotaService
 
             string modeDesc;
             if (geminiActivated && claudeActivated)
-                modeDesc = $"Gemini({usedGeminiModel}) 与 Claude/GPT({usedClaudeModel}) 限额已同步激活";
+                modeDesc = I18nService.F("AgQ.OkBothFmt", usedGeminiModel ?? "", usedClaudeModel ?? "");
             else if (claudeActivated)
-                modeDesc = $"Claude/GPT({usedClaudeModel}) 限额已激活（Gemini无可用额度）";
+                modeDesc = I18nService.F("AgQ.OkClaudeOnlyFmt", usedClaudeModel ?? "");
             else
-                modeDesc = $"Gemini({usedGeminiModel}) 限额已激活";
+                modeDesc = I18nService.F("AgQ.OkGeminiOnlyFmt", usedGeminiModel ?? "");
 
-            return (true, sw.ElapsedMilliseconds, $"限额激活成功（{modeDesc} · {profile.TierDisplay} · 耗时 {sw.ElapsedMilliseconds}ms）");
+            return (true, sw.ElapsedMilliseconds, I18nService.F("AgQ.OkSummaryFmt", modeDesc, profile.TierDisplay, sw.ElapsedMilliseconds));
         }
         else
         {
@@ -439,7 +439,7 @@ public static class AgQuotaService
             sw.Stop();
             profile.IsActivated = false;
             profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
-            profile.ActivationError = "当前模型已达限额或未收到有效响应（已同步最新配额状态）";
+            profile.ActivationError = I18nService.T("AgQ.ErrRateLimited");
             ProfileStore.Save(profile);
             return (false, sw.ElapsedMilliseconds, profile.ActivationError);
         }

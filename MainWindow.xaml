@@ -52,7 +52,7 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Text="AI 编程工具" FontSize="11" FontWeight="SemiBold"
+                                    <TextBlock Grid.Row="0" Text="{DynamicResource Main.SidebarHeader}" FontSize="11" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextMutedBrush}" Margin="20,4,0,10"/>
 
                                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -67,16 +67,16 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <Button Grid.Column="0" Click="OnOpenSettings" Style="{StaticResource GhostButton}" Padding="12,9" HorizontalContentAlignment="Stretch" ToolTip="系统设置与数据备份同步">
+                                            <Button Grid.Column="0" Click="OnOpenSettings" Style="{StaticResource GhostButton}" Padding="12,9" HorizontalContentAlignment="Stretch" ToolTip="{DynamicResource Main.SettingsTip}">
                                                 <Grid>
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
                                                         <Path Data="{StaticResource IconSettings}" Fill="{DynamicResource TabAccentBrush}" Width="15" Height="15" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="设置" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13" FontWeight="Medium" Foreground="{StaticResource TextBrush}"/>
+                                                        <TextBlock Text="{DynamicResource Main.SettingsBtn}" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13" FontWeight="Medium" Foreground="{StaticResource TextBrush}"/>
                                                     </StackPanel>
                                                     <Path HorizontalAlignment="Right" VerticalAlignment="Center" Data="{StaticResource IconChevronRight}" Fill="{StaticResource TextMutedBrush}" Width="7" Height="7" Stretch="Uniform"/>
                                                 </Grid>
                                             </Button>
-                                            <Button Grid.Column="1" Click="OnOpenBugFeedbackClick" Style="{StaticResource GhostButton}" Padding="10,9" Margin="6,0,0,0" ToolTip="Bug 反馈与建议 (跳转 GitHub Issues)">
+                                            <Button Grid.Column="1" Click="OnOpenBugFeedbackClick" Style="{StaticResource GhostButton}" Padding="10,9" Margin="6,0,0,0" ToolTip="{DynamicResource Main.BugTip}">
                                                 <Path Data="{StaticResource IconBug}" Fill="{StaticResource TextDimBrush}" Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
                                             </Button>
                                         </Grid>
@@ -118,7 +118,7 @@
                                            Visibility="Collapsed" Margin="-10,0,0,0"/>
                                 <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center"/>
                                 <Grid Grid.Column="2" x:Name="TabDragGrip" VerticalAlignment="Center" Margin="6,0,2,0"
-                                      Cursor="SizeAll" ToolTip="按住上下拖拽调整顺序" Background="Transparent" Opacity="0.3">
+                                      Cursor="SizeAll" ToolTip="{DynamicResource Main.DragTabTip}" Background="Transparent" Opacity="0.3">
                                     <Path Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
                                           Fill="#64748B" Width="9" Height="13" Stretch="Uniform"/>
                                 </Grid>
@@ -242,14 +242,14 @@
                     <TextBlock Text="APISwitch" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextBrush}"
                                Margin="9,0,0,0" VerticalAlignment="Center"/>
                     <Button x:Name="UpdateCheckBtn" Click="OnCheckUpdateClick" Style="{StaticResource GhostButton}" WindowChrome.IsHitTestVisibleInChrome="True"
-                            Padding="7,3" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="发现新版本，点击立即升级"
+                            Padding="7,3" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="{DynamicResource Main.NewVersionTip}"
                             Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Path x:Name="UpdateIcon" Data="{StaticResource IconUpgrade}" Fill="#EF4444" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                            <TextBlock x:Name="AppVersionText" Text="新版本" FontSize="11" FontWeight="Bold" Foreground="#EF4444" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="AppVersionText" Text="{DynamicResource Main.NewVersion}" FontSize="11" FontWeight="Bold" Foreground="#EF4444" VerticalAlignment="Center"/>
                             <Border x:Name="UpdateBadge" Background="#EF4444" CornerRadius="4" Padding="4,1" Margin="5,0,0,0"
                                     Visibility="Visible" VerticalAlignment="Center">
-                                <TextBlock x:Name="UpdateBadgeText" Text="升级" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                                <TextBlock x:Name="UpdateBadgeText" Text="{DynamicResource Main.Upgrade}" FontSize="9" FontWeight="Bold" Foreground="White"/>
                             </Border>
                         </StackPanel>
                     </Button>
@@ -259,19 +259,19 @@
                 <Grid Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
                     <Button x:Name="TitleBarRouterBtn" HorizontalAlignment="Right" Click="OnToggleProxyServer" Style="{StaticResource GhostButton}"
                             WindowChrome.IsHitTestVisibleInChrome="True" Padding="8,3"
-                            ToolTip="点击开启/关闭本地路由服务（提供协议转译与无缝热切换）">
+                            ToolTip="{DynamicResource Main.RouterToggleTip}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Ellipse x:Name="RouterStatusDot" Width="7" Height="7" Fill="#10B981" Margin="0,0,6,0"/>
-                            <TextBlock x:Name="RouterStatusText" Text="本地路由 :15725" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}"/>
+                            <TextBlock x:Name="RouterStatusText" Text="{DynamicResource Main.RouterOff}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}"/>
                         </StackPanel>
                     </Button>
                 </Grid>
 
                 <!-- Window Controls -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
-                    <Button Style="{StaticResource CaptionBtn}" Tag="{StaticResource IconMin}" Click="OnMinWindow" ToolTip="最小化"/>
-                    <Button x:Name="MaxRestoreBtn" Style="{StaticResource CaptionBtn}" Tag="{StaticResource IconMax}" Click="OnMaxWindow" ToolTip="最大化/还原"/>
-                    <Button Style="{StaticResource CaptionCloseBtn}" Tag="{StaticResource IconClose}" Click="OnCloseWindow" ToolTip="最小化隐藏"/>
+                    <Button Style="{StaticResource CaptionBtn}" Tag="{StaticResource IconMin}" Click="OnMinWindow" ToolTip="{DynamicResource Main.MinTip}"/>
+                    <Button x:Name="MaxRestoreBtn" Style="{StaticResource CaptionBtn}" Tag="{StaticResource IconMax}" Click="OnMaxWindow" ToolTip="{DynamicResource Main.MaxTip}"/>
+                    <Button Style="{StaticResource CaptionCloseBtn}" Tag="{StaticResource IconClose}" Click="OnCloseWindow" ToolTip="{DynamicResource Main.CloseTip}"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -288,7 +288,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Antigravity" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="Google IDE" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="{DynamicResource Main.TabAgSub}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem.Header>
@@ -319,15 +319,15 @@
                                 <TextBlock Text="Google Antigravity" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                                 <Border x:Name="CurrentAgBadge" Background="{StaticResource GreenDimBrush}" BorderBrush="{StaticResource GreenBorderBrush}"
                                         BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="● 检测就绪" FontSize="11" FontWeight="Medium" Foreground="{StaticResource GreenBrush}"/>
+                                    <TextBlock Text="{DynamicResource Ag.HeroBadgeReady}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource GreenBrush}"/>
                                 </Border>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前账号：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="CurrentAccountText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="{DynamicResource Ag.CurrentAccountLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="CurrentAccountText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                     </StackPanel>
                                 </Border>
                                 <Border Style="{StaticResource Chip}" Margin="8,0,0,0">
@@ -348,37 +348,37 @@
 
                 <!-- Action Toolbar -->
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnNewAccountLogin" ToolTip="打开 Google 官方登录网页授权新账号">
+                    <Button Style="{StaticResource PrimaryButton}" Click="OnNewAccountLogin" ToolTip="{DynamicResource Ag.LoginTip}">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconUserPlus}" Fill="White" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="登录添加账号" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Ag.LoginBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnBatchActivateAntigravity" ToolTip="以安全防风控策略（真实指纹 + 拟人化延迟）激活账号限额并测通可用性" Visibility="Collapsed">
+                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnBatchActivateAntigravity" ToolTip="{DynamicResource Ag.BatchActivateTip}" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="⚡ 批量激活" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Ag.BatchActivateBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnLaunchIde">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRocket}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="启动 IDE" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Ag.LaunchIdeBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnImportFromAgTools" ToolTip="从 Antigravity Tools 一键导入全部历史账号和配额">
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnImportFromAgTools" ToolTip="{DynamicResource Ag.ImportToolsTip}">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="从 Tools 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Ag.ImportToolsBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefresh" ToolTip="一键静默刷新所有账号的最新配额与状态">
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefresh" ToolTip="{DynamicResource Ag.RefreshTip}">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <CheckBox x:Name="AutoRestartCheck" Content="切换后自动重启 IDE" IsChecked="True" VerticalAlignment="Center" Margin="20,0,0,0" FontSize="12"/>
+                    <CheckBox x:Name="AutoRestartCheck" Content="{DynamicResource Ag.AutoRestartCheck}" IsChecked="True" VerticalAlignment="Center" Margin="20,0,0,0" FontSize="12"/>
                 </StackPanel>
 
                 <!-- Account Cards List -->
@@ -413,7 +413,7 @@
                                                 </Grid.ColumnDefinitions>
 
                                                 <!-- Drag Handle Grip -->
-                                                <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                                <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                     <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                           Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
                                                           Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
@@ -430,7 +430,7 @@
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding Email}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
                                                         <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
-                                                            <TextBlock Text="● 当前激活" Style="{StaticResource BadgeGreenText}"/>
+                                                            <TextBlock Text="{DynamicResource Ag.CurrentBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                         </Border>
                                                         <!-- Tier Badge -->
                                                         <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -465,25 +465,25 @@
 
                                                 <!-- Action Buttons -->
                                                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                    <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowSwitchAntigravity" ToolTip="切换 Antigravity IDE 到此账号">
+                                                    <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowSwitchAntigravity" ToolTip="{DynamicResource Ag.SwitchTip}">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="切换账户" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{DynamicResource Ag.SwitchBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateQuota" ToolTip="向 Google 发送消息以激活该账号的限额周期并同步刷新配额" Visibility="Collapsed">
+                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateQuota" ToolTip="{DynamicResource Ag.ActivateQuotaTip}" Visibility="Collapsed">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="激活限额" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{DynamicResource Ag.ActivateQuotaBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="在线查询并刷新此账号的最新配额">
+                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="{DynamicResource Ag.RefreshQuotaTip}">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="刷新配额" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{DynamicResource Ag.RefreshQuotaBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource DangerButton}" Padding="8,6" Margin="8,0,0,0" Click="OnCardDeleteAntigravity" ToolTip="删除本地存档">
+                                                    <Button Style="{StaticResource DangerButton}" Padding="8,6" Margin="8,0,0,0" Click="OnCardDeleteAntigravity" ToolTip="{DynamicResource Ag.DeleteTip}">
                                                         <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
                                                     </Button>
                                                 </StackPanel>
@@ -502,14 +502,14 @@
                                                     <StackPanel Grid.Column="0">
                                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                             <Border Background="#EEF2FF" CornerRadius="4" Padding="6,2">
-                                                                <TextBlock Text="Gemini 模型" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                                                <TextBlock Text="{DynamicResource Ag.GeminiModels}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
                                                             </Border>
                                                         </StackPanel>
 
                                                         <!-- Gemini 5H -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="5H 动态限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
                                                                 <TextBlock Text="{Binding Quota5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right"/>
@@ -520,7 +520,7 @@
                                                         <!-- Gemini Weekly -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="周基础限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
                                                                 <TextBlock Text="{Binding QuotaWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right"/>
@@ -535,14 +535,14 @@
                                                     <StackPanel Grid.Column="2">
                                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                             <Border Background="#F5F3FF" CornerRadius="4" Padding="6,2">
-                                                                <TextBlock Text="Claude &amp; GPT 模型" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                                                <TextBlock Text="{DynamicResource Ag.ClaudeGptModels}" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                                             </Border>
                                                         </StackPanel>
 
                                                         <!-- Claude 5H -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="5H 动态限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
                                                                 <TextBlock Text="{Binding Quota3p5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right"/>
@@ -553,7 +553,7 @@
                                                         <!-- Claude Weekly -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="周基础限额" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
                                                                 <TextBlock Text="{Binding Quota3pWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
                                                             </StackPanel>
                                                             <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right"/>
@@ -584,12 +584,12 @@
                         <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconUserPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="还没有账号存档" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="可直接从 Antigravity Tools 导入账号，或在网页端登录新 Google 账号"
+                        <TextBlock Text="{DynamicResource Ag.EmptyTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Ag.EmptyDesc}"
                                    FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,16" HorizontalAlignment="Center"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Button Content="📥 从 Tools 导入" Style="{StaticResource PrimaryButton}" Margin="0,0,10,0" Click="OnImportFromAgTools"/>
-                            <Button Content="🌐 网页登录新账号" Style="{StaticResource GhostButton}" Click="OnNewAccountLogin"/>
+                            <Button Content="{DynamicResource Ag.EmptyImport}" Style="{StaticResource PrimaryButton}" Margin="0,0,10,0" Click="OnImportFromAgTools"/>
+                            <Button Content="{DynamicResource Ag.EmptyLogin}" Style="{StaticResource GhostButton}" Click="OnNewAccountLogin"/>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
@@ -605,7 +605,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Codex" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="OpenAI / Codex API" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="{DynamicResource Main.TabCodexSub}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem.Header>
@@ -632,18 +632,18 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="Codex API 供应商" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="{DynamicResource Codex.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前供应商：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="CodexCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="{DynamicResource Common.CurrentProvider}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="CodexCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="CodexRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse x:Name="CodexRouterDot" Width="6" Height="6" Fill="#10B981" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="CodexRouterChipText" Text="本地路由已接管 (免重启热切/转译)" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="CodexRouterChipText" Text="{DynamicResource Router.DirectModeNoRouter}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -656,32 +656,32 @@
                     <Button Style="{StaticResource PrimaryButton}" Click="OnAddCodex">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="添加供应商" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="CodexToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleCodexProxy" ToolTip="切换本地路由服务（提供协议转译与无缝热切换）">
+                    <Button x:Name="CodexToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleCodexProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="CodexToolbarRouterDot" Width="7" Height="7" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="CodexToolbarRouterText" Text="本地路由：已开启" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CodexToolbarRouterText" Text="{DynamicResource Router.ToolbarOff}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRestartCodex">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="重启 Codex" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Codex.RestartBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenCodexConfig">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="打开 config.toml" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Codex.OpenConfigBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -709,7 +709,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
                                                       Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
@@ -724,7 +724,7 @@
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
-                                                        <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
+                                                        <TextBlock Text="{DynamicResource Common.InUseBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
                                                     <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
                                                             BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
@@ -742,12 +742,12 @@
                                                 <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyCodex">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="一键应用" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="编辑" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditCodex"/>
-                                                <Button Content="跨端复制" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyCodex"/>
-                                                <Button Content="删除" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteCodex"/>
+                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditCodex"/>
+                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyCodex"/>
+                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteCodex"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -771,10 +771,10 @@
                         <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="还没有 Codex 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="点击上方「添加供应商」或从 cc-switch 导入配置"
+                        <TextBlock Text="{DynamicResource Codex.EmptyTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Common.EmptyDesc}"
                                    FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,16" HorizontalAlignment="Center"/>
-                        <Button Content="➕ 立即添加供应商" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddCodex"/>
+                        <Button Content="{DynamicResource Common.EmptyAddBtn}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddCodex"/>
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -788,7 +788,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Claude Code" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="Anthropic CLI" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="{DynamicResource Main.TabClaudeSub}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem.Header>
@@ -815,18 +815,18 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="Claude Code 供应商" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="{DynamicResource Claude.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前供应商：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="ClaudeCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="{DynamicResource Common.CurrentProvider}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="ClaudeCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="ClaudeRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse x:Name="ClaudeRouterDot" Width="6" Height="6" Fill="#94A3B8" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="ClaudeRouterChipText" Text="直连直通模式（未开启路由）" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="ClaudeRouterChipText" Text="{DynamicResource Router.DirectModeNoRouter}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -839,25 +839,25 @@
                     <Button Style="{StaticResource PrimaryButton}" Click="OnAddClaude">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="添加供应商" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ClaudeToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeCliProxy" ToolTip="切换 Claude CLI 本地路由服务（通过本地端口统一中转）">
+                    <Button x:Name="ClaudeToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeCliProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="ClaudeToolbarRouterDot" Width="7" Height="7" Fill="#94A3B8" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="ClaudeToolbarRouterText" Text="本地路由：已停用" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="ClaudeToolbarRouterText" Text="{DynamicResource Router.ToolbarOff}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenClaudeSettings">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="打开 settings.json" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Claude.OpenSettingsBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -885,7 +885,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
                                                       Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
@@ -900,7 +900,7 @@
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
-                                                        <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
+                                                        <TextBlock Text="{DynamicResource Common.InUseBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
                                                     <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
                                                             BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
@@ -918,12 +918,12 @@
                                                 <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyClaude">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="一键应用" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="编辑" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditClaude"/>
-                                                <Button Content="跨端复制" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyClaude"/>
-                                                <Button Content="删除" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteClaude"/>
+                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditClaude"/>
+                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyClaude"/>
+                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteClaude"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -947,10 +947,10 @@
                         <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="还没有 Claude Code 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="点击上方「添加供应商」或从 cc-switch 导入配置"
+                        <TextBlock Text="{DynamicResource Claude.EmptyTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Common.EmptyDesc}"
                                    FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,16" HorizontalAlignment="Center"/>
-                        <Button Content="➕ 立即添加供应商" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddClaude"/>
+                        <Button Content="{DynamicResource Common.EmptyAddBtn}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddClaude"/>
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -965,7 +965,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Claude Desktop" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="Desktop App" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="{DynamicResource Main.TabDesktopSub}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem.Header>
@@ -992,18 +992,18 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="Claude Desktop 客户端网关" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="{DynamicResource Desktop.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="当前供应商：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="DesktopCurrentText" Text="检测中…" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="{DynamicResource Common.CurrentProvider}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="DesktopCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="DesktopRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse x:Name="DesktopRouterDot" Width="6" Height="6" Fill="#94A3B8" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                        <TextBlock x:Name="DesktopRouterChipText" Text="直连直通模式（未开启路由）" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="DesktopRouterChipText" Text="{DynamicResource Router.DirectModeNoRouter}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -1016,31 +1016,31 @@
                     <Button Style="{StaticResource PrimaryButton}" Click="OnAddDesktop">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="添加供应商" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="DesktopToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeDesktopProxy" ToolTip="切换 Claude 桌面客户端本地路由服务（通过本地端口统一中转）">
+                    <Button x:Name="DesktopToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeDesktopProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="DesktopToolbarRouterDot" Width="7" Height="7" Fill="#94A3B8" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="DesktopToolbarRouterText" Text="本地路由：已停用" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="DesktopToolbarRouterText" Text="{DynamicResource Router.ToolbarOff}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRestartClaudeDesktop" ToolTip="一键重启 Claude 桌面客户端以加载最新配置">
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRestartClaudeDesktop" ToolTip="{DynamicResource Desktop.RestartTip}">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="重启 Claude" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Desktop.RestartBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenDesktopConfig">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="打开桌面配置" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Desktop.OpenConfigBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1068,7 +1068,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
                                                       Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
@@ -1083,7 +1083,7 @@
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
-                                                        <TextBlock Text="● 当前使用中" Style="{StaticResource BadgeGreenText}"/>
+                                                        <TextBlock Text="{DynamicResource Common.InUseBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
                                                     <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
                                                             BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
@@ -1101,12 +1101,12 @@
                                                 <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyDesktop">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="一键应用" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="编辑" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditDesktop"/>
-                                                <Button Content="跨端复制" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyDesktop"/>
-                                                <Button Content="删除" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteDesktop"/>
+                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditDesktop"/>
+                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyDesktop"/>
+                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteDesktop"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -1130,10 +1130,10 @@
                         <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="还没有 Claude 桌面端供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="点击上方「添加供应商」或从 cc-switch 导入配置"
+                        <TextBlock Text="{DynamicResource Desktop.EmptyTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Common.EmptyDesc}"
                                    FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,16" HorizontalAlignment="Center"/>
-                        <Button Content="➕ 立即添加供应商" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddDesktop"/>
+                        <Button Content="{DynamicResource Common.EmptyAddBtn}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddDesktop"/>
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -1148,7 +1148,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="OpenCode" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="AI Coding Agent" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="{DynamicResource Main.TabOcSub}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem.Header>
@@ -1175,12 +1175,12 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="OpenCode API 供应商池" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="{DynamicResource Oc.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="已加入配置池：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="OcPoolCountText" Text="0 / 0 个供应商" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                        <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="OcPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -1193,25 +1193,25 @@
                     <Button Style="{StaticResource PrimaryButton}" Click="OnAddOpencode">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="添加供应商" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshOpencode">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenOcConfig">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="打开 opencode.json" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Oc.OpenConfigBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1239,7 +1239,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
                                                       Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
@@ -1253,11 +1253,11 @@
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#E0F2FE" BorderBrush="#7DD3FC" BorderThickness="1"
                                                             Visibility="{Binding PoolBadgeVisibility}">
-                                                        <TextBlock Text="● 已在配置池" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                                        <TextBlock Text="{DynamicResource Common.PoolBadge}" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7"/>
                                                     </Border>
                                                     <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1"
                                                             Visibility="{Binding UnpoolBadgeVisibility}">
-                                                        <TextBlock Text="○ 未加入配置池" FontSize="11" FontWeight="Medium" Foreground="#64748B"/>
+                                                        <TextBlock Text="{DynamicResource Common.UnpoolBadge}" FontSize="11" FontWeight="Medium" Foreground="#64748B"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
@@ -1268,19 +1268,19 @@
                                                         Visibility="{Binding AddBtnVisibility}" Click="OnRowAddOc">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconPlus}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="添加" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.AddBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
                                                 <Button Style="{StaticResource GhostButton}" Padding="12,6" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
                                                         Visibility="{Binding RemoveBtnVisibility}" Click="OnRowRemoveOc">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconTrash}" Fill="#EA580C" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="移除" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.RemoveBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="编辑" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditOc"/>
-                                                <Button Content="跨端复制" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyOc"/>
-                                                <Button Content="删除" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteOc"/>
+                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditOc"/>
+                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyOc"/>
+                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteOc"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -1311,10 +1311,10 @@
                         <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="还没有 OpenCode 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="点击上方「添加供应商」或从 cc-switch 导入配置"
+                        <TextBlock Text="{DynamicResource Oc.EmptyTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Common.EmptyDesc}"
                                    FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,16" HorizontalAlignment="Center"/>
-                        <Button Content="➕ 立即添加供应商" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddOpencode"/>
+                        <Button Content="{DynamicResource Common.EmptyAddBtn}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddOpencode"/>
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -1329,7 +1329,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Pi" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="Minimal Agent" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="{DynamicResource Main.TabPiSub}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
                     </StackPanel>
                 </StackPanel>
             </TabItem.Header>
@@ -1356,12 +1356,12 @@
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="Pi API 供应商池" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="{DynamicResource Pi.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Border Style="{StaticResource Chip}">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="已加入配置池：" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="PiPoolCountText" Text="0 / 0 个供应商" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                        <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="PiPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -1374,37 +1374,37 @@
                     <Button Style="{StaticResource PrimaryButton}" Click="OnAddPi">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="添加供应商" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="cc-switch 导入" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshPi">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="刷新" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenPiModels">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="打开 models.json" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Pi.OpenModelsBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenPiDir">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconFolder}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="打开 Pi 目录" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Pi.OpenDirBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCapturePi">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconSave}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="抓取快照" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Pi.CaptureBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1432,7 +1432,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="按住上下拖动调整顺序">
+                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
                                                       Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
@@ -1446,11 +1446,11 @@
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#EDE9FE" BorderBrush="#DDD6FE" BorderThickness="1"
                                                             Visibility="{Binding PoolBadgeVisibility}">
-                                                        <TextBlock Text="● 已在配置池" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                                        <TextBlock Text="{DynamicResource Common.PoolBadge}" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                                     </Border>
                                                     <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1"
                                                             Visibility="{Binding UnpoolBadgeVisibility}">
-                                                        <TextBlock Text="○ 未加入配置池" FontSize="11" FontWeight="Medium" Foreground="#64748B"/>
+                                                        <TextBlock Text="{DynamicResource Common.UnpoolBadge}" FontSize="11" FontWeight="Medium" Foreground="#64748B"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
@@ -1461,19 +1461,19 @@
                                                         Visibility="{Binding AddBtnVisibility}" Click="OnRowAddPi">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconPlus}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="添加" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.AddBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
                                                 <Button Style="{StaticResource GhostButton}" Padding="12,6" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
                                                         Visibility="{Binding RemoveBtnVisibility}" Click="OnRowRemovePi">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconTrash}" Fill="#EA580C" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="移除" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.RemoveBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="编辑" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditPi"/>
-                                                <Button Content="跨端复制" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyPi"/>
-                                                <Button Content="删除" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeletePi"/>
+                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditPi"/>
+                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyPi"/>
+                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeletePi"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -1504,10 +1504,10 @@
                         <Border Width="54" Height="54" CornerRadius="27" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Center" Margin="0,0,0,12">
                             <Path Data="{StaticResource IconPlus}" Fill="{StaticResource TextMutedBrush}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="还没有 Pi 供应商" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="点击上方「添加供应商」或从 cc-switch 导入配置"
+                        <TextBlock Text="{DynamicResource Pi.EmptyTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="{DynamicResource Common.EmptyDesc}"
                                    FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,16" HorizontalAlignment="Center"/>
-                        <Button Content="➕ 立即添加供应商" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddPi"/>
+                        <Button Content="{DynamicResource Common.EmptyAddBtn}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" Click="OnAddPi"/>
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -1527,7 +1527,7 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Path x:Name="ToastIcon" Data="{StaticResource IconCheck}" Fill="{StaticResource GreenBrush}"
                       Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
-                <TextBlock x:Name="ToastText" Text="提示信息" FontSize="13" FontWeight="SemiBold"
+                <TextBlock x:Name="ToastText" Text="{DynamicResource Common.Toast}" FontSize="13" FontWeight="SemiBold"
                            Foreground="{StaticResource TextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
@@ -1541,7 +1541,7 @@
                 </Border.Effect>
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <ProgressBar IsIndeterminate="True" Width="180" Height="4" Foreground="{StaticResource AccentBrush}" Background="#E2E8F0" BorderThickness="0"/>
-                    <TextBlock x:Name="BusyText" Text="正在处理，请稍候…" FontSize="13" FontWeight="Medium"
+                    <TextBlock x:Name="BusyText" Text="{DynamicResource Common.Busy}" FontSize="13" FontWeight="Medium"
                                Foreground="{StaticResource TextBrush}" Margin="0,14,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Border>

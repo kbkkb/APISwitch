@@ -26,6 +26,63 @@ public partial class SettingsDialog : Window
 
         ApplySettingsTheme(themeTag);
         InitSettingsValues();
+        InitLanguageCombo();
+        I18nService.LanguageChanged += OnLanguageChanged;
+        Closed += (_, _) => I18nService.LanguageChanged -= OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            InitLanguageCombo();
+            UpdateProxyEndpointsUI();
+            if (CodexProxyStatusText != null)
+                CodexProxyStatusText.Text = LocalProxyServer.IsCodexEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
+            if (ClaudeCliProxyStatusText != null)
+                ClaudeCliProxyStatusText.Text = LocalProxyServer.IsClaudeCliEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
+            if (DesktopProxyStatusText != null)
+                DesktopProxyStatusText.Text = LocalProxyServer.IsClaudeDesktopEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
+        });
+    }
+
+    private bool _isLanguageInitializing = true;
+
+    private void InitLanguageCombo()
+    {
+        _isLanguageInitializing = true;
+        try
+        {
+            LanguageCombo.Items.Clear();
+            AddLanguageItem("auto", I18nService.T("Lang.Auto"));
+            AddLanguageItem("zh-CN", I18nService.T("Lang.ZhCn"));
+            AddLanguageItem("en-US", I18nService.T("Lang.EnUs"));
+
+            var current = AppSettingsService.Current.Language ?? "auto";
+            for (int i = 0; i < LanguageCombo.Items.Count; i++)
+            {
+                if (LanguageCombo.Items[i] is ComboBoxItem item && Equals(item.Tag, current))
+                {
+                    LanguageCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            _isLanguageInitializing = false;
+        }
+    }
+
+    private void AddLanguageItem(string tag, string text) =>
+        LanguageCombo.Items.Add(new ComboBoxItem { Tag = tag, Content = text });
+
+    private void LanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLanguageInitializing) return;
+        if (LanguageCombo.SelectedItem is not ComboBoxItem item || item.Tag is not string tag) return;
+        if (tag == (AppSettingsService.Current.Language ?? "auto")) return;
+        I18nService.ApplyLanguage(tag);
     }
 
     private void ApplySettingsTheme(string tag)
@@ -150,17 +207,17 @@ public partial class SettingsDialog : Window
         UpdateProxyEndpointsUI();
 
         if (CodexProxyStatusText != null)
-            CodexProxyStatusText.Text = LocalProxyServer.IsCodexEnabled ? "已就绪" : "未开启";
+            CodexProxyStatusText.Text = LocalProxyServer.IsCodexEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
         if (ClaudeCliProxyStatusText != null)
-            ClaudeCliProxyStatusText.Text = LocalProxyServer.IsClaudeCliEnabled ? "已就绪" : "未开启";
+            ClaudeCliProxyStatusText.Text = LocalProxyServer.IsClaudeCliEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
         if (DesktopProxyStatusText != null)
-            DesktopProxyStatusText.Text = LocalProxyServer.IsClaudeDesktopEnabled ? "已就绪" : "未开启";
+            DesktopProxyStatusText.Text = LocalProxyServer.IsClaudeDesktopEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
     }
 
     private void UpdateProxyEndpointsUI()
     {
         if (ProxyHeadingText != null)
-            ProxyHeadingText.Text = $"服务状态：运行中 ({LocalProxyServer.Host}:{LocalProxyServer.Port})";
+            ProxyHeadingText.Text = I18nService.F("Proxy.StatusRunning", $"{LocalProxyServer.Host}:{LocalProxyServer.Port}");
         if (ProxyCodexUrlText != null)
             ProxyCodexUrlText.Text = LocalProxyServer.ProxyCodexUrl;
         if (ProxyClaudeCliUrlText != null)
@@ -199,8 +256,8 @@ public partial class SettingsDialog : Window
     {
         var sfd = new WpfSaveFileDialog
         {
-            Title = "导出所有配置备份",
-            Filter = "JSON 备份文件 (*.json)|*.json",
+            Title = I18nService.T("Msg.ExportDialogTitle"),
+            Filter = I18nService.T("Msg.JsonFilter"),
             FileName = $"APISwitch_Backup_{DateTime.Now:yyyyMMdd_HHmmss}.json"
         };
 
@@ -211,14 +268,14 @@ public partial class SettingsDialog : Window
                 var ver = AboutVersionText?.Text ?? "v0.1.1";
                 ConfigSyncService.ExportToFile(sfd.FileName, ver);
                 MessageBox.Show(
-                    "所有配置已成功导出！\n\n您可以将此文件保存在网盘或移动设备中，在其他电脑上直接通过「导入配置」即可无缝同步。",
-                    "导出成功",
+                    I18nService.T("Msg.ExportOk"),
+                    I18nService.T("Msg.ExportOkTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"导出备份失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(I18nService.F("Msg.ExportFail", ex.Message), I18nService.T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
@@ -227,8 +284,8 @@ public partial class SettingsDialog : Window
     {
         var ofd = new WpfOpenFileDialog
         {
-            Title = "选择 APISwitch 备份文件",
-            Filter = "JSON 备份文件 (*.json)|*.json|所有文件 (*.*)|*.*"
+            Title = I18nService.T("Msg.ImportPickTitle"),
+            Filter = I18nService.T("Msg.JsonFilter") + "|" + I18nService.T("Msg.AllFiles")
         };
 
         if (ofd.ShowDialog(this) == true)
@@ -239,10 +296,10 @@ public partial class SettingsDialog : Window
                 bool overwrite = ImportOverwriteRadio.IsChecked == true;
 
                 string confirmMsg = overwrite
-                    ? "【警告】完全覆盖模式将使用备份中的配置彻底清空并替换当前的供应商列表与账号数据。\n\n是否确认覆盖导入？"
-                    : $"准备从备份文件导入配置：\n\n• 备份时间：{bundle.ExportedAt:yyyy-MM-dd HH:mm:ss}\n• 来源设备：{bundle.DeviceName}\n• 导入模式：合并追加（保留现有供应商）\n\n是否开始导入？";
+                    ? I18nService.T("Msg.OverwriteConfirm")
+                    : I18nService.F("Msg.MergeConfirm", bundle.ExportedAt.ToString("yyyy-MM-dd HH:mm:ss"), bundle.DeviceName);
 
-                if (MessageBox.Show(confirmMsg, "导入确认", MessageBoxButton.OKCancel, overwrite ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.OK)
+                if (MessageBox.Show(confirmMsg, I18nService.T("Msg.ImportConfirmTitle"), MessageBoxButton.OKCancel, overwrite ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.OK)
                 {
                     return;
                 }
@@ -254,20 +311,14 @@ public partial class SettingsDialog : Window
                 });
 
                 MessageBox.Show(
-                    $"配置导入成功！共处理 {res.TotalCount} 项配置：\n\n" +
-                    $"• Claude CLI 供应商: {res.ClaudeCliCount} 个\n" +
-                    $"• Claude 客户端供应商: {res.ClaudeDesktopCount} 个\n" +
-                    $"• Codex 供应商: {res.CodexCount} 个\n" +
-                    $"• OpenCode 供应商: {res.OpenCodeCount} 个\n" +
-                    $"• Pi 供应商: {res.PiCount} 个\n" +
-                    $"• Antigravity 账号: {res.ProfilesCount} 个",
-                    "导入成功",
+                    I18nService.F("Msg.ImportOk", res.TotalCount, res.ClaudeCliCount, res.ClaudeDesktopCount, res.CodexCount, res.OpenCodeCount, res.PiCount, res.ProfilesCount),
+                    I18nService.T("Msg.ImportOkTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"导入备份失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(I18nService.F("Msg.ImportFail", ex.Message), I18nService.T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
@@ -288,7 +339,7 @@ public partial class SettingsDialog : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"打开目录失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(I18nService.F("Msg.OpenDirFail", ex.Message), I18nService.T("Common.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -356,14 +407,14 @@ public partial class SettingsDialog : Window
 
     private async void OnManualCheckUpdateClick(object sender, RoutedEventArgs e)
     {
-        ShowToast("正在检查最新版本…", isInfo: true);
+        ShowToast(I18nService.T("Msg.CheckingUpdate"), isInfo: true);
         try
         {
             var info = await UpdateService.CheckForUpdatesAsync();
 
             if (info == null)
             {
-                ShowToast("检查更新失败，请确认网络连接或稍后重试", isError: true);
+                ShowToast(I18nService.T("Msg.CheckUpdateFail"), isError: true);
                 return;
             }
 
@@ -371,17 +422,17 @@ public partial class SettingsDialog : Window
 
             if (info.HasUpdate)
             {
-                ShowToast($"⚡ 发现新版本 {info.LatestVersion}！");
+                ShowToast(I18nService.F("Msg.NewVersionFound", info.LatestVersion));
                 new UpdateDialog(info) { Owner = this }.ShowDialog();
             }
             else
             {
-                ShowToast($"当前已是最新版本 ({info.CurrentVersion})");
+                ShowToast(I18nService.F("Msg.LatestVersion", info.CurrentVersion));
             }
         }
         catch (Exception ex)
         {
-            ShowToast("检查更新异常：" + ex.Message, isError: true);
+            ShowToast(I18nService.F("Msg.CheckUpdateError", ex.Message), isError: true);
         }
     }
 
@@ -394,7 +445,7 @@ public partial class SettingsDialog : Window
 
         if (!int.TryParse(ProxyPortTextBox.Text?.Trim(), out int port) || port < 1024 || port > 65535)
         {
-            ShowToast("请输入合法的端口号（1024 - 65535）", isError: true);
+            ShowToast(I18nService.T("Msg.InvalidPort"), isError: true);
             return;
         }
 
@@ -409,28 +460,28 @@ public partial class SettingsDialog : Window
         ProxyPortTextBox.Text = "15725";
         var (success, msg) = LocalProxyServer.UpdateAddress("127.0.0.1", 15725);
         UpdateProxyEndpointsUI();
-        ShowToast(success ? "已恢复默认路由服务配置 (127.0.0.1:15725)" : msg, isError: !success);
+        ShowToast(success ? I18nService.T("Msg.ProxyReset") : msg, isError: !success);
     }
 
     private void OnCopyCodexUrlClick(object sender, RoutedEventArgs e) =>
-        CopyTextToClipboard(LocalProxyServer.ProxyCodexUrl, "Codex 路由端点");
+        CopyTextToClipboard(LocalProxyServer.ProxyCodexUrl, I18nService.T("Msg.EndpointCodex"));
 
     private void OnCopyClaudeCliUrlClick(object sender, RoutedEventArgs e) =>
-        CopyTextToClipboard(LocalProxyServer.ProxyClaudeCliUrl, "Claude CLI 路由端点");
+        CopyTextToClipboard(LocalProxyServer.ProxyClaudeCliUrl, I18nService.T("Msg.EndpointClaudeCli"));
 
     private void OnCopyDesktopUrlClick(object sender, RoutedEventArgs e) =>
-        CopyTextToClipboard(LocalProxyServer.ProxyClaudeDesktopUrl, "Claude Desktop 路由端点");
+        CopyTextToClipboard(LocalProxyServer.ProxyClaudeDesktopUrl, I18nService.T("Msg.EndpointDesktop"));
 
     private void CopyTextToClipboard(string text, string label)
     {
         try
         {
             System.Windows.Clipboard.SetText(text);
-            ShowToast($"已复制 {label} 到剪贴板");
+            ShowToast(I18nService.F("Msg.Copied", label));
         }
         catch (Exception ex)
         {
-            ShowToast($"复制失败：{ex.Message}", isError: true);
+            ShowToast(I18nService.F("Msg.CopyFail", ex.Message), isError: true);
         }
     }
 
@@ -441,11 +492,11 @@ public partial class SettingsDialog : Window
             LocalProxyServer.Stop(restoreDirectConfig: false);
             LocalProxyServer.Start();
             UpdateProxyEndpointsUI();
-            ShowToast($"路由服务已重启 ({LocalProxyServer.Host}:{LocalProxyServer.Port})");
+            ShowToast(I18nService.F("Msg.ProxyRestarted", $"{LocalProxyServer.Host}:{LocalProxyServer.Port}"));
         }
         catch (Exception ex)
         {
-            ShowToast($"重启服务异常：{ex.Message}", isError: true);
+            ShowToast(I18nService.F("Msg.ProxyRestartFail", ex.Message), isError: true);
         }
     }
 

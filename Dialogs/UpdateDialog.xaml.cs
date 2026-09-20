@@ -16,21 +16,21 @@ public partial class UpdateDialog : Window
         _info = info;
 
         VersionCompareText.Text = $"{info.CurrentVersion} → {info.LatestVersion}";
-        ReleaseTitleText.Text = string.IsNullOrWhiteSpace(info.Title) ? "APISwitch 新版本发布" : info.Title;
+        ReleaseTitleText.Text = string.IsNullOrWhiteSpace(info.Title) ? I18nService.T("UD.ReleaseNewFmt") : info.Title;
 
         PublishDateText.Text = info.PublishedAt.HasValue
-            ? $"发布时间：{info.PublishedAt.Value:yyyy-MM-dd HH:mm}"
-            : "发布时间：近期";
+            ? I18nService.F("UD.PublishedFmt", info.PublishedAt.Value.ToString("yyyy-MM-dd HH:mm"))
+            : I18nService.T("UD.PublishedRecent");
 
         PackageSizeText.Text = string.IsNullOrWhiteSpace(info.SizeFormatted)
             ? ""
-            : $"更新包大小：{info.SizeFormatted}";
+            : I18nService.F("UD.SizeFmt", info.SizeFormatted);
 
         ReleaseNotesText.Text = info.ReleaseNotes;
 
         if (string.IsNullOrEmpty(info.DownloadUrl))
         {
-            BtnInstall.Content = "前往 GitHub 下载";
+            BtnInstall.Content = I18nService.T("UD.GoGitHubDownload");
         }
     }
 
@@ -46,7 +46,7 @@ public partial class UpdateDialog : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show("无法打开浏览器: " + ex.Message);
+            MessageBox.Show(I18nService.F("UD.OpenBrowserFail", ex.Message));
         }
     }
 
@@ -66,9 +66,9 @@ public partial class UpdateDialog : Window
         }
 
         BtnInstall.IsEnabled = false;
-        BtnCancel.Content = "取消下载";
+        BtnCancel.Content = I18nService.T("UD.CancelDownload");
         ProgressPanel.Visibility = Visibility.Visible;
-        ProgressStatusText.Text = "正在连接下载服务器…";
+        ProgressStatusText.Text = I18nService.T("UD.Connecting");
 
         _cts = new CancellationTokenSource();
 
@@ -82,11 +82,11 @@ public partial class UpdateDialog : Window
             ProgressPercentText.Text = $"{p.percent:F0}%";
             if (p.total > 0)
             {
-                ProgressStatusText.Text = $"正在下载: {p.downloaded / 1048576.0:F1} MB / {p.total / 1048576.0:F1} MB";
+                ProgressStatusText.Text = I18nService.F("UD.DownloadingFmt", p.downloaded / 1048576.0, p.total / 1048576.0);
             }
             else
             {
-                ProgressStatusText.Text = $"已下载: {p.downloaded / 1048576.0:F1} MB";
+                ProgressStatusText.Text = I18nService.F("UD.DownloadedFmt", p.downloaded / 1048576.0);
             }
         });
 
@@ -94,7 +94,7 @@ public partial class UpdateDialog : Window
         {
             await UpdateService.DownloadAssetAsync(_info.DownloadUrl, destFile, progress, _cts.Token);
 
-            ProgressStatusText.Text = "下载完成！准备自动重启更新…";
+            ProgressStatusText.Text = I18nService.T("UD.DownloadDone");
             ProgressPercentText.Text = "100%";
             DownloadProgressBar.Value = 100;
 
@@ -106,13 +106,13 @@ public partial class UpdateDialog : Window
         {
             ProgressPanel.Visibility = Visibility.Collapsed;
             BtnInstall.IsEnabled = true;
-            BtnCancel.Content = "稍后再说";
+            BtnCancel.Content = I18nService.T("UD.LaterBtn");
         }
         catch (Exception ex)
         {
-            ProgressStatusText.Text = "下载失败：" + ex.Message;
+            ProgressStatusText.Text = I18nService.F("UD.DownloadFailFmt", ex.Message);
             BtnInstall.IsEnabled = true;
-            BtnCancel.Content = "关闭";
+            BtnCancel.Content = I18nService.T("UD.CloseBtn");
         }
     }
 }

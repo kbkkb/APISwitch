@@ -38,7 +38,7 @@ public partial class ImportDialog : Window
         var selected = _items.Where(i => i.Selected).ToList();
         if (selected.Count == 0)
         {
-            MessageBox.Show("请至少勾选一项。", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(I18nService.T("ID.SelectOne"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         try
@@ -46,13 +46,13 @@ public partial class ImportDialog : Window
             var (nc, nd, nx, no, np) = CcSwitchImport.Import(selected);
             Imported = true;
             MessageBox.Show(
-                $"导入完成：Claude CLI {nc}，Claude 客户端 {nd}，Codex {nx}，OpenCode {no}，Pi {np} 个。",
+                I18nService.F("ID.DoneFmt", nc, nd, nx, no, np),
                 Title, MessageBoxButton.OK, MessageBoxImage.Information);
             DialogResult = true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show("导入失败：" + ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(I18nService.F("ID.FailFmt", ex.Message), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }
