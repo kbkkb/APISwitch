@@ -34,6 +34,8 @@ jobs:
       - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: APISwitch ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
           files: |
             Release_Package/APISwitch-Setup-*.exe
             Release_Package/APISwitch-*-win-x64.zip

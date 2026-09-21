@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     APISwitch 一键发布打包脚本：生成绿色便携版 ZIP 与 Windows 安装包 Setup.exe
 #>
