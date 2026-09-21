@@ -243,12 +243,12 @@
                                Margin="9,0,0,0" VerticalAlignment="Center"/>
                     <Button x:Name="UpdateCheckBtn" Click="OnCheckUpdateClick" Style="{StaticResource GhostButton}" WindowChrome.IsHitTestVisibleInChrome="True"
                             Padding="7,3" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="{DynamicResource Main.NewVersionTip}"
-                            Visibility="Collapsed">
+                            Visibility="Visible">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Path x:Name="UpdateIcon" Data="{StaticResource IconUpgrade}" Fill="#EF4444" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                            <TextBlock x:Name="AppVersionText" Text="{DynamicResource Main.NewVersion}" FontSize="11" FontWeight="Bold" Foreground="#EF4444" VerticalAlignment="Center"/>
+                            <Path x:Name="UpdateIcon" Data="{StaticResource IconUpgrade}" Fill="#EF4444" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,5,0" Visibility="Collapsed"/>
+                            <TextBlock x:Name="AppVersionText" Text="v0.0.0" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
                             <Border x:Name="UpdateBadge" Background="#EF4444" CornerRadius="4" Padding="4,1" Margin="5,0,0,0"
-                                    Visibility="Visible" VerticalAlignment="Center">
+                                    Visibility="Collapsed" VerticalAlignment="Center">
                                 <TextBlock x:Name="UpdateBadgeText" Text="{DynamicResource Main.Upgrade}" FontSize="9" FontWeight="Bold" Foreground="White"/>
                             </Border>
                         </StackPanel>

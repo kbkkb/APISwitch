@@ -325,7 +325,7 @@
     <sys:String x:Key="Msg.CcNotFound">cc-switch database not found (~/.cc-switch/cc-switch.db)</sys:String>
     <sys:String x:Key="Msg.CcImported">Providers imported from cc-switch</sys:String>
     <sys:String x:Key="Msg.CcReadFailFmt">Failed to read cc-switch data: {0}</sys:String>
-    <sys:String x:Key="Msg.NewVersionClickTip">⚡ New version {0} found — click the version badge at top right to update</sys:String>
+    <sys:String x:Key="Msg.NewVersionClickTip">⚡ New version {0} found — click the version badge at top left to update</sys:String>
 
     <!-- ==================== Card Row Texts ==================== -->
     <sys:String x:Key="Row.SubChatNeedsRouter">Chat format (router required)</sys:String>

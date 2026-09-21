@@ -71,6 +71,7 @@ public partial class MainWindow : Window
         {
             App.LogStartup("MainWindow Loaded: start");
             ApplyTabTheme((Tabs.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity");
+            ShowCurrentVersion();
             LocalProxyServer.StateChanged += () => Dispatcher.Invoke(UpdateRouterUI);
             I18nService.LanguageChanged += RebuildTrayMenu;
             RefreshAll();
@@ -3370,13 +3371,37 @@ public partial class MainWindow : Window
         _latestUpdate = info;
         if (info.HasUpdate)
         {
+            // 有新版本：按钮高亮（红字 + 闪电图标 + 升级徽章）
             if (UpdateCheckBtn != null) UpdateCheckBtn.Visibility = Visibility.Visible;
-            if (AppVersionText != null) AppVersionText.Text = $"v{info.LatestVersion}";
+            if (UpdateIcon != null) UpdateIcon.Visibility = Visibility.Visible;
+            if (AppVersionText != null)
+            {
+                AppVersionText.Text = $"v{info.LatestVersion}";
+                AppVersionText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
+                AppVersionText.FontWeight = FontWeights.Bold;
+            }
+            if (UpdateBadge != null) UpdateBadge.Visibility = Visibility.Visible;
             if (UpdateBadgeText != null) UpdateBadgeText.Text = I18nService.T("Main.Upgrade");
         }
         else
         {
-            if (UpdateCheckBtn != null) UpdateCheckBtn.Visibility = Visibility.Collapsed;
+            // 无更新：常驻显示当前版本（朴素样式）
+            ShowCurrentVersion();
+        }
+    }
+
+    /// <summary>左上角常驻显示当前程序版本（无更新时的朴素样式）。</summary>
+    void ShowCurrentVersion()
+    {
+        if (UpdateCheckBtn != null) UpdateCheckBtn.Visibility = Visibility.Visible;
+        if (UpdateIcon != null) UpdateIcon.Visibility = Visibility.Collapsed;
+        if (UpdateBadge != null) UpdateBadge.Visibility = Visibility.Collapsed;
+        var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        if (ver != null && AppVersionText != null)
+        {
+            AppVersionText.Text = $"v{ver.Major}.{ver.Minor}.{ver.Build}";
+            AppVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextDimBrush");
+            AppVersionText.FontWeight = FontWeights.Normal;
         }
     }
 
@@ -3426,6 +3451,14 @@ public partial class MainWindow : Window
                 _latestUpdate = info;
                 Dispatcher.Invoke(() =>
                 {
+                    if (UpdateCheckBtn != null) UpdateCheckBtn.Visibility = Visibility.Visible;
+                    if (UpdateIcon != null) UpdateIcon.Visibility = Visibility.Visible;
+                    if (AppVersionText != null)
+                    {
+                        AppVersionText.Text = $"v{info.LatestVersion}";
+                        AppVersionText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
+                        AppVersionText.FontWeight = FontWeights.Bold;
+                    }
                     UpdateBadge.Visibility = Visibility.Visible;
                     ShowToast(I18nService.F("Msg.NewVersionClickTip", info.LatestVersion));
                 });

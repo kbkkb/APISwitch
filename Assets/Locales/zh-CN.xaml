@@ -325,7 +325,7 @@
     <sys:String x:Key="Msg.CcNotFound">未找到 cc-switch 数据库（~/.cc-switch/cc-switch.db）</sys:String>
     <sys:String x:Key="Msg.CcImported">已从 cc-switch 导入供应商</sys:String>
     <sys:String x:Key="Msg.CcReadFailFmt">读取 cc-switch 数据失败：{0}</sys:String>
-    <sys:String x:Key="Msg.NewVersionClickTip">⚡ 发现新版本 {0}，点击右上角版本号查看更新</sys:String>
+    <sys:String x:Key="Msg.NewVersionClickTip">⚡ 发现新版本 {0}，点击左上角版本号查看更新</sys:String>
 
     <!-- ==================== Card Row Texts ==================== -->
     <sys:String x:Key="Row.SubChatNeedsRouter">Chat 格式 (需路由)</sys:String>
