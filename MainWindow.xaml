@@ -255,17 +255,8 @@
                     </Button>
                 </StackPanel>
 
-                <!-- Middle Draggable Space & Router Status -->
-                <Grid Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
-                    <Button x:Name="TitleBarRouterBtn" HorizontalAlignment="Right" Click="OnToggleProxyServer" Style="{StaticResource GhostButton}"
-                            WindowChrome.IsHitTestVisibleInChrome="True" Padding="8,3"
-                            ToolTip="{DynamicResource Main.RouterToggleTip}">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse x:Name="RouterStatusDot" Width="7" Height="7" Fill="#10B981" Margin="0,0,6,0"/>
-                            <TextBlock x:Name="RouterStatusText" Text="{DynamicResource Main.RouterOff}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}"/>
-                        </StackPanel>
-                    </Button>
-                </Grid>
+                <!-- Middle Draggable Space -->
+                <Grid Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0"/>
 
                 <!-- Window Controls -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">

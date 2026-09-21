@@ -98,8 +98,6 @@
     <sys:String x:Key="Main.MinTip">最小化</sys:String>
     <sys:String x:Key="Main.MaxTip">最大化/还原</sys:String>
     <sys:String x:Key="Main.CloseTip">最小化隐藏</sys:String>
-    <sys:String x:Key="Main.RouterToggleTip">点击开启/关闭本地路由服务（提供协议转译与无缝热切换）</sys:String>
-    <sys:String x:Key="Main.RouterOff">本地路由: 已停用</sys:String>
     <sys:String x:Key="Main.TabAgSub">Google IDE</sys:String>
     <sys:String x:Key="Main.TabCodexSub">OpenAI / Codex API</sys:String>
     <sys:String x:Key="Main.TabClaudeSub">Anthropic CLI</sys:String>
@@ -186,7 +184,6 @@
     <sys:String x:Key="Common.SwitchFailFmt">切换失败：{0}</sys:String>
 
     <!-- ==================== Router UI ==================== -->
-    <sys:String x:Key="Router.TitleOnFmt">⚡ 本地路由 :{0} ({1}/3)</sys:String>
     <sys:String x:Key="Router.ToolbarOnFmt">⚡ 本地路由：已开启 (:{0})</sys:String>
     <sys:String x:Key="Router.ToolbarOff">本地路由：已停用</sys:String>
     <sys:String x:Key="Router.TakeoverFmt">本地路由已接管 (:{0} · {1} · 免重启)</sys:String>
@@ -202,8 +199,6 @@
     <sys:String x:Key="Router.CliOff">Claude CLI 本地路由已停用，Claude CLI 已切回直连模式</sys:String>
     <sys:String x:Key="Router.DesktopOnFmt">Claude 客户端本地路由已开启 (端口 :{0})，已接管 Claude 客户端请求</sys:String>
     <sys:String x:Key="Router.DesktopOff">Claude 客户端本地路由已停用，Claude 客户端已切回直连模式</sys:String>
-    <sys:String x:Key="Router.AllOnFmt">全部本地路由已开启 (端口 :{0})</sys:String>
-    <sys:String x:Key="Router.AllOff">全部本地路由已停用，各应用已切回直连模式</sys:String>
 
     <!-- ==================== Antigravity Tab ==================== -->
     <sys:String x:Key="Ag.HeroBadgeReady">● 检测就绪</sys:String>

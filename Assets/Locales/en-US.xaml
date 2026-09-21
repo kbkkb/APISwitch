@@ -98,8 +98,6 @@
     <sys:String x:Key="Main.MinTip">Minimize</sys:String>
     <sys:String x:Key="Main.MaxTip">Maximize/Restore</sys:String>
     <sys:String x:Key="Main.CloseTip">Hide to tray</sys:String>
-    <sys:String x:Key="Main.RouterToggleTip">Toggle the local router (protocol bridging &amp; seamless hot switching)</sys:String>
-    <sys:String x:Key="Main.RouterOff">Local router: off</sys:String>
     <sys:String x:Key="Main.TabAgSub">Google IDE</sys:String>
     <sys:String x:Key="Main.TabCodexSub">OpenAI / Codex API</sys:String>
     <sys:String x:Key="Main.TabClaudeSub">Anthropic CLI</sys:String>
@@ -186,7 +184,6 @@
     <sys:String x:Key="Common.SwitchFailFmt">Switch failed: {0}</sys:String>
 
     <!-- ==================== Router UI ==================== -->
-    <sys:String x:Key="Router.TitleOnFmt">⚡ Local router :{0} ({1}/3)</sys:String>
     <sys:String x:Key="Router.ToolbarOnFmt">⚡ Local router: ON (:{0})</sys:String>
     <sys:String x:Key="Router.ToolbarOff">Local router: OFF</sys:String>
     <sys:String x:Key="Router.TakeoverFmt">Router active (:{0} · {1} · no restart)</sys:String>
@@ -202,8 +199,6 @@
     <sys:String x:Key="Router.CliOff">Claude CLI router disabled; Claude CLI back to direct mode</sys:String>
     <sys:String x:Key="Router.DesktopOnFmt">Claude client router enabled (port :{0}); requests taken over</sys:String>
     <sys:String x:Key="Router.DesktopOff">Claude client router disabled; back to direct mode</sys:String>
-    <sys:String x:Key="Router.AllOnFmt">All local routers enabled (port :{0})</sys:String>
-    <sys:String x:Key="Router.AllOff">All local routers disabled; apps back to direct mode</sys:String>
 
     <!-- ==================== Antigravity Tab ==================== -->
     <sys:String x:Key="Ag.HeroBadgeReady">● Ready</sys:String>

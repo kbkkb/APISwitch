@@ -1604,16 +1604,16 @@ public partial class MainWindow : Window
                         : I18nService.T("Row.Tip1mInactive"))));
 
         public System.Windows.Media.Brush RouterBadgeBackground => IsRouterActive
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEE, 0xF2, 0xFF))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF3, 0xC7));
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEC, 0xFD, 0xF5))
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF2, 0xF2));
 
         public System.Windows.Media.Brush RouterBadgeBorderBrush => IsRouterActive
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC7, 0xD2, 0xFE))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFD, 0xE6, 0x8A));
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xA7, 0xF3, 0xD0))
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFC, 0xA5, 0xA5));
 
         public System.Windows.Media.Brush RouterBadgeForeground => IsRouterActive
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0x46, 0xE5))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x04, 0x77, 0x58))
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26));
 
         public string SubText
         {
@@ -1684,16 +1684,16 @@ public partial class MainWindow : Window
             : I18nService.F("Row.TipCodexInactiveFmt", P.WireApi == "chat" ? "Chat Completions" : (P.WireApi == "anthropic" ? "Anthropic Messages" : P.WireApi));
 
         public System.Windows.Media.Brush RouterBadgeBackground => IsRouterActive
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEE, 0xF2, 0xFF))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF3, 0xC7));
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEC, 0xFD, 0xF5))
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF2, 0xF2));
 
         public System.Windows.Media.Brush RouterBadgeBorderBrush => IsRouterActive
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC7, 0xD2, 0xFE))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFD, 0xE6, 0x8A));
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xA7, 0xF3, 0xD0))
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFC, 0xA5, 0xA5));
 
         public System.Windows.Media.Brush RouterBadgeForeground => IsRouterActive
-            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4F, 0x46, 0xE5))
-            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x06));
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x04, 0x77, 0x58))
+            : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26));
 
         public string SubText
         {
@@ -2117,17 +2117,32 @@ public partial class MainWindow : Window
         bool isCodex = LocalProxyServer.IsCodexEnabled;
         bool isClaudeCli = LocalProxyServer.IsClaudeCliEnabled;
         bool isClaudeDesktop = LocalProxyServer.IsClaudeDesktopEnabled;
-        int activeCount = (isCodex ? 1 : 0) + (isClaudeCli ? 1 : 0) + (isClaudeDesktop ? 1 : 0);
         int port = LocalProxyServer.Port;
 
-        var onBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green
-        var offBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x94, 0xA3, 0xB8)); // Gray
+        // ===== 三态语义色 =====
+        // ON（路由生效）：鲜艳翠绿 + 微光
+        var onBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x05, 0x96, 0x69));   // vivid emerald dot
+        var activeBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD1, 0xFA, 0xE5));   // vivid emerald bg
+        var activeBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x05, 0x96, 0x69)); // vivid emerald border
+        var activeFg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x04, 0x77, 0x58));   // deep emerald text
+        var chipActiveBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6E, 0xE7, 0xB7));
+        var onGlow = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81),
+            BlurRadius = 10,
+            ShadowDepth = 0,
+            Opacity = 0.55,
+        };
 
-        var activeBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEC, 0xFD, 0xF5)); // Soft emerald
-        var activeBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Vivid emerald border
-        var activeFg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x04, 0x78, 0x57)); // Deep emerald text
-        var chipActiveBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xA7, 0xF3, 0xD0));
+        // 需开启但未开启（告警）：警示红
+        var warnBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26));   // red dot
+        var warnBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFE, 0xF2, 0xF2));      // red bg
+        var warnBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFC, 0xCA, 0xCA));  // red border
+        var warnFg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB9, 0x1C, 0x1C));     // deep red text
+        var chipWarnBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFC, 0xA5, 0xA5));
 
+        // OFF 且无需路由（中性）：灰
+        var offBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x94, 0xA3, 0xB8));
         var inactiveBg = System.Windows.Media.Brushes.White;
         var inactiveBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xCB, 0xD5, 0xE1));
         var inactiveFg = (System.Windows.Media.Brush)FindResource("TextDimBrush");
@@ -2135,43 +2150,26 @@ public partial class MainWindow : Window
         var chipInactiveBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE2, 0xE8, 0xF0));
         var chipInactiveFg = (System.Windows.Media.Brush)FindResource("TextMutedBrush");
 
-        // Global TitleBar
-        if (TitleBarRouterBtn != null)
-        {
-            TitleBarRouterBtn.Background = activeCount > 0 ? activeBg : inactiveBg;
-            TitleBarRouterBtn.BorderBrush = activeCount > 0 ? activeBorder : inactiveBorder;
-        }
-        if (RouterStatusDot != null) RouterStatusDot.Fill = activeCount > 0 ? onBrush : offBrush;
-        if (RouterStatusText != null)
-        {
-            RouterStatusText.Text = activeCount > 0 ? I18nService.F("Router.TitleOnFmt", port, activeCount) : I18nService.T("Main.RouterOff");
-            RouterStatusText.Foreground = activeCount > 0 ? activeFg : inactiveFg;
-            RouterStatusText.FontWeight = activeCount > 0 ? FontWeights.SemiBold : FontWeights.Normal;
-        }
+        bool anyOn = isCodex || isClaudeCli || isClaudeDesktop;
 
         // Codex
-        if (CodexToolbarRouterBtn != null)
-        {
-            CodexToolbarRouterBtn.Background = isCodex ? activeBg : inactiveBg;
-            CodexToolbarRouterBtn.BorderBrush = isCodex ? activeBorder : inactiveBorder;
-        }
-        if (CodexToolbarRouterDot != null) CodexToolbarRouterDot.Fill = isCodex ? onBrush : offBrush;
-        if (CodexToolbarRouterText != null)
-        {
-            CodexToolbarRouterText.Text = isCodex ? I18nService.F("Router.ToolbarOnFmt", port) : I18nService.T("Router.ToolbarOff");
-            CodexToolbarRouterText.Foreground = isCodex ? activeFg : inactiveFg;
-            CodexToolbarRouterText.FontWeight = isCodex ? FontWeights.SemiBold : FontWeights.Normal;
-        }
+        bool codexNeeds = CodexProviderNeedsRouter(CodexCli.GetActiveProvider());
+        ApplyChannelRouterUi(
+            isCodex, codexNeeds,
+            CodexToolbarRouterBtn, CodexToolbarRouterDot, CodexToolbarRouterText, port,
+            onBrush, activeBg, activeBorder, activeFg,
+            warnBrush, warnBg, warnBorder, warnFg,
+            offBrush, inactiveBg, inactiveBorder, inactiveFg);
         if (CodexRouterChip != null)
         {
-            CodexRouterChip.Background = isCodex ? activeBg : chipInactiveBg;
-            CodexRouterChip.BorderBrush = isCodex ? chipActiveBorder : chipInactiveBorder;
+            CodexRouterChip.Background = isCodex ? activeBg : (codexNeeds ? warnBg : chipInactiveBg);
+            CodexRouterChip.BorderBrush = isCodex ? chipActiveBorder : (codexNeeds ? chipWarnBorder : chipInactiveBorder);
         }
-        if (CodexRouterDot != null) CodexRouterDot.Fill = isCodex ? onBrush : offBrush;
+        if (CodexRouterDot != null) CodexRouterDot.Fill = isCodex ? onBrush : (codexNeeds ? warnBrush : offBrush);
         if (CodexRouterChipText != null)
         {
-            CodexRouterChipText.Foreground = isCodex ? activeFg : chipInactiveFg;
-            CodexRouterChipText.FontWeight = isCodex ? FontWeights.SemiBold : FontWeights.Normal;
+            CodexRouterChipText.Foreground = isCodex ? activeFg : (codexNeeds ? warnFg : chipInactiveFg);
+            CodexRouterChipText.FontWeight = isCodex ? FontWeights.SemiBold : (codexNeeds ? FontWeights.SemiBold : FontWeights.Normal);
             var active = CodexCli.GetActiveProvider();
             if (active != null && !active.IsOfficial)
             {
@@ -2188,28 +2186,23 @@ public partial class MainWindow : Window
         }
 
         // Claude CLI
-        if (ClaudeToolbarRouterBtn != null)
-        {
-            ClaudeToolbarRouterBtn.Background = isClaudeCli ? activeBg : inactiveBg;
-            ClaudeToolbarRouterBtn.BorderBrush = isClaudeCli ? activeBorder : inactiveBorder;
-        }
-        if (ClaudeToolbarRouterDot != null) ClaudeToolbarRouterDot.Fill = isClaudeCli ? onBrush : offBrush;
-        if (ClaudeToolbarRouterText != null)
-        {
-            ClaudeToolbarRouterText.Text = isClaudeCli ? I18nService.F("Router.ToolbarOnFmt", port) : I18nService.T("Router.ToolbarOff");
-            ClaudeToolbarRouterText.Foreground = isClaudeCli ? activeFg : inactiveFg;
-            ClaudeToolbarRouterText.FontWeight = isClaudeCli ? FontWeights.SemiBold : FontWeights.Normal;
-        }
+        bool claudeNeeds = ClaudeProviderNeedsRouter(ClaudeCli.GetActiveProvider(), isDesktop: false);
+        ApplyChannelRouterUi(
+            isClaudeCli, claudeNeeds,
+            ClaudeToolbarRouterBtn, ClaudeToolbarRouterDot, ClaudeToolbarRouterText, port,
+            onBrush, activeBg, activeBorder, activeFg,
+            warnBrush, warnBg, warnBorder, warnFg,
+            offBrush, inactiveBg, inactiveBorder, inactiveFg);
         if (ClaudeRouterChip != null)
         {
-            ClaudeRouterChip.Background = isClaudeCli ? activeBg : chipInactiveBg;
-            ClaudeRouterChip.BorderBrush = isClaudeCli ? chipActiveBorder : chipInactiveBorder;
+            ClaudeRouterChip.Background = isClaudeCli ? activeBg : (claudeNeeds ? warnBg : chipInactiveBg);
+            ClaudeRouterChip.BorderBrush = isClaudeCli ? chipActiveBorder : (claudeNeeds ? chipWarnBorder : chipInactiveBorder);
         }
-        if (ClaudeRouterDot != null) ClaudeRouterDot.Fill = isClaudeCli ? onBrush : offBrush;
+        if (ClaudeRouterDot != null) ClaudeRouterDot.Fill = isClaudeCli ? onBrush : (claudeNeeds ? warnBrush : offBrush);
         if (ClaudeRouterChipText != null)
         {
-            ClaudeRouterChipText.Foreground = isClaudeCli ? activeFg : chipInactiveFg;
-            ClaudeRouterChipText.FontWeight = isClaudeCli ? FontWeights.SemiBold : FontWeights.Normal;
+            ClaudeRouterChipText.Foreground = isClaudeCli ? activeFg : (claudeNeeds ? warnFg : chipInactiveFg);
+            ClaudeRouterChipText.FontWeight = isClaudeCli ? FontWeights.SemiBold : (claudeNeeds ? FontWeights.SemiBold : FontWeights.Normal);
             var active = ClaudeCli.GetActiveProvider();
             if (active != null && !active.IsOfficial)
             {
@@ -2224,28 +2217,23 @@ public partial class MainWindow : Window
         }
 
         // Claude Desktop
-        if (DesktopToolbarRouterBtn != null)
-        {
-            DesktopToolbarRouterBtn.Background = isClaudeDesktop ? activeBg : inactiveBg;
-            DesktopToolbarRouterBtn.BorderBrush = isClaudeDesktop ? activeBorder : inactiveBorder;
-        }
-        if (DesktopToolbarRouterDot != null) DesktopToolbarRouterDot.Fill = isClaudeDesktop ? onBrush : offBrush;
-        if (DesktopToolbarRouterText != null)
-        {
-            DesktopToolbarRouterText.Text = isClaudeDesktop ? I18nService.F("Router.ToolbarOnFmt", port) : I18nService.T("Router.ToolbarOff");
-            DesktopToolbarRouterText.Foreground = isClaudeDesktop ? activeFg : inactiveFg;
-            DesktopToolbarRouterText.FontWeight = isClaudeDesktop ? FontWeights.SemiBold : FontWeights.Normal;
-        }
+        bool desktopNeeds = ClaudeProviderNeedsRouter(ClaudeDesktopCli.GetActiveProvider(), isDesktop: true);
+        ApplyChannelRouterUi(
+            isClaudeDesktop, desktopNeeds,
+            DesktopToolbarRouterBtn, DesktopToolbarRouterDot, DesktopToolbarRouterText, port,
+            onBrush, activeBg, activeBorder, activeFg,
+            warnBrush, warnBg, warnBorder, warnFg,
+            offBrush, inactiveBg, inactiveBorder, inactiveFg);
         if (DesktopRouterChip != null)
         {
-            DesktopRouterChip.Background = isClaudeDesktop ? activeBg : chipInactiveBg;
-            DesktopRouterChip.BorderBrush = isClaudeDesktop ? chipActiveBorder : chipInactiveBorder;
+            DesktopRouterChip.Background = isClaudeDesktop ? activeBg : (desktopNeeds ? warnBg : chipInactiveBg);
+            DesktopRouterChip.BorderBrush = isClaudeDesktop ? chipActiveBorder : (desktopNeeds ? chipWarnBorder : chipInactiveBorder);
         }
-        if (DesktopRouterDot != null) DesktopRouterDot.Fill = isClaudeDesktop ? onBrush : offBrush;
+        if (DesktopRouterDot != null) DesktopRouterDot.Fill = isClaudeDesktop ? onBrush : (desktopNeeds ? warnBrush : offBrush);
         if (DesktopRouterChipText != null)
         {
-            DesktopRouterChipText.Foreground = isClaudeDesktop ? activeFg : chipInactiveFg;
-            DesktopRouterChipText.FontWeight = isClaudeDesktop ? FontWeights.SemiBold : FontWeights.Normal;
+            DesktopRouterChipText.Foreground = isClaudeDesktop ? activeFg : (desktopNeeds ? warnFg : chipInactiveFg);
+            DesktopRouterChipText.FontWeight = isClaudeDesktop ? FontWeights.SemiBold : (desktopNeeds ? FontWeights.SemiBold : FontWeights.Normal);
             var active = ClaudeDesktopCli.GetActiveProvider();
             if (active != null && !active.IsOfficial)
             {
@@ -2259,6 +2247,51 @@ public partial class MainWindow : Window
             }
         }
     }
+
+    /// <summary>渠道工具栏三态配色：开=翠绿 / 关且需路由=警示红 / 关且无需=灰。</summary>
+    static void ApplyChannelRouterUi(
+        bool isOn, bool needs,
+        System.Windows.Controls.Button? btn, System.Windows.Shapes.Ellipse? dot, System.Windows.Controls.TextBlock? text, int port,
+        System.Windows.Media.SolidColorBrush onBrush,
+        System.Windows.Media.SolidColorBrush activeBg, System.Windows.Media.SolidColorBrush activeBorder, System.Windows.Media.SolidColorBrush activeFg,
+        System.Windows.Media.SolidColorBrush warnBrush,
+        System.Windows.Media.SolidColorBrush warnBg, System.Windows.Media.SolidColorBrush warnBorder, System.Windows.Media.SolidColorBrush warnFg,
+        System.Windows.Media.SolidColorBrush offBrush,
+        System.Windows.Media.Brush inactiveBg, System.Windows.Media.SolidColorBrush inactiveBorder, System.Windows.Media.Brush inactiveFg)
+    {
+        var bg = isOn ? activeBg : (needs ? warnBg : inactiveBg);
+        var border = isOn ? activeBorder : (needs ? warnBorder : inactiveBorder);
+        var fg = isOn ? activeFg : (needs ? warnFg : inactiveFg);
+
+        if (btn != null)
+        {
+            btn.Background = bg;
+            btn.BorderBrush = border;
+        }
+        if (dot != null) dot.Fill = isOn ? onBrush : (needs ? warnBrush : offBrush);
+        if (text != null)
+        {
+            text.Text = isOn ? I18nService.F("Router.ToolbarOnFmt", port) : I18nService.T("Router.ToolbarOff");
+            text.Foreground = fg;
+            text.FontWeight = isOn || needs ? FontWeights.SemiBold : FontWeights.Normal;
+        }
+    }
+
+    /// <summary>Codex 供应商是否必须走本地路由（与 CodexRow.RequiresRouter 同规则）。</summary>
+    static bool CodexProviderNeedsRouter(CodexProvider? p) =>
+        p != null && !p.IsOfficial && (
+            string.Equals(p.WireApi, "chat", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.WireApi, "anthropic", StringComparison.OrdinalIgnoreCase) ||
+            (p.ExtraOptions != null && p.ExtraOptions.TryGetValue("require_proxy", out var rp) && bool.TryParse(rp, out var b) && b));
+
+    /// <summary>Claude 供应商是否必须走本地路由（与 ClaudeRow.RequiresRouter 同规则）。</summary>
+    static bool ClaudeProviderNeedsRouter(ClaudeProvider? p, bool isDesktop) =>
+        p != null && !p.IsOfficial && (
+            string.Equals(p.WireApi, "chat", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.WireApi, "responses", StringComparison.OrdinalIgnoreCase) ||
+            (isDesktop && string.Equals(p.AccessMode, "mapping", StringComparison.OrdinalIgnoreCase)) ||
+            (!isDesktop && p.ModelMappings != null && p.ModelMappings.Any(m => m.Supports1m)) ||
+            (p.ExtraOptions != null && p.ExtraOptions.TryGetValue("require_proxy", out var rp) && bool.TryParse(rp, out var b) && b));
 
     void OnToggleCodexProxy(object sender, RoutedEventArgs e)
     {
@@ -2305,22 +2338,6 @@ public partial class MainWindow : Window
         }
     }
 
-    void OnToggleProxyServer(object sender, RoutedEventArgs e)
-    {
-        var newState = !LocalProxyServer.IsEnabled;
-        LocalProxyServer.SetEnabled(newState);
-        RefreshCodex();
-        RefreshClaude();
-        RefreshDesktop();
-        if (newState)
-        {
-            ShowToast(I18nService.F("Router.AllOnFmt", LocalProxyServer.Port));
-        }
-        else
-        {
-            ShowToast(I18nService.T("Router.AllOff"));
-        }
-    }
 
     void OnAddCodex(object sender, RoutedEventArgs e) => EditCodex(null);
 

@@ -9,9 +9,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>APISwitch</AssemblyName>
     <RootNamespace>APISwitch</RootNamespace>
-    <Version>0.1.1</Version>
-    <FileVersion>0.1.1.0</FileVersion>
-    <AssemblyVersion>0.1.1.0</AssemblyVersion>
+    <Version>0.2.1</Version>
+    <FileVersion>0.2.1.0</FileVersion>
+    <AssemblyVersion>0.2.1.0</AssemblyVersion>
     <Product>APISwitch</Product>
     <Description>第三方 API 和谷歌官方订阅切换与管理</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
