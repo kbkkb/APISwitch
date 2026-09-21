@@ -1,9 +1,10 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 using APISwitch.Services;
 
 namespace APISwitch.Models;
 
-public class Profile
+public class Profile : INotifyPropertyChanged
 {
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
@@ -45,6 +46,25 @@ public class Profile
     public long? ActivationLatencyMs { get; set; }
     public string? ActivationError { get; set; }
 
+    // 配额用尽重置时间（429 时由 Google 响应捕获，用于倒计时展示）
+    public DateTime? QuotaExhaustedResetAt { get; set; }
+
+    // 最近一次激活是否因 429 配额用尽而失败（用于徽章/Toast 区分“用尽”与“真失败”）
+    public bool QuotaExhausted { get; set; }
+
+    // 激活中标志（UI 微交互：按钮旋转动画 + 防抖）
+    [JsonIgnore]
+    public bool IsActivating
+    {
+        get => _isActivating;
+        set { if (_isActivating != value) { _isActivating = value; OnPropertyChanged(nameof(IsActivating)); } }
+    }
+    private bool _isActivating;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged(string name) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
     [JsonIgnore]
     public bool HasActivationStatus => IsActivated.HasValue;
 
@@ -58,6 +78,21 @@ public class Profile
                 if (ActivationLatencyMs.HasValue && ActivationLatencyMs.Value > 0)
                     return I18nService.F("Ag.ActivatedLatencyFmt", ActivationLatencyMs.Value);
                 return I18nService.T("Ag.Activated");
+            }
+            // 429 用尽：QuotaExhaustedResetAt 仅由 429 路径写入，其存在即代表上次失败为配额用尽
+            // （兼容不含 QuotaExhausted 标志的旧存档）
+            if (QuotaExhaustedResetAt.HasValue)
+            {
+                if (QuotaExhaustedResetAt.Value > DateTime.UtcNow)
+                {
+                    var left = QuotaExhaustedResetAt.Value - DateTime.UtcNow;
+                    var cd = left.TotalHours >= 1
+                        ? $"{(int)left.TotalHours}h {left.Minutes}m"
+                        : $"{left.Minutes}m {left.Seconds}s";
+                    return I18nService.F("Ag.ExhaustedCountdownFmt", cd);
+                }
+                // 重置时间已过：配额应已恢复，归为待激活而非“失败”
+                return I18nService.T("Ag.PendingActivation");
             }
             if (IsActivated == false)
             {

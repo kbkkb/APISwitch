@@ -354,15 +354,26 @@ public partial class MainWindow : Window
     async void OnCardActivateQuota(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Profile target) return;
-        SetBusy(I18nService.F("Msg.AgActivatingFmt", target.Email));
+        if (target.IsActivating) return; // 防抖：激活中忽略重复点击
+
+        target.IsActivating = true;
         try
         {
-            var (ok, latencyMs, msg) = await AgQuotaService.ActivateAccountQuotaAsync(target);
+            SetBusy(I18nService.F("Msg.AgActivatingFmt", target.Email));
+            var (ok, latencyMs, msg, rateLimited) = await AgQuotaService.ActivateAccountQuotaAsync(target);
             ClearBusy();
             RefreshAntigravity();
             if (ok)
             {
                 ShowToast(I18nService.F("Msg.AgActivatedFmt", target.Email, latencyMs));
+            }
+            else if (rateLimited)
+            {
+                // 429 用尽不是“失败”：提示重置时间，不用错误样式
+                var reset = target.QuotaExhaustedResetAt.HasValue
+                    ? target.QuotaExhaustedResetAt.Value.ToLocalTime().ToString("HH:mm")
+                    : "—";
+                ShowToast(I18nService.F("Msg.AgQuotaExhaustedFmt", target.Email, reset), isInfo: true);
             }
             else
             {
@@ -373,6 +384,10 @@ public partial class MainWindow : Window
         {
             ClearBusy();
             ShowToast(I18nService.F("Msg.AgActivateErrorFmt", ex.Message), isError: true);
+        }
+        finally
+        {
+            target.IsActivating = false;
         }
     }
 
@@ -391,11 +406,13 @@ public partial class MainWindow : Window
         for (int i = 0; i < _profiles.Count; i++)
         {
             var p = _profiles[i];
+            p.IsActivating = true;
+            Dispatcher.Invoke(() => ProfileList.Items.Refresh());
             SetBusy(I18nService.F("Msg.AgBatchProgressFmt", i + 1, count, p.Email));
 
             try
             {
-                var (ok, latencyMs, msg) = await AgQuotaService.ActivateAccountQuotaAsync(p);
+                var (ok, latencyMs, msg, rateLimited) = await AgQuotaService.ActivateAccountQuotaAsync(p);
                 if (ok) successCount++;
                 else failCount++;
             }
@@ -405,6 +422,10 @@ public partial class MainWindow : Window
                 p.IsActivated = false;
                 p.ActivationError = ex.Message;
                 ProfileStore.Save(p);
+            }
+            finally
+            {
+                p.IsActivating = false;
             }
 
             RefreshAntigravity();

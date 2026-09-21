@@ -71,9 +71,18 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         LogStartup($"OnStartup start, args=[{string.Join(" ", e.Args)}]");
+        // 语言字典需在任何 UI / 诊断路径之前就绪（selftest / render-test 同样需要本地化文本）
+        I18nService.Initialize();
+        LogStartup($"I18n initialized, language={I18nService.ResolvedLanguage}.");
         if (e.Args.Contains("--probe"))
         {
             RunProbe();
+            Shutdown();
+            return;
+        }
+        if (e.Args.Length >= 2 && e.Args[0] == "--activate")
+        {
+            RunActivate(e.Args[1]);
             Shutdown();
             return;
         }
@@ -182,8 +191,6 @@ public partial class App : System.Windows.Application
 
         LocalProxyServer.Initialize();
         LogStartup("LocalProxyServer initialized.");
-        I18nService.Initialize();
-        LogStartup($"I18n initialized, language={I18nService.ResolvedLanguage}.");
 
         // 修复：ComboBox 聚焦（未展开下拉）时滚轮会误切换选中项。
         // 在隧道阶段拦截（Combo 自身的 OnMouseWheel 在冒泡阶段），未展开时把滚轮
@@ -501,6 +508,57 @@ public partial class App : System.Windows.Application
         {
             sb.AppendLine("think_channels_err=" + ex.Message);
         }
+        // ===== Antigravity 激活引擎断言 =====
+        try
+        {
+            // 1) Claude 候选模型动态筛选：sonnet 优先 + 版本升序（最老优先）
+            var claudePicked = Services.AgQuotaService.ResolveClaudeModels(new List<string>
+            {
+                "gemini-2.5-flash", "claude-opus-4-6", "claude-sonnet-4-6", "claude-sonnet-4-5", "gpt-5"
+            });
+            sb.AppendLine("ag_claude_pick=" + string.Join(",", claudePicked));
+
+            // 1b) Gemini 候选：无 low/lite 后缀的新模型（如 gemini-3.5-flash）也必须被选中；
+            //     有空列表时必须返回空（绝不硬编码猜测模型名）
+            var geminiPicked = Services.AgQuotaService.ResolveGeminiModels(new List<string>
+            {
+                "gemini-3.5-pro", "gemini-3.5-flash", "gemini-2.5-pro", "claude-sonnet-4-6"
+            });
+            sb.AppendLine("ag_gemini_pick=" + string.Join(",", geminiPicked));
+            sb.AppendLine("ag_gemini_empty=" + Services.AgQuotaService.ResolveGeminiModels(new List<string>()).Count);
+            sb.AppendLine("ag_claude_empty=" + Services.AgQuotaService.ResolveClaudeModels(new List<string>()).Count);
+
+            // 2) SSE 候选判定：合法 candidates → true；含 text 字段的错误 JSON → false
+            sb.AppendLine("ag_sse_valid=" + Services.AgQuotaService.IsValidCandidateData(
+                "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"}]}}]}"));
+            sb.AppendLine("ag_sse_error_json=" + Services.AgQuotaService.IsValidCandidateData(
+                "{\"error\":{\"message\":\"text field mentioned but failed\"}}"));
+
+            // 3) 三态徽章文本：已激活 / 用尽倒计时 / 待激活
+            var pAct = new Models.Profile { IsActivated = true, ActivationLatencyMs = 850 };
+            sb.AppendLine("ag_status_activated=" + pAct.ActivationStatusText);
+            var pExh = new Models.Profile { IsActivated = false, QuotaExhaustedResetAt = DateTime.UtcNow.AddMinutes(95) };
+            sb.AppendLine("ag_status_exhausted=" + pExh.ActivationStatusText);
+            var pNone = new Models.Profile();
+            sb.AppendLine("ag_status_pending=" + pNone.ActivationStatusText);
+
+            // 3b) QuotaExhausted 标志语义：未来重置→倒计时；已过重置→待激活（非“失败”）
+            var pExhFuture = new Models.Profile { IsActivated = false, QuotaExhausted = true, QuotaExhaustedResetAt = DateTime.UtcNow.AddHours(2) };
+            sb.AppendLine("ag_exhausted_future=" + pExhFuture.ActivationStatusText);
+            var pExhPast = new Models.Profile { IsActivated = false, QuotaExhausted = true, QuotaExhaustedResetAt = DateTime.UtcNow.AddHours(-1) };
+            sb.AppendLine("ag_exhausted_past=" + pExhPast.ActivationStatusText);
+            var pRealFail = new Models.Profile { IsActivated = false, ActivationError = "token" };
+            sb.AppendLine("ag_real_fail=" + pRealFail.ActivationStatusText);
+            // 4) 批量激活按钮可见（曾误置 Collapsed 导致功能不可达）
+            var mw2 = new MainWindow { Visibility = Visibility.Hidden };
+            var batchBtn = mw2.FindName("BatchActivateBtn") as System.Windows.Controls.Control;
+            sb.AppendLine("ag_batch_btn=" + (batchBtn != null && batchBtn.Visibility == Visibility.Visible ? "visible" : "hidden"));
+            mw2.Close();
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("ag_activation_err=" + ex.Message);
+        }
         // ProviderDialog 各模式的默认模型区可见性断言（防回归）
         try
         {
@@ -530,9 +588,61 @@ public partial class App : System.Windows.Application
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "apiswitch-selftest.txt"), sb.ToString());
     }
 
-    static void RunProbe()
+    /// <summary>诊断模式：对指定邮箱的存档账号执行一次真实激活，输出可用模型与结果。</summary>
+    static void RunActivate(string email)
     {
+        // 在后台线程执行，避免阻塞 STA 调度线程导致异步续延死锁
         var sb = new StringBuilder();
+        try
+        {
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                var inner = new StringBuilder();
+                try
+                {
+                    var profiles = ProfileStore.Load();
+                    var p = profiles.FirstOrDefault(x => string.Equals(x.Email, email, StringComparison.OrdinalIgnoreCase));
+                    if (p == null)
+                    {
+                        inner.AppendLine("profile-not-found");
+                    }
+                    else
+                    {
+                        inner.AppendLine("email=" + p.Email);
+                        var tokenOk = AgQuotaService.EnsureFreshTokenAsync(p).GetAwaiter().GetResult();
+                        inner.AppendLine("token_ok=" + tokenOk);
+                        if (tokenOk && !string.IsNullOrEmpty(p.AccessToken))
+                        {
+                            var models = AgQuotaService.FetchAvailableModelNamesAsync(p, p.AccessToken).GetAwaiter().GetResult();
+                            inner.AppendLine("available_models_count=" + models.Count);
+                            inner.AppendLine("available_models=" + string.Join(", ", models));
+                            inner.AppendLine("gemini_candidates=" + string.Join(", ", AgQuotaService.ResolveGeminiModels(models)));
+                            inner.AppendLine("claude_candidates=" + string.Join(", ", AgQuotaService.ResolveClaudeModels(models)));
+                        }
+                        var (ok, latency, msg, rateLimited) = AgQuotaService.ActivateAccountQuotaAsync(p).GetAwaiter().GetResult();
+                        inner.AppendLine("activate_ok=" + ok);
+                        inner.AppendLine("activate_rate_limited=" + rateLimited);
+                        inner.AppendLine("activate_latency_ms=" + latency);
+                        inner.AppendLine("activate_message=" + msg);
+                        inner.AppendLine("exhausted_reset_utc=" + (p.QuotaExhaustedResetAt?.ToString("O") ?? "-"));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    inner.AppendLine("activate_err=" + ex);
+                }
+                sb.Append(inner);
+            }).Wait(TimeSpan.FromMinutes(3));
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("activate_outer_err=" + ex.Message);
+        }
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "apiswitch-activate.txt"), sb.ToString());
+    }
+
+    static void RunProbe()
+    {        var sb = new StringBuilder();
         var db = AgPaths.FindStateDb();
         sb.AppendLine("db=" + (db ?? "null"));
         sb.AppendLine("exe=" + (AgPaths.FindIdeExecutable() ?? "null"));

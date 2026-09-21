@@ -282,6 +282,7 @@
     <sys:String x:Key="Msg.AgLoginFailFmt">登录失败: {0}</sys:String>
     <sys:String x:Key="Msg.AgActivatingFmt">正在向 Google 发送激活消息并刷新 {0} 的限额…</sys:String>
     <sys:String x:Key="Msg.AgActivatedFmt">⚡ {0} 账号限额已激活并刷新 (延迟 {1}ms)</sys:String>
+    <sys:String x:Key="Msg.AgQuotaExhaustedFmt">⚡ {0} 配额已用尽，将于 {1} 重置（已同步最新配额状态）</sys:String>
     <sys:String x:Key="Msg.AgActivateFailFmt">激活限额失败: {0}</sys:String>
     <sys:String x:Key="Msg.AgActivateErrorFmt">激活限额异常: {0}</sys:String>
     <sys:String x:Key="Msg.AgBatchEmpty">当前没有账号存档可供激活</sys:String>
@@ -522,6 +523,7 @@
 
     <!-- ==================== Antigravity Profile Card / Quota ==================== -->
     <sys:String x:Key="Ag.ActivatedLatencyFmt">● 已激活 ({0}ms)</sys:String>
+    <sys:String x:Key="Ag.ExhaustedCountdownFmt">● 已用尽 ({0} 后重置)</sys:String>
     <sys:String x:Key="Ag.Activated">● 已激活</sys:String>
     <sys:String x:Key="Ag.ActivationFailed">● 激活失败</sys:String>
     <sys:String x:Key="Ag.PendingActivation">○ 待激活</sys:String>
@@ -559,4 +561,7 @@
     <sys:String x:Key="AgQ.OkGeminiOnlyFmt">Gemini({0}) 限额已激活</sys:String>
     <sys:String x:Key="AgQ.OkSummaryFmt">限额激活成功（{0} · {1} · 耗时 {2}ms）</sys:String>
     <sys:String x:Key="AgQ.ErrRateLimited">当前模型已达限额或未收到有效响应（已同步最新配额状态）</sys:String>
+    <sys:String x:Key="AgQ.ErrRateLimitedRpm">触发 Google 分钟级限流（429，配额仍充足），已自动重试一次；请稍等 1~2 分钟后再试</sys:String>
+    <sys:String x:Key="AgQ.ErrNoValidStream">未收到有效流式响应（候选模型均不可用或网络异常）</sys:String>
+    <sys:String x:Key="AgQ.ErrNoModelList">无法获取该账号的可用模型列表（fetchAvailableModels 失败），已中止激活以避免请求不存在的模型</sys:String>
 </ResourceDictionary>

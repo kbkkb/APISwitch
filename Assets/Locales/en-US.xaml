@@ -282,6 +282,7 @@
     <sys:String x:Key="Msg.AgLoginFailFmt">Login failed: {0}</sys:String>
     <sys:String x:Key="Msg.AgActivatingFmt">Sending activation message to Google and refreshing {0}'s quota…</sys:String>
     <sys:String x:Key="Msg.AgActivatedFmt">⚡ {0} quota activated ＆ refreshed ({1} ms)</sys:String>
+    <sys:String x:Key="Msg.AgQuotaExhaustedFmt">⚡ {0} quota exhausted, resets at {1} (latest quota state synced)</sys:String>
     <sys:String x:Key="Msg.AgActivateFailFmt">Quota activation failed: {0}</sys:String>
     <sys:String x:Key="Msg.AgActivateErrorFmt">Quota activation error: {0}</sys:String>
     <sys:String x:Key="Msg.AgBatchEmpty">No archived accounts to activate</sys:String>
@@ -522,6 +523,7 @@
 
     <!-- ==================== Antigravity Profile Card / Quota ==================== -->
     <sys:String x:Key="Ag.ActivatedLatencyFmt">● Activated ({0} ms)</sys:String>
+    <sys:String x:Key="Ag.ExhaustedCountdownFmt">● Quota exhausted (resets in {0})</sys:String>
     <sys:String x:Key="Ag.Activated">● Activated</sys:String>
     <sys:String x:Key="Ag.ActivationFailed">● Activation failed</sys:String>
     <sys:String x:Key="Ag.PendingActivation">○ Pending activation</sys:String>
@@ -559,4 +561,7 @@
     <sys:String x:Key="AgQ.OkGeminiOnlyFmt">Gemini ({0}) quota activated</sys:String>
     <sys:String x:Key="AgQ.OkSummaryFmt">Quota activated ({0} · {1} · {2} ms)</sys:String>
     <sys:String x:Key="AgQ.ErrRateLimited">Current model hit its limit or no valid response (latest quota state synced)</sys:String>
+    <sys:String x:Key="AgQ.ErrRateLimitedRpm">Google per-minute rate limit hit (429, quota still available); auto-retried once — please try again in 1-2 minutes</sys:String>
+    <sys:String x:Key="AgQ.ErrNoValidStream">No valid stream response (all candidate models unavailable or network error)</sys:String>
+    <sys:String x:Key="AgQ.ErrNoModelList">Could not fetch the account's available model list (fetchAvailableModels failed); activation aborted to avoid requesting non-existent models</sys:String>
 </ResourceDictionary>

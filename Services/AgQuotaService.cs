@@ -117,9 +117,9 @@ public static class AgQuotaService
         string? companionProject = null;
         var loadUrls = new[]
         {
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
-            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
+"https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+"https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
         };
 
         foreach (var url in loadUrls)
@@ -188,6 +188,36 @@ public static class AgQuotaService
         }
     }
 
+    private static string? ParseTierName(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("paidTier", out var pt) && pt.TryGetProperty("name", out var pn))
+                return pn.GetString();
+            if (root.TryGetProperty("currentTier", out var ct) && ct.TryGetProperty("name", out var cn))
+                return cn.GetString();
+        }
+        catch { }
+        return null;
+    }
+
+    private static string? ParseProjectId(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("cloudaicompanionProject", out var cp) && cp.ValueKind == JsonValueKind.String)
+                return cp.GetString();
+            if (root.TryGetProperty("companionProject", out var cp2) && cp2.TryGetProperty("projectId", out var pid))
+                return pid.GetString();
+        }
+        catch { }
+        return null;
+    }
+
     private static string GetMachineId(Profile profile)
     {
         if (!string.IsNullOrEmpty(profile.DeviceProfile?.MachineId))
@@ -222,9 +252,9 @@ public static class AgQuotaService
     {
         var modelUrls = new[]
         {
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-            "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
+"https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+"https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
         };
 
         foreach (var url in modelUrls)
@@ -244,11 +274,23 @@ public static class AgQuotaService
                     if (doc.RootElement.TryGetProperty("models", out var modelsElem))
                     {
                         var list = new List<string>();
+                        var quotaSummary = new List<string>();
                         foreach (var prop in modelsElem.EnumerateObject())
                         {
                             list.Add(prop.Name);
+                            // per-model 配额信息（diagnose：判断 429 是否源于模型级限额）
+                            if (prop.Value.TryGetProperty("quotaInfo", out var qi) &&
+                                qi.TryGetProperty("remainingFraction", out var rf) &&
+                                rf.TryGetDouble(out var rfd))
+                            {
+                                quotaSummary.Add($"{prop.Name}={rfd:0.##}");
+                            }
                         }
-                        if (list.Count > 0) return list;
+                        if (list.Count > 0)
+                        {
+                            App.LogStartup($"AgFetchModels: {list.Count} models; quota: {string.Join(" ", quotaSummary)}");
+                            return list;
+                        }
                     }
                 }
             }
@@ -258,39 +300,63 @@ public static class AgQuotaService
     }
 
     /// <summary>
-    /// 从官方可用模型中，提取支持且开销最低的 Gemini Flash-low 模型列表，按版本升序排列（优先使用当前最老但有效的 low 模型以最大限度节省额度消耗）
+    /// 从账号实时拉回的可用模型中筛选 Gemini 候选，严格按“开销从低到高”分层：
+    ///   1) flash + low/lite（最低开销档）
+    ///   2) 任意 flash
+    ///   3) 任意 gemini
+    /// 同层内按版本升序（最老优先，保证向后兼容）。
+    /// **绝不使用硬编码模型名**——拉取失败时返回空列表，由调用方报明确错误，
+    /// 避免拿猜测的模型名去打 Google 导致 404/429 误判。
     /// </summary>
-    public static List<string> ResolveGeminiFlashLowModels(List<string> availableModels)
+    public static List<string> ResolveGeminiModels(List<string> availableModels)
     {
-        var fallbackList = new List<string>
-        {
-            "gemini-3.6-flash-low",
-            "gemini-3.7-flash-low",
-            "gemini-3.8-flash-low"
-        };
-
         if (availableModels == null || availableModels.Count == 0)
-            return fallbackList;
+            return new List<string>();
 
-        var geminiFlash = availableModels
-            .Where(m => m.Contains("gemini", StringComparison.OrdinalIgnoreCase) &&
-                        m.Contains("flash", StringComparison.OrdinalIgnoreCase))
+        var gemini = availableModels
+            .Where(m => m.Contains("gemini", StringComparison.OrdinalIgnoreCase))
             .ToList();
+        if (gemini.Count == 0) return new List<string>();
 
-        if (geminiFlash.Count == 0)
-            return fallbackList;
+        var flash = gemini.Where(m => m.Contains("flash", StringComparison.OrdinalIgnoreCase)).ToList();
+        var lowTier = flash.Where(m =>
+            m.Contains("low", StringComparison.OrdinalIgnoreCase) ||
+            m.Contains("lite", StringComparison.OrdinalIgnoreCase)).ToList();
 
-        // 优先筛选低额度档位（low 或 lite 或 extra-low）
-        var lowModels = geminiFlash
-            .Where(m => m.Contains("low", StringComparison.OrdinalIgnoreCase) ||
-                        m.Contains("lite", StringComparison.OrdinalIgnoreCase))
+        var pool = lowTier.Count > 0 ? lowTier : (flash.Count > 0 ? flash : gemini);
+        return pool.OrderBy(ExtractModelVersion).ToList();
+    }
+
+    /// <summary>
+    /// 从账号实时拉回的可用模型中筛选 Claude/GPT 候选：sonnet 优先，其次任意 claude，按版本升序。
+    /// 同样绝不使用硬编码模型名。
+    /// </summary>
+    public static List<string> ResolveClaudeModels(List<string> availableModels)
+    {
+        if (availableModels == null || availableModels.Count == 0)
+            return new List<string>();
+
+        var claude = availableModels
+            .Where(m => m.Contains("claude", StringComparison.OrdinalIgnoreCase))
             .ToList();
+        if (claude.Count == 0) return new List<string>();
 
-        var selected = (lowModels.Count > 0 ? lowModels : geminiFlash)
-            .OrderBy(m => ExtractModelVersion(m))
-            .ToList();
+        var sonnet = claude.Where(m => m.Contains("sonnet", StringComparison.OrdinalIgnoreCase)).ToList();
+        var pool = sonnet.Count > 0 ? sonnet : claude;
+        return pool.OrderBy(ExtractClaudeVersion).ToList();
+    }
 
-        return selected.Count > 0 ? selected : fallbackList;
+    private static double ExtractClaudeVersion(string modelName)
+    {
+        // claude-sonnet-4-6 → 4.6（claude 版本号为 major-minor 短横线形式）
+        var match = System.Text.RegularExpressions.Regex.Match(modelName, @"claude-\w+-(\d+(?:-\d+)?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var v = match.Groups[1].Value.Replace('-', '.');
+            if (double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d))
+                return d;
+        }
+        return 999.0;
     }
 
     private static double ExtractModelVersion(string modelName)
@@ -309,7 +375,7 @@ public static class AgQuotaService
     /// 1. 动态拉取当前账号可用模型，使用最老/最低开销的 gemini flash-low 模型（向后兼容 + 极低消耗）。
     /// 2. Starter账号仅测Gemini；Pro账号依次激活Gemini与GPT/Claude并采用拟人化延迟。
     /// </summary>
-    public static async Task<(bool ok, long latencyMs, string message)> ActivateAccountQuotaAsync(Profile profile)
+    public static async Task<(bool ok, long latencyMs, string message, bool rateLimited)> ActivateAccountQuotaAsync(Profile profile)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -318,7 +384,7 @@ public static class AgQuotaService
             profile.IsActivated = false;
             profile.ActivationError = I18nService.T("AgQ.ErrNoCredentials");
             ProfileStore.Save(profile);
-            return (false, 0, profile.ActivationError);
+            return (false, 0, profile.ActivationError, false);
         }
 
         // 1. 确保 Token 处于最新状态
@@ -328,7 +394,7 @@ public static class AgQuotaService
             profile.IsActivated = false;
             profile.ActivationError = I18nService.T("AgQ.ErrTokenRefresh");
             ProfileStore.Save(profile);
-            return (false, 0, profile.ActivationError);
+            return (false, 0, profile.ActivationError, false);
         }
 
         var token = profile.AccessToken;
@@ -337,9 +403,9 @@ public static class AgQuotaService
         string? companionProject = null;
         var loadUrls = new[]
         {
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
-            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
+"https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+"https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
         };
 
         foreach (var url in loadUrls)
@@ -354,6 +420,8 @@ public static class AgQuotaService
                 if (resp.IsSuccessStatusCode)
                 {
                     var json = await resp.Content.ReadAsStringAsync();
+                    // 诊断日志：核对生产端点返回的 project / tier 字段
+                    App.LogStartup($"AgLoadCodeAssist ok: url={url} len={json.Length} hasProject={json.Contains("cloudaicompanionProject")} hasPaidTier={json.Contains("paidTier")} tier={(ParseTierName(json) ?? "-")} project={(ParseProjectId(json) ?? "-")}");
                     ParseTier(profile, json);
                     using var doc = JsonDocument.Parse(json);
                     if (doc.RootElement.TryGetProperty("cloudaicompanionProject", out var cp) && !string.IsNullOrEmpty(cp.GetString()))
@@ -366,60 +434,93 @@ public static class AgQuotaService
                     }
                     break;
                 }
+                else
+                {
+                    App.LogStartup($"AgLoadCodeAssist FAIL: url={url} status={(int)resp.StatusCode}");
+                }
             }
             catch { }
         }
 
-        // 3. 动态读取该账号当前可用的全部模型，按“最老且为 flash-low / lite 极低消耗”排序以确保向后兼容和最低额度开销
+        // 3. 动态读取该账号当前可用的全部模型（唯一信任来源；拉取失败则中止，绝不用猜测模型名）
         var availableModels = await FetchAvailableModelNamesAsync(profile, token);
-        var geminiCandidateModels = ResolveGeminiFlashLowModels(availableModels);
+        if (availableModels.Count == 0)
+        {
+            sw.Stop();
+            profile.IsActivated = false;
+            profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
+            profile.ActivationError = I18nService.T("AgQ.ErrNoModelList");
+            ProfileStore.Save(profile);
+            return (false, sw.ElapsedMilliseconds, profile.ActivationError, false);
+        }
+
+        var geminiCandidateModels = ResolveGeminiModels(availableModels);
+        var claudeCandidateModels = ResolveClaudeModels(availableModels);
+        App.LogStartup($"AgActivate: {profile.Email} available={availableModels.Count} geminiCandidates=[{string.Join(",", geminiCandidateModels.Take(5))}] claudeCandidates=[{string.Join(",", claudeCandidateModels.Take(5))}]");
 
         // 4. 安全防风控真实激活：
         // 免费(Starter)与 Pro/Ultra 账号均支持 Gemini 与 Claude/GPT 限额池，严格采用拟人随机间隔（800~1500ms）避免风控
+        // 关键：两个配额池相互独立——Gemini 池 429 不代表 Claude/GPT 池也用尽，必须分别尝试！
         bool geminiActivated = false;
         string? usedGeminiModel = null;
+        bool geminiExhausted = false;
         bool claudeActivated = false;
         string? usedClaudeModel = null;
+        bool claudeExhausted = false;
 
-        // 步骤 4.1: 激活 Gemini 5H / 周限额（依次尝试可用列表中最老但有效的 flash-low 模型）
+        // 步骤 4.1: 激活 Gemini 5H / 周限额（依次尝试可用列表中最老且最低开销的模型）
         foreach (var model in geminiCandidateModels)
         {
-            geminiActivated = await SendStreamPingAsync(profile, token, companionProject, model);
-            if (geminiActivated)
+            var r = await SendStreamPingWithRetryAsync(profile, token, companionProject, model);
+            if (r == StreamPingResult.Success)
             {
+                geminiActivated = true;
                 usedGeminiModel = model;
                 break;
             }
+            if (r == StreamPingResult.RateLimited)
+            {
+                geminiExhausted = true;
+                break; // Gemini 池已用尽：同池其他模型必然同样 429，无需重试
+            }
         }
 
-        // 步骤 4.2: 激活 Claude / GPT 3P 共享限额池（免费与 Pro 账号均享有配额）
+        // 步骤 4.2: 激活 Claude / GPT 3P 共享限额池（与 Gemini 池独立；即使 Gemini 用尽也要尝试）
         // 防风控安全间隔，模拟人类 IDE 正常流式调用节奏
         await Task.Delay(Random.Shared.Next(800, 1500));
-
-        var claudeCandidates = new[] { "claude-sonnet-4-6", "claude-opus-4-6-thinking" };
-        foreach (var cm in claudeCandidates)
+        foreach (var cm in claudeCandidateModels)
         {
-            claudeActivated = await SendStreamPingAsync(profile, token, companionProject, cm);
-            if (claudeActivated)
+            var r = await SendStreamPingWithRetryAsync(profile, token, companionProject, cm);
+            if (r == StreamPingResult.Success)
             {
+                claudeActivated = true;
                 usedClaudeModel = cm;
                 break;
             }
+            if (r == StreamPingResult.RateLimited)
+            {
+                claudeExhausted = true;
+                break;
+            }
         }
+
+        bool rateLimited = (geminiExhausted || claudeExhausted) && !geminiActivated && !claudeActivated;
 
         // 严格检验：必须有真实的流式握手成功，杜绝假激活
         bool msgSuccess = geminiActivated || claudeActivated;
 
+        // 无论成败都同步拉取最新配额；429 时用解析到的真实 bucket 重置时间替代盲猜
+        await RefreshQuotaAsync(profile);
+        sw.Stop();
+
         if (msgSuccess)
         {
-            // 5. 同步拉取并刷新最新配额，并回写 Antigravity Tools
-            await RefreshQuotaAsync(profile);
-            sw.Stop();
-
             profile.IsActivated = true;
             profile.ActivatedAt = DateTime.UtcNow;
             profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
             profile.ActivationError = null;
+            profile.QuotaExhausted = false;
+            profile.QuotaExhaustedResetAt = null;
             ProfileStore.Save(profile);
 
             string modeDesc;
@@ -430,28 +531,152 @@ public static class AgQuotaService
             else
                 modeDesc = I18nService.F("AgQ.OkGeminiOnlyFmt", usedGeminiModel ?? "");
 
-            return (true, sw.ElapsedMilliseconds, I18nService.F("AgQ.OkSummaryFmt", modeDesc, profile.TierDisplay, sw.ElapsedMilliseconds));
+            return (true, sw.ElapsedMilliseconds, I18nService.F("AgQ.OkSummaryFmt", modeDesc, profile.TierDisplay, sw.ElapsedMilliseconds), false);
         }
         else
         {
-            // 即使流式请求未命中候选流（如均已达限额返回 429），也同步拉取最新配额以展示实际用尽状态和倒计时
-            await RefreshQuotaAsync(profile);
-            sw.Stop();
             profile.IsActivated = false;
             profile.ActivationLatencyMs = sw.ElapsedMilliseconds;
-            profile.ActivationError = I18nService.T("AgQ.ErrRateLimited");
+            profile.QuotaExhausted = rateLimited;
+            if (rateLimited)
+            {
+                // 429 但配额摘要显示仍充足 → 分钟级限流（RPM），不是配额用尽：
+                // 不写倒计时（避免误导），提示用户稍后重试。
+                var minRemaining = MinRemainingFraction(profile);
+                if (minRemaining.HasValue && minRemaining.Value > 0.02)
+                {
+                    profile.ActivationError = I18nService.T("AgQ.ErrRateLimitedRpm");
+                    profile.QuotaExhaustedResetAt = null;
+                }
+                else
+                {
+                    profile.ActivationError = I18nService.T("AgQ.ErrRateLimited");
+                    // 优先使用配额摘要里解析到的真实重置时间；解析不到才退化为 +5h 兜底
+                    profile.QuotaExhaustedResetAt = EarliestQuotaReset(profile) ?? DateTime.UtcNow.AddHours(5);
+                }
+            }
+            else
+            {
+                profile.ActivationError = I18nService.T("AgQ.ErrNoValidStream");
+                profile.QuotaExhaustedResetAt = null;
+            }
             ProfileStore.Save(profile);
-            return (false, sw.ElapsedMilliseconds, profile.ActivationError);
+            return (false, sw.ElapsedMilliseconds, profile.ActivationError, rateLimited);
         }
     }
 
-    private static async Task<bool> SendStreamPingAsync(Profile profile, string token, string? project, string model)
+    /// <summary>取四个配额桶中最小的剩余比例（无数据返回 null）。</summary>
+    private static double? MinRemainingFraction(Profile profile)
     {
+        double? min = null;
+        void Consider(double? v)
+        {
+            if (v.HasValue && (min == null || v.Value < min)) min = v;
+        }
+        Consider(profile.Quota5hFraction);
+        Consider(profile.QuotaWeeklyFraction);
+        Consider(profile.Quota3p5hFraction);
+        Consider(profile.Quota3pWeeklyFraction);
+        return min;
+    }
+
+    /// <summary>取配额摘要中最早的未来重置时间（用于 429 倒计时展示）。</summary>
+    private static DateTime? EarliestQuotaReset(Profile profile)
+    {
+        DateTime? earliest = null;
+        void Consider(string? raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return;
+            if (DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var dt)
+                && dt > DateTime.UtcNow && dt < DateTime.UtcNow.AddDays(8))
+            {
+                if (earliest == null || dt < earliest) earliest = dt;
+            }
+        }
+        Consider(profile.Quota5hResetTime);
+        Consider(profile.QuotaWeeklyResetTime);
+        Consider(profile.Quota3p5hResetTime);
+        Consider(profile.Quota3pWeeklyResetTime);
+        return earliest;
+    }
+    /// <summary>流式握手结果三态。</summary>
+    private enum StreamPingResult
+    {
+        /// <summary>命中首个有效数据块</summary>
+        Success,
+        /// <summary>配额耗尽（429），携带重置时间（如可解析）</summary>
+        RateLimited,
+        /// <summary>网络/端点/模型不可用等失败</summary>
+        Failed,
+    }
+
+    /// <summary>
+    /// 从 429 响应中尽力解析配额重置时间：优先 retry-after 头（秒），
+    /// 其次在响应体中递归查找 resetTime / quotaResetTime 字段（ISO8601）。
+    /// </summary>
+    private static DateTime? ParseRateLimitResetAsync(HttpResponseMessage resp, string? body)
+    {
+        try
+        {
+            if (resp.Headers.TryGetValues("Retry-After", out var ra) &&
+                double.TryParse(ra.FirstOrDefault(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sec) &&
+                sec > 0 && sec < 7 * 24 * 3600)
+            {
+                return DateTime.UtcNow.AddSeconds(sec);
+            }
+        }
+        catch { }
+
+        if (string.IsNullOrEmpty(body)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            DateTime? found = null;
+            void Walk(JsonElement el)
+            {
+                if (found != null) return;
+                if (el.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in el.EnumerateObject())
+                    {
+                        if (found != null) return;
+                        var name = prop.Name;
+                        if ((name.Contains("reset", StringComparison.OrdinalIgnoreCase) ||
+                             name.Contains("quotaReset", StringComparison.OrdinalIgnoreCase)) &&
+                            prop.Value.ValueKind == JsonValueKind.String &&
+                            DateTime.TryParse(prop.Value.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var dt))
+                        {
+                            if (dt > DateTime.UtcNow && dt < DateTime.UtcNow.AddDays(8)) found = dt;
+                            return;
+                        }
+                        Walk(prop.Value);
+                    }
+                }
+                else if (el.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in el.EnumerateArray())
+                    {
+                        if (found != null) return;
+                        Walk(item);
+                    }
+                }
+            }
+            Walk(doc.RootElement);
+            return found;
+        }
+        catch { return null; }
+    }
+    private static async Task<StreamPingResult> SendStreamPingAsync(Profile profile, string token, string? project, string model, bool allowRetry = true)
+    {
+        // 生产端点优先（spec：cloudcode-pa 为首选）；daily/sandbox 为备用。
+        // daily 端点有独立配额限制，可能单独返回 429——因此 429 时必须继续尝试下一个 URL。
         var streamUrls = new[]
         {
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse",
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse",
-            "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse"
+"https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse",
+"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse",
+"https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse"
         };
 
         var payload = new
@@ -472,6 +697,7 @@ public static class AgQuotaService
         };
         var jsonBody = JsonSerializer.Serialize(payload);
 
+        bool sawRateLimit = false;
         foreach (var url in streamUrls)
         {
             try
@@ -482,6 +708,21 @@ public static class AgQuotaService
                 postReq.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
                 using var postResp = await Http.SendAsync(postReq, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+
+                if (postResp.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    // 429：记录 reset 信息，但继续尝试下一个 URL——daily 端点可能单独限流，
+                    // 生产端点未必用尽。所有 URL 均 429 才返回 RateLimited。
+                    string? errBody = null;
+                    try { errBody = await postResp.Content.ReadAsStringAsync(cts.Token); } catch { }
+                    if (!string.IsNullOrEmpty(errBody))
+                        App.LogStartup($"AgActivate 429: model={model} url={url} body={errBody[..Math.Min(200, errBody.Length)]}");
+                    profile.QuotaExhausted = true;
+                    profile.QuotaExhaustedResetAt = ParseRateLimitResetAsync(postResp, errBody) ?? DateTime.UtcNow.AddHours(5);
+                    sawRateLimit = true;
+                    continue;
+                }
+
                 if (postResp.IsSuccessStatusCode)
                 {
                     bool candidateFound = false;
@@ -492,22 +733,24 @@ public static class AgQuotaService
                         string? line;
                         while ((line = await reader.ReadLineAsync(cts.Token)) != null)
                         {
-                            if (line.StartsWith("data:"))
-                            {
-                                // 若模型已被弃用或下架（如 Google 提示 "no longer available"），则不可判定为成功
-                                if (line.Contains("no longer available", StringComparison.OrdinalIgnoreCase) ||
-                                    line.Contains("is deprecated", StringComparison.OrdinalIgnoreCase) ||
-                                    line.Contains("not available", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    candidateFound = false;
-                                    break;
-                                }
+                            if (!line.StartsWith("data:")) continue;
+                            var data = line.Substring(5).Trim();
+                            if (data.Length == 0 || data == "[DONE]") continue;
 
-                                if (line.Contains("candidates") || line.Contains("response") || line.Contains("text"))
-                                {
-                                    candidateFound = true;
-                                    break; // 命中首个数据块后立即中断流读取，最大限度节省 Token 消耗与网络时间
-                                }
+                            // 结构化判定：解析 SSE JSON，要求 candidates[0].content.parts 含非空文本。
+                            // 杜绝把错误响应（含 "text" 字段的 error JSON）误判为成功。
+                            if (IsValidCandidateData(data))
+                            {
+                                candidateFound = true;
+                                break; // 命中首个数据块后立即中断流读取，最大限度节省 Token
+                            }
+
+                            // 模型弃用/下架：该候选不可用
+                            if (data.Contains("no longer available", StringComparison.OrdinalIgnoreCase) ||
+                                data.Contains("is deprecated", StringComparison.OrdinalIgnoreCase))
+                            {
+                                candidateFound = false;
+                                break;
                             }
                         }
                     }
@@ -518,17 +761,71 @@ public static class AgQuotaService
 
                     if (candidateFound)
                     {
-                        return true;
+                        profile.QuotaExhausted = false;
+                        profile.QuotaExhaustedResetAt = null;
+                        return StreamPingResult.Success;
                     }
                 }
-                // 注意：绝不将 429 或 403 视为成功！继续尝试备用端点或返回失败
+                // 注意：绝不将 403/其他错误码视为成功！继续尝试备用端点。
             }
             catch
             {
                 // 超时或网络异常，尝试下一个备用端点
             }
         }
-        return false;
+        return sawRateLimit ? StreamPingResult.RateLimited : StreamPingResult.Failed;
+    }
+
+    /// <summary>
+    /// 带一次退避重试的流式握手：429 常见于分钟级限流（RPM，免费档尤其明显），
+    /// 等待 6~14 秒后重试一次，仍失败才交给调用方按用尽/限流处理。
+    /// </summary>
+    private static async Task<StreamPingResult> SendStreamPingWithRetryAsync(Profile profile, string token, string? project, string model)
+    {
+        var r = await SendStreamPingAsync(profile, token, project, model);
+        if (r == StreamPingResult.RateLimited)
+        {
+            await Task.Delay(Random.Shared.Next(6000, 14000));
+            r = await SendStreamPingAsync(profile, token, project, model, allowRetry: false);
+        }
+        return r;
+    }
+
+    /// <summary>
+    /// 判定 SSE data 是否为有效生成内容：JSON 含 candidates 数组且首个 candidate 有非空 content parts。
+    /// 无法解析为 JSON 时保守返回 false。
+    /// </summary>
+    public static bool IsValidCandidateData(string data)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("candidates", out var cands) || cands.ValueKind != JsonValueKind.Array || cands.GetArrayLength() == 0)
+                return false;
+
+            var first = cands[0];
+            if (!first.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Object)
+                return false;
+            if (!content.TryGetProperty("parts", out var parts) || parts.ValueKind != JsonValueKind.Array)
+                return false;
+
+            foreach (var part in parts.EnumerateArray())
+            {
+                if (part.ValueKind == JsonValueKind.Object &&
+                    part.TryGetProperty("text", out var textElem) &&
+                    textElem.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(textElem.GetString()))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static async Task<bool> RefreshQuotaAsync(Profile profile)
@@ -546,9 +843,9 @@ public static class AgQuotaService
         string? companionProject = null;
         var tierUrls = new[]
         {
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
-            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
+"https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+"https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
         };
 
         foreach (var url in tierUrls)
@@ -593,9 +890,9 @@ public static class AgQuotaService
         // 关键：带上有效 project（如 aicode-consumers），避免 Starter 免费版因未带 project 返回 403 Forbidden
         var quotaUrls = new[]
         {
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-            "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
+"https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+"https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
         };
 
         foreach (var url in quotaUrls)
@@ -610,6 +907,7 @@ public static class AgQuotaService
                 if (resp.IsSuccessStatusCode)
                 {
                     var json = await resp.Content.ReadAsStringAsync();
+                    App.LogStartup($"AgQuota: {profile.Email} url={url}");
                     ParseQuotaSummary(profile, json);
                     quotaGot = true;
                     _ = AgToolsService.SyncQuotaToToolsAsync(profile, json, null);
@@ -625,7 +923,8 @@ public static class AgQuotaService
                     if (respEmpty.IsSuccessStatusCode)
                     {
                         var json = await respEmpty.Content.ReadAsStringAsync();
-                        ParseQuotaSummary(profile, json);
+                        App.LogStartup($"AgQuota: {profile.Email} url={url}");
+                    ParseQuotaSummary(profile, json);
                         quotaGot = true;
                         _ = AgToolsService.SyncQuotaToToolsAsync(profile, json, null);
                         break;

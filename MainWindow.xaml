@@ -354,7 +354,7 @@
                             <TextBlock Text="{DynamicResource Ag.LoginBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnBatchActivateAntigravity" ToolTip="{DynamicResource Ag.BatchActivateTip}" Visibility="Collapsed">
+                    <Button x:Name="BatchActivateBtn" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnBatchActivateAntigravity" ToolTip="{DynamicResource Ag.BatchActivateTip}" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
                             <TextBlock Text="{DynamicResource Ag.BatchActivateBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
@@ -473,7 +473,11 @@
                                                     </Button>
                                                     <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateQuota" ToolTip="{DynamicResource Ag.ActivateQuotaTip}" Visibility="Collapsed">
                                                         <StackPanel Orientation="Horizontal">
-                                                            <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                            <Path x:Name="ActivateIcon" Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                                <Path.RenderTransform>
+                                                                    <RotateTransform x:Name="ActivateIconRotate" Angle="0"/>
+                                                                </Path.RenderTransform>
+                                                            </Path>
                                                             <TextBlock Text="{DynamicResource Ag.ActivateQuotaBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
@@ -569,6 +573,25 @@
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
                                         </Trigger>
+                                        <DataTrigger Binding="{Binding IsActivating}" Value="True">
+                                            <Setter TargetName="ActivateIcon" Property="Opacity" Value="0.6"/>
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard Name="ActivateSpin">
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="ActivateIconRotate"
+                                                                         Storyboard.TargetProperty="Angle"
+                                                                         From="0" To="360" Duration="0:0:0.8"
+                                                                         RepeatBehavior="Forever"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <StopStoryboard BeginStoryboardName="ActivateSpin"/>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsActivating}" Value="False">
+                                            <Setter TargetName="ActivateIcon" Property="Opacity" Value="1"/>
+                                        </DataTrigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource CardActiveBrush}"/>
