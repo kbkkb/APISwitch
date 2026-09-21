@@ -1,6 +1,6 @@
 ; Inno Setup Script for APISwitch
 #define MyAppName "APISwitch"
-#define MyAppVersion "0.2.2"
+#define MyAppVersion "0.2.3"
 #define MyAppPublisher "kbkkb"
 #define MyAppURL "https://github.com/kbkkb/APISwitch"
 #define MyAppExeName "APISwitch.exe"

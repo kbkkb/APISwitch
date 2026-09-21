@@ -77,7 +77,7 @@
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="BtnCancel" Content="{DynamicResource UD.LaterBtn}" Click="OnCancel" Margin="0,0,10,0" Padding="14,7" Style="{StaticResource GhostButton}"/>
-                    <Button x:Name="BtnInstall" Content="{DynamicResource UD.GoGitHubDownload}" Style="{StaticResource PrimaryButton}" Click="OnInstall" Padding="16,7" FontWeight="SemiBold"/>
+                    <Button x:Name="BtnInstall" Content="{DynamicResource UD.InstallBtn}" Style="{StaticResource PrimaryButton}" Click="OnInstall" Padding="16,7" FontWeight="SemiBold"/>
                 </StackPanel>
             </Grid>
         </StackPanel>

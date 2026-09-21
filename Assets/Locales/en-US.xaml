@@ -506,6 +506,7 @@
     <sys:String x:Key="UD.PreparingDownload">Preparing download…</sys:String>
     <sys:String x:Key="UD.GitHubBtn">View on GitHub</sys:String>
     <sys:String x:Key="UD.GoGitHubDownload">Download from GitHub</sys:String>
+    <sys:String x:Key="UD.InstallBtn">Update &amp; Restart Now</sys:String>
     <sys:String x:Key="UD.LaterBtn">Later</sys:String>
     <sys:String x:Key="UD.CancelDownload">Cancel download</sys:String>
     <sys:String x:Key="UD.CloseBtn">Close</sys:String>

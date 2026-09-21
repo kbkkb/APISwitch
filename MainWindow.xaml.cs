@@ -3376,7 +3376,7 @@ public partial class MainWindow : Window
             if (UpdateIcon != null) UpdateIcon.Visibility = Visibility.Visible;
             if (AppVersionText != null)
             {
-                AppVersionText.Text = $"v{info.LatestVersion}";
+                AppVersionText.Text = info.LatestVersion; // LatestVersion 已带 v 前缀（UpdateService 保证）
                 AppVersionText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
                 AppVersionText.FontWeight = FontWeights.Bold;
             }
@@ -3455,7 +3455,7 @@ public partial class MainWindow : Window
                     if (UpdateIcon != null) UpdateIcon.Visibility = Visibility.Visible;
                     if (AppVersionText != null)
                     {
-                        AppVersionText.Text = $"v{info.LatestVersion}";
+                        AppVersionText.Text = info.LatestVersion; // LatestVersion 已带 v 前缀（UpdateService 保证）
                         AppVersionText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
                         AppVersionText.FontWeight = FontWeights.Bold;
                     }
