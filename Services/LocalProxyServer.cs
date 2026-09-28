@@ -49,6 +49,9 @@ public static class LocalProxyServer
 
     public static event Action? StateChanged;
 
+    // 当前 Claude 路由的 agent 类型（供用量监控归属）
+    static string _claudeAgent = UsageStorage.AgentClaudeDesktop;
+
     public static void Initialize()
     {
         try
@@ -764,6 +767,12 @@ public static class LocalProxyServer
             }
         }
 
+        // 用量监控：请求上游在流式响应末 chunk 返回 usage 统计
+        if (chatPayload["stream"]?.GetValue<bool>() == true)
+        {
+            chatPayload["stream_options"] = new JsonObject { ["include_usage"] = true };
+        }
+
         var upstreamUrl = GetUpstreamEndpoint(provider.BaseUrl, "chat/completions");
         var reqMsg = new HttpRequestMessage(HttpMethod.Post, upstreamUrl)
         {
@@ -884,6 +893,10 @@ public static class LocalProxyServer
         var toolStates = new List<(int Index, string ItemId, string CallId, string Name, StringBuilder Arguments, bool Added)>();
         var completedToolCalls = new List<JsonObject>();
 
+        // 用量监控：从上游 SSE 末 chunk 捕获 token 统计
+        long usagePromptTokens = 0, usageCompletionTokens = 0;
+        var usageSw = System.Diagnostics.Stopwatch.StartNew();
+
         using var stream = await upstreamResp.Content.ReadAsStreamAsync();
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
@@ -901,6 +914,20 @@ public static class LocalProxyServer
             {
                 var chunk = JsonNode.Parse(dataStr);
                 if (chunk is not JsonObject chunkObj) continue;
+
+                // 用量监控：末 chunk 的 usage 字段（stream_options.include_usage）
+                if (chunkObj["usage"] is JsonObject usageObj)
+                {
+                    if (usageObj["prompt_tokens"]?.GetValue<long>() is long pt) usagePromptTokens = pt;
+                    if (usageObj["completion_tokens"]?.GetValue<long>() is long ct) usageCompletionTokens = ct;
+                    if (usageObj["total_tokens"]?.GetValue<long>() is long tt && usagePromptTokens == 0 && usageCompletionTokens == 0)
+                    {
+                        // 部分中转只给 total_tokens：按 3:1 经验比例拆分入/出
+                        usagePromptTokens = tt * 3 / 4;
+                        usageCompletionTokens = tt - usagePromptTokens;
+                    }
+                    continue; // usage chunk 无业务内容
+                }
 
                 var choices = chunkObj["choices"] as JsonArray;
                 if (choices == null || choices.Count == 0) continue;
@@ -1062,6 +1089,14 @@ public static class LocalProxyServer
                 }
             }
             catch { }
+        }
+
+        // 用量监控：落库本次请求的 token 消耗（Codex 经网关的请求）
+        usageSw.Stop();
+        if (usagePromptTokens > 0 || usageCompletionTokens > 0)
+        {
+            UsageStorage.RecordUsage(UsageStorage.AgentCodex, provider.Id ?? "", provider.Name ?? "",
+                model ?? "", usagePromptTokens, usageCompletionTokens);
         }
 
         // Finish tool-call items and include them in the final Responses output.
@@ -1246,7 +1281,7 @@ public static class LocalProxyServer
         }
 
         await using var outStream = ctx.Response.OutputStream;
-        await upstreamResp.Content.CopyToAsync(outStream);
+        await TeeCopyWithUsageAsync(upstreamResp, outStream, UsageStorage.AgentCodex, provider.Id ?? "", provider.Name ?? "");
         await outStream.FlushAsync();
     }
 
@@ -1468,7 +1503,7 @@ public static class LocalProxyServer
         }
 
         await using var outStream = ctx.Response.OutputStream;
-        await upstreamResp.Content.CopyToAsync(outStream);
+        await TeeCopyWithUsageAsync(upstreamResp, outStream, _claudeAgent, provider.Id ?? "", provider.Name ?? "");
         await outStream.FlushAsync();
     }
 
@@ -1502,6 +1537,64 @@ public static class LocalProxyServer
         await using var outStream = ctx.Response.OutputStream;
         await outStream.WriteAsync(bytes);
         await outStream.FlushAsync();
+    }
+
+    /// <summary>
+    /// 透传上游响应流，同时扫描 SSE data 行中的 usage 字段用于用量监控。
+    /// 非 SSE 响应（纯 JSON/二进制）不受影响，原样拷贝。
+    /// </summary>
+    private static async Task TeeCopyWithUsageAsync(HttpResponseMessage upstreamResp, System.IO.Stream outStream,
+        string agent, string providerId, string providerName, string model = "")
+    {
+        long inTokens = 0, outTokens = 0;
+        var contentType = upstreamResp.Content.Headers.ContentType?.MediaType ?? "";
+
+        if (!contentType.Contains("event-stream", StringComparison.OrdinalIgnoreCase))
+        {
+            // 非流式：直接拷贝（无法逐 chunk 拿 usage）
+            await upstreamResp.Content.CopyToAsync(outStream);
+            return;
+        }
+
+        await using var upstream = await upstreamResp.Content.ReadAsStreamAsync();
+        using var reader = new System.IO.StreamReader(upstream, Encoding.UTF8);
+        await using var writer = new System.IO.StreamWriter(outStream, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
+
+        string? line;
+        while ((line = await reader.ReadLineAsync()) != null)
+        {
+            await writer.WriteLineAsync(line);
+            if (string.IsNullOrEmpty(line) || !line.TrimStart().StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var dataStr = line.Substring(line.IndexOf(':') + 1).Trim();
+            if (dataStr == "[DONE]" || dataStr.Length == 0) continue;
+
+            try
+            {
+                if (JsonNode.Parse(dataStr) is JsonObject obj)
+                {
+                    // Anthropic: message_delta.usage；OpenAI: usage
+                    if (obj["usage"] is JsonObject u)
+                    {
+                        if (u["input_tokens"]?.GetValue<long>() is long it) inTokens = it;
+                        else if (u["prompt_tokens"]?.GetValue<long>() is long pt) inTokens = pt;
+                        if (u["output_tokens"]?.GetValue<long>() is long ot) outTokens = ot;
+                        else if (u["completion_tokens"]?.GetValue<long>() is long ct) outTokens = ct;
+                    }
+                    else if (obj["message"]?["usage"] is JsonObject mu)
+                    {
+                        if (mu["input_tokens"]?.GetValue<long>() is long it2) inTokens = it2;
+                        if (mu["output_tokens"]?.GetValue<long>() is long ot2) outTokens = ot2;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        if (inTokens > 0 || outTokens > 0)
+        {
+            UsageStorage.RecordUsage(agent, providerId, providerName, model, inTokens, outTokens);
+        }
     }
 
     private static async Task WriteErrorAsync(HttpListenerContext ctx, int statusCode, string message)

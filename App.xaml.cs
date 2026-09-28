@@ -199,7 +199,6 @@ public partial class App : System.Windows.Application
             UIElement.PreviewMouseWheelEvent,
             new System.Windows.Input.MouseWheelEventHandler(OnComboBoxPreviewMouseWheel));
         base.OnStartup(e);
-        base.OnStartup(e);
 
         LogStartup("Creating MainWindow...");
         var mainWindow = new MainWindow();

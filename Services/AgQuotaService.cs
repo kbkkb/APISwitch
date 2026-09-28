@@ -937,11 +937,25 @@ public static class AgQuotaService
         if (quotaGot)
         {
             profile.QuotaUpdatedAt = DateTime.UtcNow;
+            // 用量监控：写入配额快照（供趋势差分展示）
+            UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-5h", profile.Quota5hFraction ?? 0, ParseResetUtc(profile.Quota5hResetTime));
+            UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-weekly", profile.QuotaWeeklyFraction ?? 0, ParseResetUtc(profile.QuotaWeeklyResetTime));
+            UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "3p-5h", profile.Quota3p5hFraction ?? 0, ParseResetUtc(profile.Quota3p5hResetTime));
+            UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "3p-weekly", profile.Quota3pWeeklyFraction ?? 0, ParseResetUtc(profile.Quota3pWeeklyResetTime));
             ProfileStore.Save(profile);
             return true;
         }
 
         return false;
+    }
+
+    static DateTime? ParseResetUtc(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return null;
+        if (DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var dt))
+            return dt;
+        return null;
     }
 
     private static void ParseQuotaSummary(Profile profile, string json)

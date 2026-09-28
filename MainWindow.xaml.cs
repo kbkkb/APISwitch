@@ -72,6 +72,8 @@ public partial class MainWindow : Window
             App.LogStartup("MainWindow Loaded: start");
             ApplyTabTheme((Tabs.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity");
             ShowCurrentVersion();
+            UsageStorage.CleanupOldData();
+            _ = System.Threading.Tasks.Task.Run(() => UsageScanner.ScanAll());
             LocalProxyServer.StateChanged += () => Dispatcher.Invoke(UpdateRouterUI);
             I18nService.LanguageChanged += RebuildTrayMenu;
             RefreshAll();
@@ -112,7 +114,7 @@ public partial class MainWindow : Window
 
     public void RefreshAll()
     {
-        RefreshAntigravity();
+        _ = RefreshAntigravityAsync();
         RefreshCodex();
         RefreshClaude();
         RefreshDesktop();
@@ -185,7 +187,7 @@ public partial class MainWindow : Window
         switch (tag)
         {
             case "antigravity":
-                RefreshAntigravity();
+                _ = RefreshAntigravityAsync();
                 _ = RefreshAllAgQuotasAsync(silent: true);
                 break;
             case "codex": RefreshCodex(); break;
@@ -198,64 +200,76 @@ public partial class MainWindow : Window
 
     // ---------- Antigravity ----------
 
-    void RefreshAntigravity()
+    async Task RefreshAntigravityAsync()
     {
         var db = AgPaths.FindStateDb();
         DbPathText.Text = db ?? I18nService.T("Ag.DbNotFound");
 
-        string? email = null, plan = null, state = null;
+        string? email = null, plan = null, state = null, dbError = null;
+        bool running = false;
+        List<Profile> loaded = new();
 
-        // 1. Try detecting active email from ~/.gemini/oauth_creds.json
-        if (File.Exists(AgToolsService.GeminiCredsPath))
+        // 进程枚举、SQLite 读取、账号文件加载都比较重，放到后台线程执行，避免 UI 卡顿
+        await Task.Run(() =>
         {
+            // 1. Try detecting active email from ~/.gemini/oauth_creds.json
             try
             {
-                var credsText = File.ReadAllText(AgToolsService.GeminiCredsPath);
-                using var doc = JsonDocument.Parse(credsText);
-                if (doc.RootElement.TryGetProperty("id_token", out var idElem))
+                if (File.Exists(AgToolsService.GeminiCredsPath))
                 {
-                    var idToken = idElem.GetString();
-                    if (!string.IsNullOrEmpty(idToken))
+                    var credsText = File.ReadAllText(AgToolsService.GeminiCredsPath);
+                    using var doc = JsonDocument.Parse(credsText);
+                    if (doc.RootElement.TryGetProperty("id_token", out var idElem))
                     {
-                        var parts = idToken.Split('.');
-                        if (parts.Length >= 2)
+                        var idToken = idElem.GetString();
+                        if (!string.IsNullOrEmpty(idToken))
                         {
-                            var payload = parts[1].Replace('-', '+').Replace('_', '/');
-                            switch (payload.Length % 4) { case 2: payload += "=="; break; case 3: payload += "="; break; }
-                            using var pDoc = JsonDocument.Parse(Convert.FromBase64String(payload));
-                            if (pDoc.RootElement.TryGetProperty("email", out var emElem))
+                            var parts = idToken.Split('.');
+                            if (parts.Length >= 2)
                             {
-                                email = emElem.GetString();
-                                state = "signedIn";
+                                var payload = parts[1].Replace('-', '+').Replace('_', '/');
+                                switch (payload.Length % 4) { case 2: payload += "=="; break; case 3: payload += "="; break; }
+                                using var pDoc = JsonDocument.Parse(Convert.FromBase64String(payload));
+                                if (pDoc.RootElement.TryGetProperty("email", out var emElem))
+                                {
+                                    email = emElem.GetString();
+                                    state = "signedIn";
+                                }
                             }
                         }
                     }
                 }
             }
             catch { }
-        }
 
-        // 2. Fallback to state.vscdb
-        if (db != null)
-        {
-            try
+            // 2. Fallback to state.vscdb
+            if (db != null)
             {
-                var auth = AgDb.ReadAuth(db);
-                auth.TryGetValue(AgState.KeyUserStatus, out var us);
-                auth.TryGetValue(AgState.KeyOauthToken, out var ot);
-                var dbEmail = AgState.ExtractEmail(us);
-                if (string.IsNullOrEmpty(email))
+                try
                 {
-                    email = dbEmail;
-                    state = AgState.ExtractAuthState(ot, email);
+                    var auth = AgDb.ReadAuth(db);
+                    auth.TryGetValue(AgState.KeyUserStatus, out var us);
+                    auth.TryGetValue(AgState.KeyOauthToken, out var ot);
+                    var dbEmail = AgState.ExtractEmail(us);
+                    if (string.IsNullOrEmpty(email))
+                    {
+                        email = dbEmail;
+                        state = AgState.ExtractAuthState(ot, email);
+                    }
+                    plan = AgState.ExtractPlan(us);
                 }
-                plan = AgState.ExtractPlan(us);
+                catch (Exception ex)
+                {
+                    dbError = ex.Message;
+                }
             }
-            catch (Exception ex)
-            {
-                if (email == null) DbPathText.Text = I18nService.F("Msg.DbReadFailFmt", db, ex.Message);
-            }
-        }
+
+            running = AgProcess.IsRunning();
+            loaded = ProfileStore.Load();
+        });
+
+        if (email == null && dbError != null)
+            DbPathText.Text = I18nService.F("Msg.DbReadFailFmt", db ?? "", dbError);
 
         CurrentAccountText.Text = email ?? I18nService.T("Ag.NoAccount");
         StateChip.Text = state switch
@@ -267,11 +281,8 @@ public partial class MainWindow : Window
         };
         PlanChip.Text = string.IsNullOrEmpty(plan) ? "—" : plan;
 
-        var running = AgProcess.IsRunning();
         IdeChip.Text = running ? I18nService.T("Ag.IdeRunning") : I18nService.T("Ag.IdeNotRunning");
         IdeChip.Foreground = running ? System.Windows.Media.Brushes.LightGreen : null;
-
-        var loaded = ProfileStore.Load();
 
         // If no profiles loaded yet and Antigravity Tools is available, auto import
         if (loaded.Count == 0 && AgToolsService.IsInstalled())
@@ -283,7 +294,7 @@ public partial class MainWindow : Window
                     var imported = await AgToolsService.ImportAccountsAsync();
                     if (imported.Count > 0)
                     {
-                        Dispatcher.Invoke(() => RefreshAntigravity());
+                        Dispatcher.Invoke(() => { _ = RefreshAntigravityAsync(); });
                     }
                 });
             }
@@ -316,7 +327,7 @@ public partial class MainWindow : Window
         {
             var imported = await AgToolsService.ImportAccountsAsync();
             ClearBusy();
-            RefreshAntigravity();
+            await RefreshAntigravityAsync();
             if (imported.Count > 0)
                 ShowToast(I18nService.F("Msg.AgImportedFmt", imported.Count));
             else
@@ -337,7 +348,7 @@ public partial class MainWindow : Window
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
             var profile = await AgAuthFlow.StartGoogleLoginAsync(cts.Token);
             ClearBusy();
-            RefreshAntigravity();
+            await RefreshAntigravityAsync();
             ShowToast(I18nService.F("Msg.AgLoginOkFmt", profile.Email));
         }
         catch (OperationCanceledException)
@@ -363,7 +374,7 @@ public partial class MainWindow : Window
             SetBusy(I18nService.F("Msg.AgActivatingFmt", target.Email));
             var (ok, latencyMs, msg, rateLimited) = await AgQuotaService.ActivateAccountQuotaAsync(target);
             ClearBusy();
-            RefreshAntigravity();
+            await RefreshAntigravityAsync();
             if (ok)
             {
                 ShowToast(I18nService.F("Msg.AgActivatedFmt", target.Email, latencyMs));
@@ -429,7 +440,7 @@ public partial class MainWindow : Window
                 p.IsActivating = false;
             }
 
-            RefreshAntigravity();
+            await RefreshAntigravityAsync();
 
             if (i < _profiles.Count - 1)
             {
@@ -440,7 +451,7 @@ public partial class MainWindow : Window
         }
 
         ClearBusy();
-        RefreshAntigravity();
+        await RefreshAntigravityAsync();
         ShowToast(I18nService.F("Msg.AgBatchDoneFmt", successCount, failCount));
     }
 
@@ -528,12 +539,12 @@ public partial class MainWindow : Window
 
         if (AutoRestartCheck.IsChecked == true)
         {
-            try { AgProcess.StartIde(); }
+            try { await Task.Run(AgProcess.StartIde); }
             catch (Exception ex) { ClearBusy(); ShowToast(I18nService.F("Msg.AgIdeRestartFailFmt", ex.Message), isError: true); return; }
         }
 
         ClearBusy();
-        RefreshAntigravity();
+        await RefreshAntigravityAsync();
         ShowToast((AutoRestartCheck.IsChecked == true ? I18nService.F("Msg.AgSwitchedRestartFmt", target.Email) : I18nService.F("Msg.AgSwitchedFmt", target.Email)));
     }
 
@@ -543,7 +554,7 @@ public partial class MainWindow : Window
         if (!Confirm(I18nService.F("Common.DeleteArchiveConfirmFmt", target.Email))) return;
         try { ProfileStore.Delete(target); }
         catch (Exception ex) { Warn(I18nService.F("Common.DeleteFailFmt", ex.Message)); return; }
-        RefreshAntigravity();
+        _ = RefreshAntigravityAsync();
     }
 
     async Task RefreshAllAgQuotasAsync(bool silent)
@@ -553,7 +564,7 @@ public partial class MainWindow : Window
 
         try
         {
-            RefreshAntigravity();
+            await RefreshAntigravityAsync();
 
             if (_profiles.Count == 0)
             {
@@ -619,6 +630,12 @@ public partial class MainWindow : Window
     {
         var tag = (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity";
         var dlg = new SettingsDialog(tag, this) { Owner = this };
+        dlg.ShowDialog();
+    }
+
+    void OnOpenUsageMonitor(object sender, RoutedEventArgs e)
+    {
+        var dlg = new UsageMonitorWindow { Owner = this };
         dlg.ShowDialog();
     }
 

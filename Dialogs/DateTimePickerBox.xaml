@@ -1,0 +1,75 @@
+<UserControl x:Class="APISwitch.Dialogs.DateTimePickerBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False">
+    <Grid>
+        <ToggleButton x:Name="Toggle" Cursor="Hand" Focusable="False"
+                      ToolTip="{DynamicResource Usage.PickerTip}">
+            <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1"
+                            CornerRadius="8" Height="32" Padding="10,0">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#C7D2FE"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#818CF8"/>
+                            <Setter TargetName="Bd" Property="Background" Value="#F5F7FF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ToggleButton.Template>
+            <ToggleButton.Content>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Data="{StaticResource IconCalendar}" Fill="#94A3B8"
+                          Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="FieldText" Grid.Column="1" Margin="7,0,0,0" FontSize="12"
+                               Foreground="{StaticResource TextDimBrush}" FontFamily="{StaticResource AppFontFamily}"
+                               VerticalAlignment="Center" HorizontalAlignment="Left" MinWidth="108"/>
+                </Grid>
+            </ToggleButton.Content>
+        </ToggleButton>
+
+        <Popup x:Name="Pop" AllowsTransparency="True" StaysOpen="False"
+               Placement="Bottom" PlacementTarget="{Binding ElementName=Toggle}">
+            <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1"
+                    CornerRadius="12" Padding="12" Margin="12,6,12,12">
+                <Border.Effect>
+                    <DropShadowEffect Color="#0F172A" Opacity="0.18" BlurRadius="18" ShadowDepth="3" Direction="270"/>
+                </Border.Effect>
+                <StackPanel>
+                    <Calendar x:Name="Cal" SelectionMode="SingleDate" FirstDayOfWeek="Monday" FontSize="12"/>
+                    <Border Height="1" Background="#F1F5F9" Margin="0,10,0,10"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="58"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="58"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{DynamicResource Usage.Hour}" FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <ComboBox x:Name="HourBox" Grid.Column="1" FontSize="12" HorizontalAlignment="Stretch"
+                                  VerticalContentAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="{DynamicResource Usage.Minute}" FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="10,0,6,0"/>
+                        <ComboBox x:Name="MinuteBox" Grid.Column="3" FontSize="12" HorizontalAlignment="Stretch"
+                                  VerticalContentAlignment="Center"/>
+                        <Button x:Name="NowBtn" Grid.Column="5" Content="{DynamicResource Usage.Now}"
+                                FontSize="11" Padding="10,4" Cursor="Hand" Background="#EEF2FF" Foreground="#4F46E5"
+                                BorderThickness="0" FontWeight="Medium"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

@@ -9,15 +9,27 @@ public static class AgProcess
     {
         var exe = AgPaths.FindIdeExecutable();
         var dir = exe != null ? Path.GetDirectoryName(exe) : null;
-        return Process.GetProcesses()
-            .Where(p => p.ProcessName.StartsWith("Antigravity", StringComparison.OrdinalIgnoreCase))
-            .Where(p =>
+        var all = Process.GetProcesses();
+        var result = new List<Process>();
+        foreach (var p in all)
+        {
+            if (!p.ProcessName.StartsWith("Antigravity", StringComparison.OrdinalIgnoreCase))
             {
-                if (dir == null) return true;
-                var path = SafePath(p);
-                return path != null && path.StartsWith(dir, StringComparison.OrdinalIgnoreCase);
-            })
-            .ToArray();
+                p.Dispose();
+                continue;
+            }
+            if (dir == null)
+            {
+                result.Add(p);
+                continue;
+            }
+            var path = SafePath(p);
+            if (path != null && path.StartsWith(dir, StringComparison.OrdinalIgnoreCase))
+                result.Add(p);
+            else
+                p.Dispose();
+        }
+        return result.ToArray();
     }
 
     public static bool IsRunning() => GetIdeProcesses().Length > 0;
@@ -41,17 +53,25 @@ public static class AgProcess
         while (DateTime.UtcNow < deadline)
         {
             await Task.Delay(300);
-            if (!GetIdeProcesses().Any(p => !p.HasExited)) break;
+            var poll = GetIdeProcesses();
+            bool anyAlive = poll.Any(p => !p.HasExited);
+            foreach (var p in poll) p.Dispose();
+            if (!anyAlive) break;
         }
 
-        foreach (var p in GetIdeProcesses())
+        var kill = GetIdeProcesses();
+        foreach (var p in kill)
         {
             try { p.Kill(entireProcessTree: true); } catch { }
         }
+        foreach (var p in kill) p.Dispose();
 
         await Task.Delay(400);
         foreach (var p in procs) p.Dispose();
-        return GetIdeProcesses().Length == 0;
+        var final = GetIdeProcesses();
+        bool ok = final.Length == 0;
+        foreach (var p in final) p.Dispose();
+        return ok;
     }
 
     public static void StartIde()

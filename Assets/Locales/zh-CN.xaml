@@ -560,4 +560,58 @@
     <sys:String x:Key="AgQ.ErrRateLimitedRpm">触发 Google 分钟级限流（429，配额仍充足），已自动重试一次；请稍等 1~2 分钟后再试</sys:String>
     <sys:String x:Key="AgQ.ErrNoValidStream">未收到有效流式响应（候选模型均不可用或网络异常）</sys:String>
     <sys:String x:Key="AgQ.ErrNoModelList">无法获取该账号的可用模型列表（fetchAvailableModels 失败），已中止激活以避免请求不存在的模型</sys:String>
+
+    <!-- ==================== 用量监控 ==================== -->
+    <sys:String x:Key="Usage.Title">用量监控</sys:String>
+    <sys:String x:Key="Usage.ShortTitle">用量</sys:String>
+    <sys:String x:Key="Usage.CloseTip">关闭窗口</sys:String>
+    <sys:String x:Key="Usage.From">从</sys:String>
+    <sys:String x:Key="Usage.To">到</sys:String>
+    <sys:String x:Key="Usage.Apply">查询</sys:String>
+    <sys:String x:Key="Usage.Quick1D">近一天</sys:String>
+    <sys:String x:Key="Usage.Quick1W">近一周</sys:String>
+    <sys:String x:Key="Usage.Quick30D">近30天</sys:String>
+    <sys:String x:Key="Usage.Hour">时</sys:String>
+    <sys:String x:Key="Usage.Minute">分</sys:String>
+    <sys:String x:Key="Usage.Now">此刻</sys:String>
+    <sys:String x:Key="Usage.PickerTip">选择日期与时间</sys:String>
+    <sys:String x:Key="Usage.TotalTokens">总 Token</sys:String>
+    <sys:String x:Key="Usage.InputTokens">输入 Token</sys:String>
+    <sys:String x:Key="Usage.OutputTokens">输出 Token</sys:String>
+    <sys:String x:Key="Usage.Requests">请求数</sys:String>
+    <sys:String x:Key="Usage.AgentOpenCode">OpenCode</sys:String>
+    <sys:String x:Key="Usage.AgentPi">Pi</sys:String>
+    <sys:String x:Key="Usage.InOut">入 {0} / 出 {1}</sys:String>
+    <sys:String x:Key="Usage.ByProvider">按供应商</sys:String>
+    <sys:String x:Key="Usage.ByModel">按模型</sys:String>
+    <sys:String x:Key="Usage.TodayTokens">今日 Token</sys:String>
+    <sys:String x:Key="Usage.WeekTokens">本周 Token</sys:String>
+    <sys:String x:Key="Usage.TodayRequests">今日请求数</sys:String>
+    <sys:String x:Key="Usage.ByAgent">按客户端汇总（今日）</sys:String>
+    <sys:String x:Key="Usage.RecentCalls">最近调用明细</sys:String>
+    <sys:String x:Key="Usage.AgentCodex">Codex</sys:String>
+    <sys:String x:Key="Usage.AgentClaudeCli">Claude CLI</sys:String>
+    <sys:String x:Key="Usage.AgentClaudeDesktop">Claude Desktop</sys:String>
+    <sys:String x:Key="Usage.AgentRequests">{0} 次请求</sys:String>
+    <sys:String x:Key="Usage.ColTime">时间</sys:String>
+    <sys:String x:Key="Usage.ColAgent">客户端</sys:String>
+    <sys:String x:Key="Usage.ColProvider">供应商</sys:String>
+    <sys:String x:Key="Usage.ColModel">模型</sys:String>
+    <sys:String x:Key="Usage.ColIn">输入</sys:String>
+    <sys:String x:Key="Usage.ColOut">输出</sys:String>
+    <sys:String x:Key="Usage.ColTotal">总量</sys:String>
+    <sys:String x:Key="Usage.Note">说明：通过扫描 Codex / Claude Code / OpenCode / Pi 本地会话记录统计用量（应用未运行期间产生的调用也会被纳入），数据保留 90 天。</sys:String>
+
+    <!-- 用量监控重构新增 -->
+    <sys:String x:Key="Usage.TabProviders">供应商明细</sys:String>
+    <sys:String x:Key="Usage.TabAgents">客户端汇总</sys:String>
+    <sys:String x:Key="Usage.TabCalls">调用明细</sys:String>
+    <sys:String x:Key="Usage.TrendTitle">每日用量趋势</sys:String>
+    <sys:String x:Key="Usage.LegendIn">输入</sys:String>
+    <sys:String x:Key="Usage.LegendOut">输出</sys:String>
+    <sys:String x:Key="Usage.NoData">该时间段暂无用量数据</sys:String>
+    <sys:String x:Key="Usage.NoDataTip">让任意客户端（Codex / Claude Code / OpenCode / Pi）发起几次请求，或调整查询时间范围</sys:String>
+    <sys:String x:Key="Usage.ExpandTip">展开查看该供应商下的模型明细</sys:String>
+    <sys:String x:Key="Usage.ModelsFmt">{0} 个模型</sys:String>
+    <sys:String x:Key="Usage.UnknownModel">未知模型</sys:String>
 </ResourceDictionary>

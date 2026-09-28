@@ -241,6 +241,13 @@
                            RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center"/>
                     <TextBlock Text="APISwitch" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextBrush}"
                                Margin="9,0,0,0" VerticalAlignment="Center"/>
+                    <Button x:Name="UsageMonitorBtn" Click="OnOpenUsageMonitor" Style="{StaticResource GhostButton}" WindowChrome.IsHitTestVisibleInChrome="True"
+                            Padding="7,3" Margin="6,0,0,0" VerticalAlignment="Center" ToolTip="{DynamicResource Usage.Title}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconZap}" Fill="{DynamicResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock Text="{DynamicResource Usage.ShortTitle}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="UpdateCheckBtn" Click="OnCheckUpdateClick" Style="{StaticResource GhostButton}" WindowChrome.IsHitTestVisibleInChrome="True"
                             Padding="7,3" Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="{DynamicResource Main.NewVersionTip}"
                             Visibility="Visible">

@@ -560,4 +560,58 @@
     <sys:String x:Key="AgQ.ErrRateLimitedRpm">Google per-minute rate limit hit (429, quota still available); auto-retried once — please try again in 1-2 minutes</sys:String>
     <sys:String x:Key="AgQ.ErrNoValidStream">No valid stream response (all candidate models unavailable or network error)</sys:String>
     <sys:String x:Key="AgQ.ErrNoModelList">Could not fetch the account's available model list (fetchAvailableModels failed); activation aborted to avoid requesting non-existent models</sys:String>
+
+    <!-- ==================== Usage Monitor ==================== -->
+    <sys:String x:Key="Usage.Title">Usage Monitor</sys:String>
+    <sys:String x:Key="Usage.ShortTitle">Usage</sys:String>
+    <sys:String x:Key="Usage.CloseTip">Close window</sys:String>
+    <sys:String x:Key="Usage.From">From</sys:String>
+    <sys:String x:Key="Usage.To">To</sys:String>
+    <sys:String x:Key="Usage.Apply">Query</sys:String>
+    <sys:String x:Key="Usage.Quick1D">Last 1 Day</sys:String>
+    <sys:String x:Key="Usage.Quick1W">Last 1 Week</sys:String>
+    <sys:String x:Key="Usage.Quick30D">Last 30 Days</sys:String>
+    <sys:String x:Key="Usage.Hour">Hour</sys:String>
+    <sys:String x:Key="Usage.Minute">Min</sys:String>
+    <sys:String x:Key="Usage.Now">Now</sys:String>
+    <sys:String x:Key="Usage.PickerTip">Pick date and time</sys:String>
+    <sys:String x:Key="Usage.TotalTokens">Total Tokens</sys:String>
+    <sys:String x:Key="Usage.InputTokens">Input Tokens</sys:String>
+    <sys:String x:Key="Usage.OutputTokens">Output Tokens</sys:String>
+    <sys:String x:Key="Usage.Requests">Requests</sys:String>
+    <sys:String x:Key="Usage.AgentOpenCode">OpenCode</sys:String>
+    <sys:String x:Key="Usage.AgentPi">Pi</sys:String>
+    <sys:String x:Key="Usage.InOut">in {0} / out {1}</sys:String>
+    <sys:String x:Key="Usage.ByProvider">By Provider</sys:String>
+    <sys:String x:Key="Usage.ByModel">By Model</sys:String>
+    <sys:String x:Key="Usage.TodayTokens">Today Tokens</sys:String>
+    <sys:String x:Key="Usage.WeekTokens">This Week Tokens</sys:String>
+    <sys:String x:Key="Usage.TodayRequests">Requests Today</sys:String>
+    <sys:String x:Key="Usage.ByAgent">By Client (Today)</sys:String>
+    <sys:String x:Key="Usage.RecentCalls">Recent Calls</sys:String>
+    <sys:String x:Key="Usage.AgentCodex">Codex</sys:String>
+    <sys:String x:Key="Usage.AgentClaudeCli">Claude CLI</sys:String>
+    <sys:String x:Key="Usage.AgentClaudeDesktop">Claude Desktop</sys:String>
+    <sys:String x:Key="Usage.AgentRequests">{0} requests</sys:String>
+    <sys:String x:Key="Usage.ColTime">Time</sys:String>
+    <sys:String x:Key="Usage.ColAgent">Client</sys:String>
+    <sys:String x:Key="Usage.ColProvider">Provider</sys:String>
+    <sys:String x:Key="Usage.ColModel">Model</sys:String>
+    <sys:String x:Key="Usage.ColIn">In</sys:String>
+    <sys:String x:Key="Usage.ColOut">Out</sys:String>
+    <sys:String x:Key="Usage.ColTotal">Total</sys:String>
+    <sys:String x:Key="Usage.Note">Note: usage is computed by scanning local Codex / Claude Code / OpenCode / Pi session records, so calls made while the app was not running are included. Data is kept for 90 days.</sys:String>
+
+    <!-- Usage monitor redesign -->
+    <sys:String x:Key="Usage.TabProviders">Providers</sys:String>
+    <sys:String x:Key="Usage.TabAgents">Clients</sys:String>
+    <sys:String x:Key="Usage.TabCalls">Recent Calls</sys:String>
+    <sys:String x:Key="Usage.TrendTitle">Daily Usage Trend</sys:String>
+    <sys:String x:Key="Usage.LegendIn">Input</sys:String>
+    <sys:String x:Key="Usage.LegendOut">Output</sys:String>
+    <sys:String x:Key="Usage.NoData">No usage data in this time range</sys:String>
+    <sys:String x:Key="Usage.NoDataTip">Send a few requests from any client (Codex / Claude Code / OpenCode / Pi), or adjust the time range</sys:String>
+    <sys:String x:Key="Usage.ExpandTip">Expand to see the model breakdown of this provider</sys:String>
+    <sys:String x:Key="Usage.ModelsFmt">{0} models</sys:String>
+    <sys:String x:Key="Usage.UnknownModel">Unknown model</sys:String>
 </ResourceDictionary>
