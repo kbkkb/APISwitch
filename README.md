@@ -49,7 +49,19 @@ APISwitch provides deep native configuration management and local protocol trans
 - Switch between Simplified Chinese and English instantly (Settings → General & System → Interface Language), covering the main window, settings dialog, system tray, provider editors and more.
 - Changes apply immediately with no restart; tray menu and toast messages update in sync.
 
-### 4. Data Backup & Multi-Device Roaming
+### 4. Usage Monitoring & Analytics
+- **Token Usage Dashboard**: A dedicated monitoring window summarizing total / input / output tokens and request counts over any selected time range.
+- **Daily Trend Chart**: Stacked bar chart of daily consumption. Days without calls are rendered as empty bars, so active and idle days stay visually distinct.
+- **Click a Bar to Drill Down**: Selecting a day highlights its bar, shows the day's total above the bar, and switches the summary cards, provider breakdown, client breakdown and call details to that day. Click again to deselect; click another bar to switch.
+- **Provider Drill-Down**: Expand any provider to inspect its per-model consumption.
+- **Client Breakdown**: Separate statistics for Codex, Claude CLI, Claude Desktop, OpenCode and Pi.
+- **Recent Calls**: The latest 400 calls with time, client, provider, model and in/out/total tokens, rendered with a virtualized list so scrolling stays smooth even with large datasets.
+- **Cross-Provider Model Aggregation**: Model names differing only by casing, organization prefix (`zai-org/`), `:variant` suffixes, date-snapshot suffixes, `-free` channel markers or Modal deployment names are automatically merged into one logical model. Expand a group to inspect each provider's share and the original raw names.
+- **Local Session Scanning**: Usage produced while APISwitch was not running is captured by scanning local session files (Codex `~/.codex/sessions`, Claude Code `~/.claude/projects`, Pi `~/.pi/agent/sessions`, OpenCode `opencode.db`). Incremental scanning avoids double counting and runs automatically when you open the monitoring window.
+- **Persistent & Self-Cleaning**: Stored in SQLite and survives restarts; records older than 90 days are pruned automatically.
+- **Dial-Style Date/Time Picker**: Custom calendar panel plus a clock dial for hour and minute — click or drag to change values in real time. 24 hours are all reachable in a single click via the dual-ring hour dial.
+
+### 5. Data Backup & Multi-Device Roaming
 - **One-Click Full Export**: Bundle all tool provider configurations and Antigravity account data into a standardized JSON backup file.
 - **Flexible Restore Modes**: Supports both "Merge & Append" (recommended: keeps existing configs while adding new or updating matching items) and "Full Overwrite" modes for seamless roaming across multiple machines.
 - **Direct Local Management**: One click to open the local physical storage directory for full data ownership and transparency.
@@ -122,7 +134,7 @@ dotnet build -c Release
 
 - [x] **Multi-Language Support (i18n)**: Simplified Chinese / English interface switching, applied instantly without restart.
 - [ ] **Antigravity Quota Activation**: Activate account quota cycles via official Google streaming handshake (in development, not yet released).
-- [ ] **Token Usage & Analytics**: Real-time Token consumption monitoring and call history analysis powered by the local gateway.
+- [x] **Token Usage & Analytics (v0.3.0)**: Dedicated usage monitoring window with daily trend chart, provider / client / model breakdowns, cross-provider model aggregation and local session scanning.
 - [ ] **More Agent Platforms**: Continuous expansion to emerging AI coding assistants, terminal agents, and developer platforms.
 
 ---

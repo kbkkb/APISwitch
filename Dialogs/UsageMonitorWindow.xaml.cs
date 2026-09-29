@@ -23,6 +23,8 @@ public partial class UsageMonitorWindow : Window
     List<UsageStorage.DailyTotal> _daily = new();
     bool _updatingRangeFields;
     DateTime? _selectedDay;
+    int _refreshGen;
+    System.Windows.Threading.DispatcherTimer? _chartRedrawTimer;
 
     public UsageMonitorWindow()
     {
@@ -34,7 +36,7 @@ public partial class UsageMonitorWindow : Window
             Task.Run(() => UsageScanner.ScanAll())
                 .ContinueWith(_ => Dispatcher.Invoke(RefreshData));
         };
-        SizeChanged += (_, _) => DrawTrendChart();
+        SizeChanged += (_, _) => ScheduleChartRedraw();
     }
 
     // ---------- 时间范围 ----------
@@ -91,7 +93,7 @@ public partial class UsageMonitorWindow : Window
 
     // ---------- 数据刷新 ----------
 
-    void RefreshData()
+    async void RefreshData()
     {
         if (!TryGetRange(out var from, out var to))
         {
@@ -99,18 +101,31 @@ public partial class UsageMonitorWindow : Window
             return;
         }
 
-        long fromTs = new DateTimeOffset(from).ToUnixTimeSeconds();
-        long toTs = new DateTimeOffset(to).ToUnixTimeSeconds();
-
         // 点击选中某天时：汇总卡片与下方明细切换为当天数据；趋势图始终展示完整区间
         if (_selectedDay.HasValue && (_selectedDay.Value < from.Date || _selectedDay.Value > to.Date))
             _selectedDay = null; // 范围变更后选中日已不在区间内，自动取消选择
         var effFrom = _selectedDay?.Date ?? from;
         var effTo = _selectedDay.HasValue ? _selectedDay.Value.Date.AddDays(1).AddSeconds(-1) : to;
+        long fromTs = new DateTimeOffset(from).ToUnixTimeSeconds();
+        long toTs = new DateTimeOffset(to).ToUnixTimeSeconds();
         long effFromTs = new DateTimeOffset(effFrom).ToUnixTimeSeconds();
         long effToTs = new DateTimeOffset(effTo).ToUnixTimeSeconds();
 
-        var s = UsageStorage.GetSummary(effFromTs, effToTs);
+        // 快速连续刷新（快速点选柱子/切换区间）时，只应用最后一次的结果
+        int gen = ++_refreshGen;
+
+        // 所有 SQLite 查询挪到后台线程执行，避免 UI 线程迟滞
+        var (s, dailyRows, pmTotals, agentTotals, events) = await Task.Run(() =>
+        {
+            var summary = UsageStorage.GetSummary(effFromTs, effToTs);
+            var daily = UsageStorage.GetDailyTotals(fromTs, toTs);
+            var pm = UsageStorage.GetProviderModelTotals(effFromTs, effToTs);
+            var ag = UsageStorage.GetAgentTotals(effFromTs, effToTs);
+            var evs = UsageStorage.GetRecentEvents(effFromTs, effToTs, limit: 400);
+            return (summary, daily, pm, ag, evs);
+        }).ConfigureAwait(true);
+
+        if (gen != _refreshGen) return; // 已有更新的刷新在途，丢弃本次结果
         TotalTokensText.Text = FormatTokens(s.TotalIn + s.TotalOut);
         InTokensText.Text = FormatTokens(s.TotalIn);
         OutTokensText.Text = FormatTokens(s.TotalOut);
@@ -122,7 +137,7 @@ public partial class UsageMonitorWindow : Window
 
         // 每日趋势：补齐区间内没有调用的日期（空柱），便于直观区分活跃/空闲日；
         // 区间过长（>92 天）时不补齐，避免柱形过密不可读
-        _daily = UsageStorage.GetDailyTotals(fromTs, toTs);
+        _daily = dailyRows;
         int spanDays = (to.Date - from.Date).Days + 1;
         if (spanDays > 1 && spanDays <= 92)
         {
@@ -139,7 +154,7 @@ public partial class UsageMonitorWindow : Window
 
         // 供应商下钻：provider × model 交叉汇总
         var providerGroups = new List<ProviderGroupVM>();
-        foreach (var g in UsageStorage.GetProviderModelTotals(effFromTs, effToTs)
+        foreach (var g in pmTotals
                      .GroupBy(x => x.Provider, StringComparer.OrdinalIgnoreCase))
         {
             var models = g.OrderByDescending(m => m.InTokens + m.OutTokens).ToList();
@@ -177,12 +192,70 @@ public partial class UsageMonitorWindow : Window
         {
             foreach (var g in providerGroups) g.ShareOfAll = 100.0 * g.Total / grandTotal;
         }
-        ProviderList.ItemsSource = providerGroups;
+        ProvidersPanel.ItemsSource = providerGroups;
 
+        // 模型汇总：跨供应商合并同模型（大小写 / 前缀 / 变体后缀 / 日期快照 / 部署名归一化）
+        var allModelKeys = new HashSet<string>(pmTotals.Select(x => NormalizeModelKey(x.Model)), StringComparer.Ordinal);
+        var modelGroups = new List<ModelGroupVM>();
+        foreach (var g in pmTotals
+                     .GroupBy(x => string.IsNullOrEmpty(x.Model) ? "" : ResolveDeploymentName(NormalizeModelKey(x.Model), allModelKeys), StringComparer.Ordinal)
+                     .OrderByDescending(g => g.Sum(x => x.InTokens + x.OutTokens)))
+        {
+            // 显示名：优先取用量最大的"干净"原名（非部署长名），清理后保留原大小写
+            var rep = g.Where(x => !string.IsNullOrEmpty(x.Model)
+                                && !x.Model.Contains("--") && !x.Model.Contains('.'))
+                       .OrderByDescending(x => x.InTokens + x.OutTokens)
+                       .FirstOrDefault()?.Model
+                      ?? g.OrderBy(x => CleanModelName(x.Model).Length)
+                           .ThenByDescending(x => x.InTokens + x.OutTokens)
+                           .First().Model;
+            long mgIn = g.Sum(x => x.InTokens);
+            long mgOut = g.Sum(x => x.OutTokens);
+            long mgReq = g.Sum(x => x.Requests);
+            long mgTotal = mgIn + mgOut;
+
+            var displayName = string.IsNullOrEmpty(rep) ? I18nService.T("Usage.UnknownModel") : CleanModelName(rep);
+
+            var providerRows = g
+                .GroupBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
+                .Select(p =>
+                {
+                    long pIn = p.Sum(x => x.InTokens);
+                    long pOut = p.Sum(x => x.OutTokens);
+                    long pTotal = pIn + pOut;
+                    return new ModelProviderRowVM
+                    {
+                        Provider = p.Key,
+                        RawModel = p.OrderByDescending(x => x.InTokens + x.OutTokens).First().Model,
+                        GroupName = displayName,
+                        InTokens = pIn,
+                        OutTokens = pOut,
+                        Requests = p.Sum(x => x.Requests),
+                        Total = pTotal,
+                        ShareOfModel = mgTotal > 0 ? 100.0 * pTotal / mgTotal : 0,
+                    };
+                })
+                .OrderByDescending(p => p.Total)
+                .ToList();
+
+            modelGroups.Add(new ModelGroupVM
+            {
+                Name = displayName,
+                InTokens = mgIn,
+                OutTokens = mgOut,
+                Requests = mgReq,
+                Total = mgTotal,
+                Providers = providerRows,
+            });
+        }
+        long modelGrand = modelGroups.Sum(x => x.Total);
+        if (modelGrand > 0)
+            foreach (var mg in modelGroups) mg.ShareOfAll = 100.0 * mg.Total / modelGrand;
+        ModelsPanel.ItemsSource = modelGroups;
         // 客户端汇总
-        var agentTotals = UsageStorage.GetAgentTotals(effFromTs, effToTs);
+        // agentTotals 已在后台查询中获得
         long agentGrand = agentTotals.Sum(a => a.InTokens + a.OutTokens);
-        AgentList.ItemsSource = agentTotals.Select(a => new AgentRowVM
+        AgentsPanel.ItemsSource = agentTotals.Select(a => new AgentRowVM
         {
             Name = AgentName(a.Agent),
             Agent = a.Agent,
@@ -194,7 +267,7 @@ public partial class UsageMonitorWindow : Window
         }).ToList();
 
         // 调用明细
-        var events = UsageStorage.GetRecentEvents(effFromTs, effToTs, limit: 400);
+        // events 已在后台查询中获得
         CallsList.ItemsSource = events.Select(ev => new CallRowVM
         {
             TimeText = ev.Ts.ToString("MM-dd HH:mm:ss"),
@@ -211,7 +284,26 @@ public partial class UsageMonitorWindow : Window
 
     // ---------- 每日趋势图（Canvas 绘制） ----------
 
-    void OnChartSizeChanged(object sender, SizeChangedEventArgs e) => DrawTrendChart();
+    void OnChartSizeChanged(object sender, SizeChangedEventArgs e) => ScheduleChartRedraw();
+
+    /// <summary>尺寸变化防抖：拖动窗口大小时每帧都触发重绘会卡，合并为停顿 120ms 后重绘一次。</summary>
+    void ScheduleChartRedraw()
+    {
+        if (_chartRedrawTimer == null)
+        {
+            _chartRedrawTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(120),
+            };
+            _chartRedrawTimer.Tick += (_, _) =>
+            {
+                _chartRedrawTimer!.Stop();
+                DrawTrendChart();
+            };
+        }
+        _chartRedrawTimer.Stop();
+        _chartRedrawTimer.Start();
+    }
 
     void DrawTrendChart()
     {
@@ -395,6 +487,7 @@ public partial class UsageMonitorWindow : Window
 
     void OnTabProvidersChecked(object sender, RoutedEventArgs e) => SwitchView(ProvidersPanel);
     void OnTabAgentsChecked(object sender, RoutedEventArgs e) => SwitchView(AgentsPanel);
+    void OnTabModelsChecked(object sender, RoutedEventArgs e) => SwitchView(ModelsPanel);
     void OnTabCallsChecked(object sender, RoutedEventArgs e) => SwitchView(CallsPanel);
 
     void SwitchView(UIElement panel)
@@ -402,15 +495,22 @@ public partial class UsageMonitorWindow : Window
         if (panel == null) return;
         ProvidersPanel.Visibility = panel == ProvidersPanel ? Visibility.Visible : Visibility.Collapsed;
         AgentsPanel.Visibility = panel == AgentsPanel ? Visibility.Visible : Visibility.Collapsed;
+        ModelsPanel.Visibility = panel == ModelsPanel ? Visibility.Visible : Visibility.Collapsed;
         CallsPanel.Visibility = panel == CallsPanel ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // ---------- 供应商下钻展开/收起 ----------
+    // ---------- 展开/收起 ----------
 
     void OnToggleProviderExpand(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is ProviderGroupVM g)
             g.Expanded = !g.Expanded;
+    }
+
+    void OnToggleModelExpand(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ModelGroupVM mg)
+            mg.Expanded = !mg.Expanded;
     }
 
     // ---------- 窗口操作 ----------
@@ -424,6 +524,55 @@ public partial class UsageMonitorWindow : Window
 
     // ---------- 工具 ----------
 
+    // ---------- 模型名归一化（跨供应商合并同模型） ----------
+
+    static readonly string[] ModelStripSuffixes = { "-latest", "-free" };
+
+    /// <summary>
+    /// 清理模型显示名：去掉组织/路由前缀（zai-org/、pro/）、:variant 变体（kimi-k3:test）、
+    /// [1M] 上下文标记、尾部日期快照（-0731、-20250929）与通道标记（-free/-latest），保留原大小写。
+    /// </summary>
+    static string CleanModelName(string raw)
+    {
+        var m = (raw ?? "").Trim();
+        if (m.Length == 0) return "";
+        int slash = m.LastIndexOf('/');
+        if (slash >= 0) m = m[(slash + 1)..].Trim();
+        int colon = m.IndexOf(':');
+        if (colon > 0) m = m[..colon].Trim();
+        if (m.EndsWith("[1m]", StringComparison.OrdinalIgnoreCase)) m = m[..^4].Trim();
+        var date = System.Text.RegularExpressions.Regex.Match(m, @"-\d{4,8}$");
+        if (date.Success) m = m[..date.Index];
+        foreach (var s in ModelStripSuffixes)
+            if (m.EndsWith(s, StringComparison.OrdinalIgnoreCase)) { m = m[..^s.Length]; break; }
+        return m;
+    }
+
+    /// <summary>模型分组键：清理后小写。</summary>
+    static string NormalizeModelKey(string raw) => CleanModelName(raw).ToLowerInvariant();
+
+    /// <summary>
+    /// 部署长名归并：kingblue…--ep-kimi-k3-server.us-west.modal.direct 这类 modal 部署串
+    /// 归并到其包含的已知短模型名。短名后必须紧跟部署特征（-server / . / 结尾），
+    /// 避免 glm-5.3 误并入 glm-5.3-flash。
+    /// </summary>
+    static string ResolveDeploymentName(string key, IEnumerable<string> allKeys)
+    {
+        if (key.Length == 0 || !(key.Contains("--") || key.Contains('.'))) return key;
+        foreach (var shortKey in allKeys.Where(k => k.Length > 0 && k.Length < key.Length)
+                     .OrderByDescending(k => k.Length))
+        {
+            int idx = key.IndexOf(shortKey, StringComparison.Ordinal);
+            while (idx >= 0)
+            {
+                int after = idx + shortKey.Length;
+                if (after == key.Length || key[after] == '.' || key.AsSpan(after).StartsWith("-server"))
+                    return shortKey;
+                idx = key.IndexOf(shortKey, idx + 1, StringComparison.Ordinal);
+            }
+        }
+        return key;
+    }
     static string AgentName(string agent) => agent switch
     {
         UsageStorage.AgentCodex => I18nService.T("Usage.AgentCodex"),
@@ -508,6 +657,68 @@ public partial class UsageMonitorWindow : Window
 
         public double BarWidth => Math.Clamp(BarTrackWidth * ShareOfProvider / 100.0, 0, BarTrackWidth);
         public string ShareText => $"{ShareOfProvider:F1}%";
+        public string ReqText => I18nService.F("Usage.AgentRequests", Requests.ToString("N0", CultureInfo.CurrentCulture));
+        public string InOutText => I18nService.F("Usage.InOut", FormatTokens(InTokens), FormatTokens(OutTokens));
+        public string TotalText => FormatTokens(Total);
+    }
+
+    /// <summary>模型汇总分组：同一模型（归一化后）跨供应商合并的统计行。</summary>
+    public class ModelGroupVM : INotifyPropertyChanged
+    {
+        bool _expanded;
+
+        public string Name { get; set; } = "";
+        public long InTokens { get; set; }
+        public long OutTokens { get; set; }
+        public long Requests { get; set; }
+        public long Total { get; set; }
+        public double ShareOfAll { get; set; }
+        public List<ModelProviderRowVM> Providers { get; set; } = new();
+
+        public bool Expanded
+        {
+            get => _expanded;
+            set
+            {
+                if (_expanded == value) return;
+                _expanded = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Expanded)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ChevronAngle)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ProvidersVisibility)));
+            }
+        }
+
+        public double ChevronAngle => Expanded ? 90 : 0;
+        public Visibility ProvidersVisibility => Expanded ? Visibility.Visible : Visibility.Collapsed;
+
+        public double BarWidth => Math.Clamp(BarTrackWidth * ShareOfAll / 100.0, 0, BarTrackWidth);
+        public string ShareText => $"{ShareOfAll:F1}%";
+        public string ReqText => I18nService.F("Usage.AgentRequests", Requests.ToString("N0", CultureInfo.CurrentCulture));
+        public string InOutText => I18nService.F("Usage.InOut", FormatTokens(InTokens), FormatTokens(OutTokens));
+        public string TotalText => FormatTokens(Total);
+        public string ProviderCountText => I18nService.F("Usage.ProvidersFmt", Providers.Count);
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    /// <summary>模型分组下的供应商细分行（含原始模型名，便于核对归并是否正确）。</summary>
+    public class ModelProviderRowVM
+    {
+        public string Provider { get; set; } = "";
+        public string RawModel { get; set; } = "";
+        public string GroupName { get; set; } = "";
+        public long InTokens { get; set; }
+        public long OutTokens { get; set; }
+        public long Requests { get; set; }
+        public long Total { get; set; }
+        public double ShareOfModel { get; set; }
+
+        public string NameText => string.IsNullOrEmpty(Provider) ? I18nService.T("Usage.UnknownModel") : Provider;
+        public string RawModelText => string.Equals(RawModel, GroupName, StringComparison.OrdinalIgnoreCase)
+            ? ""
+            : I18nService.F("Usage.RawModelFmt", RawModel);
+        public double BarWidth => Math.Clamp(BarTrackWidth * ShareOfModel / 100.0, 0, BarTrackWidth);
+        public string ShareText => $"{ShareOfModel:F1}%";
         public string ReqText => I18nService.F("Usage.AgentRequests", Requests.ToString("N0", CultureInfo.CurrentCulture));
         public string InOutText => I18nService.F("Usage.InOut", FormatTokens(InTokens), FormatTokens(OutTokens));
         public string TotalText => FormatTokens(Total);

@@ -66,6 +66,38 @@
             </Setter>
         </Style>
 
+        <!-- 虚拟化列表（容器回收）：大列表只实例化可视区行，滚动/切换不卡顿 -->
+        <Style x:Key="VListBox" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+            <Setter Property="VirtualizingPanel.CacheLength" Value="1,2"/>
+            <Setter Property="VirtualizingPanel.CacheLengthUnit" Value="Page"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Focusable" Value="False"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Window.Resources>
 
     <Border Background="#FFFFFF" BorderBrush="{DynamicResource SidebarBorderBrush}" BorderThickness="1.5" CornerRadius="12">
@@ -204,6 +236,7 @@
                 <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,14,0,0">
                     <RadioButton x:Name="TabProvidersRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabProviders}" Checked="OnTabProvidersChecked" IsChecked="True"/>
                     <RadioButton x:Name="TabAgentsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabAgents}" Checked="OnTabAgentsChecked" Margin="4,0,0,0"/>
+                    <RadioButton x:Name="TabModelsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabModels}" Checked="OnTabModelsChecked" Margin="4,0,0,0"/>
                     <RadioButton x:Name="TabCallsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabCalls}" Checked="OnTabCallsChecked" Margin="4,0,0,0"/>
                     <TextBlock x:Name="RangeSummaryText" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="14,2,0,0"/>
                 </StackPanel>
@@ -212,11 +245,9 @@
                 <Grid Grid.Row="4" Margin="0,10,0,0" Background="Transparent">
 
                     <!-- 面板 1：供应商下钻 -->
-                    <ScrollViewer x:Name="ProvidersPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel>
-                            <ItemsControl x:Name="ProviderList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
+                    <ListBox x:Name="ProvidersPanel" Style="{StaticResource VListBox}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
                                         <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="10,4,12,4" Margin="0,0,0,8">
                                             <StackPanel>
                                                 <Button Style="{StaticResource RowHeaderBtn}" Click="OnToggleProviderExpand" ToolTip="{DynamicResource Usage.ExpandTip}">
@@ -276,17 +307,13 @@
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </ScrollViewer>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
 
                     <!-- 面板 2：客户端汇总 -->
-                    <ScrollViewer x:Name="AgentsPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
-                        <StackPanel>
-                            <ItemsControl x:Name="AgentList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
+                    <ListBox x:Name="AgentsPanel" Style="{StaticResource VListBox}" Visibility="Collapsed">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
                                         <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="12,6,12,6" Margin="0,0,0,8">
                                             <Grid Height="36">
                                                 <Grid.ColumnDefinitions>
@@ -310,12 +337,78 @@
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </ScrollViewer>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <!-- 面板 3：模型汇总（跨供应商合并同模型） -->
+                    <ListBox x:Name="ModelsPanel" Style="{StaticResource VListBox}" Visibility="Collapsed">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="10,4,12,4" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <Button Style="{StaticResource RowHeaderBtn}" Click="OnToggleModelExpand" ToolTip="{DynamicResource Usage.ExpandTip}">
+                                            <Grid Height="36" Margin="2,0,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="20"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="170"/>
+                                                    <ColumnDefinition Width="44"/>
+                                                    <ColumnDefinition Width="76"/>
+                                                    <ColumnDefinition Width="130"/>
+                                                    <ColumnDefinition Width="86"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Path Grid.Column="0" Data="{StaticResource IconChevronRight}" Fill="#94A3B8" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <RotateTransform Angle="{Binding ChevronAngle}"/>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                                    <TextBlock Text="{Binding ProviderCountText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,2,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <Border Grid.Column="2" Height="7" CornerRadius="3.5" Background="#EEF2FF" VerticalAlignment="Center">
+                                                    <Border Width="{Binding BarWidth}" Height="7" CornerRadius="3.5" Background="{StaticResource AccentGradient}" HorizontalAlignment="Left"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="3" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding ReqText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                        </Button>
+                                        <ItemsControl ItemsSource="{Binding Providers}" Visibility="{Binding ProvidersVisibility}" Margin="8,2,6,4">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Height="26">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="170"/>
+                                                            <ColumnDefinition Width="44"/>
+                                                            <ColumnDefinition Width="76"/>
+                                                            <ColumnDefinition Width="130"/>
+                                                            <ColumnDefinition Width="86"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Height="1" VerticalAlignment="Bottom" Background="#F1F5F9" Margin="0,0,10,0"/>
+                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                                                            <TextBlock Text="{Binding NameText}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding NameText}"/>
+                                                            <TextBlock Text="{Binding RawModelText}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="8,1,0,0" TextTrimming="CharacterEllipsis" MaxWidth="220" ToolTip="{Binding RawModel}"/>
+                                                        </StackPanel>
+                                                        <Border Grid.Column="1" Height="5" CornerRadius="2.5" Background="#EEF2FF" VerticalAlignment="Center">
+                                                            <Border Width="{Binding BarWidth}" Height="5" CornerRadius="2.5" Background="#A5B4FC" HorizontalAlignment="Left"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="2" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding ReqText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="5" Text="{Binding TotalText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
 
-                    <!-- 面板 3：调用明细 -->
+                    <!-- 面板 4：调用明细 -->
                     <Grid x:Name="CallsPanel" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -341,31 +434,7 @@
                                 <TextBlock Grid.Column="6" Text="{DynamicResource Usage.ColTotal}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
                             </Grid>
                         </Border>
-                        <ListBox x:Name="CallsList" Grid.Row="1"
-                                 Background="Transparent" BorderThickness="0" Padding="0"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 VirtualizingPanel.IsVirtualizing="True"
-                                 VirtualizingPanel.VirtualizationMode="Recycling"
-                                 VirtualizingPanel.CacheLength="1,2"
-                                 VirtualizingPanel.CacheLengthUnit="Page"
-                                 Focusable="False">
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="0"/>
-                                    <Setter Property="Margin" Value="0"/>
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="Focusable" Value="False"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ListBoxItem">
-                                                <ContentPresenter/>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </ListBox.ItemContainerStyle>
+                        <ListBox x:Name="CallsList" Grid.Row="1" Style="{StaticResource VListBox}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Height="30">

@@ -57,15 +57,50 @@ public partial class App : System.Windows.Application
             });
         }
     }
+    static readonly object _logLock = new();
+
     public static void LogStartup(string msg)
     {
-        try
+        // 后台配额任务与 UI 线程都会写日志，轮转涉及"读-截断-写"，
+        // 必须串行化，否则并发轮转会互相覆盖导致日志错乱
+        lock (_logLock)
         {
-            var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
-            Directory.CreateDirectory(logDir);
-            File.AppendAllText(Path.Combine(logDir, "startup.log"), $"[{DateTime.Now:O}] [PID:{Environment.ProcessId}] {msg}\n");
+            try
+            {
+                var logDir = Path.Combine(AgPaths.AppData, "APISwitch");
+                Directory.CreateDirectory(logDir);
+                var logPath = Path.Combine(logDir, "startup.log");
+
+                // 简单轮转：超过 1MB 时保留尾部 256KB，避免日志无限增长
+                try
+                {
+                    var fi = new FileInfo(logPath);
+                    if (fi.Exists && fi.Length > 1_048_576)
+                    {
+                        const int keep = 262_144;
+                        var tail = new byte[keep];
+                        using (var fs = new FileStream(logPath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+                        {
+                            fs.Seek(-keep, SeekOrigin.End);
+                            int read = 0;
+                            while (read < keep)
+                            {
+                                int n = fs.Read(tail, read, keep - read);
+                                if (n <= 0) break;
+                                read += n;
+                            }
+                            fs.SetLength(0);
+                            fs.Position = 0;
+                            fs.Write(tail, 0, read);
+                        }
+                    }
+                }
+                catch { }
+
+                File.AppendAllText(logPath, $"[{DateTime.Now:O}] [PID:{Environment.ProcessId}] {msg}\n");
+            }
+            catch { }
         }
-        catch { }
     }
 
     protected override void OnStartup(StartupEventArgs e)

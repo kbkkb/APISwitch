@@ -575,6 +575,14 @@
     <sys:String x:Key="Usage.Minute">Min</sys:String>
     <sys:String x:Key="Usage.Now">Now</sys:String>
     <sys:String x:Key="Usage.PickerTip">Pick date and time</sys:String>
+    <sys:String x:Key="Usage.Done">Done</sys:String>
+    <sys:String x:Key="Usage.Dow0">Sun</sys:String>
+    <sys:String x:Key="Usage.Dow1">Mon</sys:String>
+    <sys:String x:Key="Usage.Dow2">Tue</sys:String>
+    <sys:String x:Key="Usage.Dow3">Wed</sys:String>
+    <sys:String x:Key="Usage.Dow4">Thu</sys:String>
+    <sys:String x:Key="Usage.Dow5">Fri</sys:String>
+    <sys:String x:Key="Usage.Dow6">Sat</sys:String>
     <sys:String x:Key="Usage.TotalTokens">Total Tokens</sys:String>
     <sys:String x:Key="Usage.InputTokens">Input Tokens</sys:String>
     <sys:String x:Key="Usage.OutputTokens">Output Tokens</sys:String>
@@ -605,6 +613,9 @@
     <!-- Usage monitor redesign -->
     <sys:String x:Key="Usage.TabProviders">Providers</sys:String>
     <sys:String x:Key="Usage.TabAgents">Clients</sys:String>
+    <sys:String x:Key="Usage.TabModels">Models</sys:String>
+    <sys:String x:Key="Usage.ProvidersFmt">{0} providers</sys:String>
+    <sys:String x:Key="Usage.RawModelFmt">(raw: {0})</sys:String>
     <sys:String x:Key="Usage.TabCalls">Recent Calls</sys:String>
     <sys:String x:Key="Usage.TrendTitle">Daily Usage Trend</sys:String>
     <sys:String x:Key="Usage.LegendIn">Input</sys:String>

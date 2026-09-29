@@ -575,6 +575,14 @@
     <sys:String x:Key="Usage.Minute">分</sys:String>
     <sys:String x:Key="Usage.Now">此刻</sys:String>
     <sys:String x:Key="Usage.PickerTip">选择日期与时间</sys:String>
+    <sys:String x:Key="Usage.Done">完成</sys:String>
+    <sys:String x:Key="Usage.Dow0">日</sys:String>
+    <sys:String x:Key="Usage.Dow1">一</sys:String>
+    <sys:String x:Key="Usage.Dow2">二</sys:String>
+    <sys:String x:Key="Usage.Dow3">三</sys:String>
+    <sys:String x:Key="Usage.Dow4">四</sys:String>
+    <sys:String x:Key="Usage.Dow5">五</sys:String>
+    <sys:String x:Key="Usage.Dow6">六</sys:String>
     <sys:String x:Key="Usage.TotalTokens">总 Token</sys:String>
     <sys:String x:Key="Usage.InputTokens">输入 Token</sys:String>
     <sys:String x:Key="Usage.OutputTokens">输出 Token</sys:String>
@@ -605,6 +613,9 @@
     <!-- 用量监控重构新增 -->
     <sys:String x:Key="Usage.TabProviders">供应商明细</sys:String>
     <sys:String x:Key="Usage.TabAgents">客户端汇总</sys:String>
+    <sys:String x:Key="Usage.TabModels">模型汇总</sys:String>
+    <sys:String x:Key="Usage.ProvidersFmt">{0} 家供应商</sys:String>
+    <sys:String x:Key="Usage.RawModelFmt">（原名：{0}）</sys:String>
     <sys:String x:Key="Usage.TabCalls">调用明细</sys:String>
     <sys:String x:Key="Usage.TrendTitle">每日用量趋势</sys:String>
     <sys:String x:Key="Usage.LegendIn">输入</sys:String>
