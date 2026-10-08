@@ -79,27 +79,93 @@ public class Profile : INotifyPropertyChanged
                     return I18nService.F("Ag.ActivatedLatencyFmt", ActivationLatencyMs.Value);
                 return I18nService.T("Ag.Activated");
             }
-            // 429 用尽：QuotaExhaustedResetAt 仅由 429 路径写入，其存在即代表上次失败为配额用尽
-            // （兼容不含 QuotaExhausted 标志的旧存档）
-            if (QuotaExhaustedResetAt.HasValue)
+
+            // 以实时配额为准判断是否仍处于用尽状态：配额恢复后即使 429 遗留标记未清，
+            // 也不应继续显示倒计时（修复"未激活却显示错误倒计时"）。
+            double? minRemaining = MinRemainingFraction();
+            if (minRemaining.HasValue)
             {
-                if (QuotaExhaustedResetAt.Value > DateTime.UtcNow)
+                if (minRemaining.Value <= 0.02)
                 {
-                    var left = QuotaExhaustedResetAt.Value - DateTime.UtcNow;
-                    var cd = left.TotalHours >= 1
-                        ? $"{(int)left.TotalHours}h {left.Minutes}m"
-                        : $"{left.Minutes}m {left.Seconds}s";
-                    return I18nService.F("Ag.ExhaustedCountdownFmt", cd);
+                    var resetAt = ConstrainingResetUtc();
+                    if (resetAt.HasValue)
+                    {
+                        var left = resetAt.Value - DateTime.UtcNow;
+                        if (left.TotalSeconds > 0)
+                            return I18nService.F("Ag.ExhaustedCountdownFmt", FormatCountdown(left));
+                    }
                 }
-                // 重置时间已过：配额应已恢复，归为待激活而非“失败”
+                // 配额充足（或用尽但拿不到重置时间）→ 不属于用尽态，继续往下走
+            }
+            else if (QuotaExhaustedResetAt.HasValue)
+            {
+                // 完全拿不到实时配额时，退回 429 路径记录的标记
+                if (QuotaExhaustedResetAt.Value > DateTime.UtcNow)
+                    return I18nService.F("Ag.ExhaustedCountdownFmt",
+                        FormatCountdown(QuotaExhaustedResetAt.Value - DateTime.UtcNow));
+                // 重置时间已过：配额应已恢复，归为待激活而非"失败"
                 return I18nService.T("Ag.PendingActivation");
             }
+
             if (IsActivated == false)
-            {
                 return I18nService.T("Ag.ActivationFailed");
-            }
             return I18nService.T("Ag.PendingActivation");
         }
+    }
+
+    /// <summary>四桶中最小剩余比例；无任何配额数据返回 null。</summary>
+    double? MinRemainingFraction()
+    {
+        double? min = null;
+        void Consider(double? v)
+        {
+            if (v.HasValue && (min == null || v.Value < min)) min = v;
+        }
+        Consider(Quota5hFraction);
+        Consider(QuotaWeeklyFraction);
+        Consider(Quota3p5hFraction);
+        Consider(Quota3pWeeklyFraction);
+        return min;
+    }
+
+    /// <summary>
+    /// 当前真正接近用尽（≤2%）的桶中，最早的未来重置时间。
+    /// 只统计"已用尽"的桶，避免拿仍充裕的桶的重置时间来做倒计时。
+    /// </summary>
+    internal DateTime? ConstrainingResetUtc()
+    {
+        DateTime? earliest = null;
+        void Consider(double? fraction, string? raw)
+        {
+            if (!fraction.HasValue || fraction.Value > 0.02) return;
+            var dt = ParseResetUtc(raw);
+            if (dt.HasValue && dt.Value > DateTime.UtcNow && dt.Value < DateTime.UtcNow.AddDays(8))
+                if (earliest == null || dt.Value < earliest) earliest = dt.Value;
+        }
+        Consider(Quota5hFraction, Quota5hResetTime);
+        Consider(QuotaWeeklyFraction, QuotaWeeklyResetTime);
+        Consider(Quota3p5hFraction, Quota3p5hResetTime);
+        Consider(Quota3pWeeklyFraction, Quota3pWeeklyResetTime);
+        return earliest;
+    }
+
+    /// <summary>倒计时时长的人类可读格式：≥1天用 d/h，≥1小时用 h/m，否则 m/s。</summary>
+    static string FormatCountdown(TimeSpan left)
+    {
+        if (left.TotalSeconds <= 0) return "";
+        if (left.TotalDays >= 1) return $"{(int)left.TotalDays}d {left.Hours}h";
+        if (left.TotalHours >= 1) return $"{(int)left.TotalHours}h {left.Minutes}m";
+        return $"{left.Minutes}m {left.Seconds}s";
+    }
+
+    /// <summary>时区安全的 UTC 解析（与 AgQuotaService.ParseResetUtc 语义一致）。</summary>
+    static DateTime? ParseResetUtc(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return null;
+        if (DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var dt))
+            return dt;
+        return null;
     }
 
     [JsonIgnore]
@@ -183,7 +249,7 @@ public class Profile : INotifyPropertyChanged
             if (!IsProTier) return I18nService.T("Ag.No5hLimit");
             if (!Quota5hFraction.HasValue) return I18nService.T("Ag.NotActivatedShort");
             if (string.IsNullOrEmpty(Quota5hResetTime)) return I18nService.T("Ag.FullStandby");
-            if (DateTime.TryParse(Quota5hResetTime, out var dt))
+            if (ParseResetUtc(Quota5hResetTime) is { } dt)
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
                 if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
@@ -211,7 +277,7 @@ public class Profile : INotifyPropertyChanged
         get
         {
             if (string.IsNullOrEmpty(QuotaWeeklyResetTime)) return "";
-            if (DateTime.TryParse(QuotaWeeklyResetTime, out var dt))
+            if (ParseResetUtc(QuotaWeeklyResetTime) is { } dt)
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
                 if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");
@@ -246,7 +312,7 @@ public class Profile : INotifyPropertyChanged
             if (!IsProTier) return I18nService.T("Ag.No5hLimit");
             if (!Quota3p5hFraction.HasValue) return I18nService.T("Ag.NotActivatedShort");
             if (string.IsNullOrEmpty(Quota3p5hResetTime)) return I18nService.T("Ag.FullStandby");
-            if (DateTime.TryParse(Quota3p5hResetTime, out var dt))
+            if (ParseResetUtc(Quota3p5hResetTime) is { } dt)
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
                 if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
@@ -273,7 +339,7 @@ public class Profile : INotifyPropertyChanged
         get
         {
             if (string.IsNullOrEmpty(Quota3pWeeklyResetTime)) return "";
-            if (DateTime.TryParse(Quota3pWeeklyResetTime, out var dt))
+            if (ParseResetUtc(Quota3pWeeklyResetTime) is { } dt)
             {
                 var diff = dt.ToUniversalTime() - DateTime.UtcNow;
                 if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");

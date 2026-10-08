@@ -397,8 +397,52 @@ public static class AgQuotaService
             return (false, 0, profile.ActivationError, false);
         }
 
-        var token = profile.AccessToken;
+        // 1.5 激活依赖本地真实的 Antigravity CLI（agy.exe）。
+        // 与人类在终端使用完全一致（自带鉴权 / 项目解析 / 配额管理 / 设备指纹），
+        // 风控命中率远低于手搓 HTTP 握手。CLI 缺失时直接返回可操作错误，
+        // 由 UI 提示用户安装，绝不静默回退到不可用的合成握手。
+        if (!AgCliService.IsAvailable())
+        {
+            sw.Stop();
+            profile.IsActivated = false;
+            profile.ActivationError = I18nService.T("AgQ.CliNotFound");
+            ProfileStore.Save(profile);
+            return (false, sw.ElapsedMilliseconds, profile.ActivationError, false);
+        }
 
+        var cliResult = await AgCliService.ActivateAsync(profile);
+        // CLI 跑完无论成败都同步一次最新配额，保证徽章与剩余百分比是最新的
+        await RefreshQuotaAsync(profile);
+
+        profile.IsActivated = cliResult.Ok;
+        profile.ActivationLatencyMs = cliResult.LatencyMs;
+        profile.ActivatedAt = cliResult.Ok ? DateTime.UtcNow : profile.ActivatedAt;
+        if (cliResult.Ok)
+        {
+            profile.ActivationError = null;
+            profile.QuotaExhausted = false;
+            profile.QuotaExhaustedResetAt = null;
+        }
+        else
+        {
+            profile.ActivationError = cliResult.Message;
+            profile.QuotaExhausted = cliResult.RateLimited;
+            if (cliResult.RateLimited)
+                profile.QuotaExhaustedResetAt = profile.ConstrainingResetUtc() ?? DateTime.UtcNow.AddHours(5);
+        }
+        ProfileStore.Save(profile);
+        sw.Stop();
+        return (cliResult.Ok, cliResult.LatencyMs, cliResult.Message, cliResult.RateLimited);
+    }
+
+    /// <summary>
+    /// 预留：手搓 HTTP 合成握手。实测对 Pro 账号长期 429（设备指纹与配额管理均与
+    /// 真实客户端不一致），已停止使用；保留以便后续诊断比对，不参与正常激活流程。
+    /// </summary>
+    private static async Task<(bool ok, long latencyMs, string message, bool rateLimited)> ActivateViaSyntheticHandshakeAsync(Profile profile)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var token = profile.AccessToken ?? "";
         // 2. loadCodeAssist 获取关联 companion project 并解析当前账号阶梯
         string? companionProject = null;
         var loadUrls = new[]
@@ -551,8 +595,10 @@ public static class AgQuotaService
                 else
                 {
                     profile.ActivationError = I18nService.T("AgQ.ErrRateLimited");
-                    // 优先使用配额摘要里解析到的真实重置时间；解析不到才退化为 +5h 兜底
-                    profile.QuotaExhaustedResetAt = EarliestQuotaReset(profile) ?? DateTime.UtcNow.AddHours(5);
+                    // 优先用"当前真正用尽的桶"的重置时间；退化到最早的未来重置；最后才盲猜 +5h
+                    profile.QuotaExhaustedResetAt = profile.ConstrainingResetUtc()
+                        ?? EarliestQuotaReset(profile)
+                        ?? DateTime.UtcNow.AddHours(5);
                 }
             }
             else
@@ -937,6 +983,23 @@ public static class AgQuotaService
         if (quotaGot)
         {
             profile.QuotaUpdatedAt = DateTime.UtcNow;
+
+            // 配额已恢复：清理 429 遗留的"用尽"标记，避免徽章继续显示过期倒计时。
+            // IsActivated=false 只表示"上次激活失败"，配额恢复后失败原因已不存在，回落"待激活"。
+            if (profile.QuotaExhausted || profile.QuotaExhaustedResetAt.HasValue)
+            {
+                var minRemaining = MinRemainingFraction(profile);
+                if (minRemaining.HasValue && minRemaining.Value > 0.05)
+                {
+                    profile.QuotaExhausted = false;
+                    profile.QuotaExhaustedResetAt = null;
+                    if (profile.IsActivated == false)
+                    {
+                        profile.IsActivated = null;
+                        profile.ActivationError = null;
+                    }
+                }
+            }
             // 用量监控：写入配额快照（供趋势差分展示）
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-5h", profile.Quota5hFraction ?? 0, ParseResetUtc(profile.Quota5hResetTime));
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-weekly", profile.QuotaWeeklyFraction ?? 0, ParseResetUtc(profile.QuotaWeeklyResetTime));

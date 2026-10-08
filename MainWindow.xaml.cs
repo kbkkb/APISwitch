@@ -27,6 +27,12 @@ public partial class MainWindow : Window
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
+    // 拦截"最小化"系统命令（点击任务栏按钮 / Win+↓ / Win+M / Alt+Space 等都会发它）。
+    // 让窗口根本不进入 Minimized 状态，任务栏上就不会出现"最小化按钮"，
+    // 随后 ShowInTaskbar=false + Hide() 才能干净地把窗口收进托盘。
+    private const int WM_SYSCOMMAND = 0x0112;
+    private const int SC_MINIMIZE = 0xF020;
+
     ObservableCollection<Profile> _profiles = new();
     ObservableCollection<CodexRow> _codexCollection = new();
     ObservableCollection<ClaudeRow> _claudeCollection = new();
@@ -47,6 +53,7 @@ public partial class MainWindow : Window
 
     System.Windows.Forms.NotifyIcon? _notifyIcon;
     bool _isExiting = false;
+    bool _trayTransition = false;
     ProviderDialog? _activeProviderDialog;
 
     public MainWindow()
@@ -105,11 +112,31 @@ public partial class MainWindow : Window
             var handle = new WindowInteropHelper(this).Handle;
             int cornerPreference = DWMWCP_ROUND;
             DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPreference, sizeof(int));
+
+            // 拦截 SC_MINIMIZE：任务栏按钮点击 / Win+↓ / Win+M 一律转成"隐藏到托盘"，
+            // 窗口不会进入 Minimized 状态，任务栏上也就不会残留最小化按钮。
+            if (HwndSource.FromHwnd(handle) is HwndSource source)
+            {
+                source.AddHook(WndProc);
+            }
         }
         catch
         {
             // 兼容不支持 DWMWA_WINDOW_CORNER_PREFERENCE 的低版本系统
         }
+    }
+
+    IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_SYSCOMMAND && (wParam.ToInt32() & 0xFFF0) == SC_MINIMIZE)
+        {
+            handled = true;
+            if (IsVisible)
+            {
+                MinimizeToTray();
+            }
+        }
+        return IntPtr.Zero;
     }
 
     public void RefreshAll()
@@ -157,8 +184,11 @@ public partial class MainWindow : Window
 
     void OnWindowStateChanged(object? sender, EventArgs e)
     {
+        if (_trayTransition) return;
         if (WindowState == WindowState.Minimized)
         {
+            // 兜底：万一 OS 绕过 WM_SYSCOMMAND 直接最小化，也立刻转成"隐藏到托盘"，
+            // 绝不在任务栏上留一个最小化按钮。
             MinimizeToTray();
         }
         else if (IsActive)
@@ -367,6 +397,7 @@ public partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.DataContext is not Profile target) return;
         if (target.IsActivating) return; // 防抖：激活中忽略重复点击
+        if (!EnsureAgCliAvailable()) return;
 
         target.IsActivating = true;
         try
@@ -403,8 +434,20 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 激活前检查本地 Antigravity CLI 是否可用。
+    /// 不可用时弹出可操作提示（而非静默失败），返回 false 中止激活。
+    /// </summary>
+    bool EnsureAgCliAvailable()
+    {
+        if (Services.AgCliService.IsAvailable()) return true;
+        Warn(I18nService.T("AgQ.CliMissingHint"));
+        return false;
+    }
+
     async void OnBatchActivateAntigravity(object sender, RoutedEventArgs e)
     {
+        if (!EnsureAgCliAvailable()) return;
         if (_profiles.Count == 0)
         {
             ShowToast(I18nService.T("Msg.AgBatchEmpty"), isError: true);
@@ -3210,12 +3253,21 @@ public partial class MainWindow : Window
 
             _notifyIcon.MouseClick += (_, e) =>
             {
-                if (e.Button == System.Windows.Forms.MouseButtons.Left)
+                if (e.Button != System.Windows.Forms.MouseButtons.Left) return;
+                // 左键 = 切换：窗口还看得见就收进托盘（与点标题栏"-"一致），
+                // 已经收进托盘了才唤出。双击会触发两次单击，净效果仍是"唤出"，行为可预期。
+                Dispatcher.Invoke(() =>
                 {
-                    RestoreFromTray();
-                }
+                    if (IsVisible)
+                    {
+                        MinimizeToTray();
+                    }
+                    else
+                    {
+                        RestoreAndActivate();
+                    }
+                });
             };
-            _notifyIcon.DoubleClick += (_, _) => RestoreFromTray();
 
             _notifyIcon.ContextMenuStrip = ModernTrayMenu.Create(
                 onShow: RestoreFromTray,
@@ -3232,25 +3284,45 @@ public partial class MainWindow : Window
         catch { }
     }
 
-    void MinimizeToTray()
+    /// <summary>
+    /// 隐藏到托盘：任务栏按钮必须彻底消失，而不是变成一个"最小化按钮"蹲在任务栏右侧。
+    /// </summary>
+    public void MinimizeToTray()
     {
-        WindowState = WindowState.Minimized;
-        Hide();
-        ShowInTaskbar = false;
+        _trayTransition = true;
+        try
+        {
+            // 1) 若此刻已被 OS 置成最小化（例如点任务栏按钮触发的兜底路径），
+            //    必须先恢复成 Normal。Windows 对"最小化中的窗口"执行 ShowInTaskbar=false
+            //    时，任务栏上那个最小化按钮不一定会被清掉；先归位再摘，按钮才会真正消失。
+            // 2) 顺序必须是 ShowInTaskbar=false → Hide()，反了就有概率残留任务栏按钮。
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+            }
+            ShowInTaskbar = false;
+            Hide();
+        }
+        finally
+        {
+            _trayTransition = false;
+        }
         _agQuotaTimer?.Stop();
     }
 
     public void RestoreAndActivate()
     {
+        // 先把窗口状态归一化，再亮出任务栏按钮：避免"以最小化状态显示"——
+        // 那种情况下屏幕上不会出现窗口，只在任务栏留一个最小化按钮。
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
         if (!IsVisible)
         {
             Show();
         }
         ShowInTaskbar = true;
-        if (WindowState == WindowState.Minimized)
-        {
-            WindowState = WindowState.Normal;
-        }
         Activate();
         Topmost = true;
         Topmost = false;

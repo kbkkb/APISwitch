@@ -352,7 +352,7 @@
                             <TextBlock Text="{DynamicResource Ag.LoginBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="BatchActivateBtn" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnBatchActivateAntigravity" ToolTip="{DynamicResource Ag.BatchActivateTip}" Visibility="Collapsed">
+                    <Button x:Name="BatchActivateBtn" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnBatchActivateAntigravity" ToolTip="{DynamicResource Ag.BatchActivateTip}">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
                             <TextBlock Text="{DynamicResource Ag.BatchActivateBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
@@ -469,7 +469,7 @@
                                                             <TextBlock Text="{DynamicResource Ag.SwitchBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateQuota" ToolTip="{DynamicResource Ag.ActivateQuotaTip}" Visibility="Collapsed">
+                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateQuota" ToolTip="{DynamicResource Ag.ActivateQuotaTip}">
                                                         <StackPanel Orientation="Horizontal">
                                                             <Path x:Name="ActivateIcon" Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
                                                                 <Path.RenderTransform>

@@ -560,6 +560,13 @@
     <sys:String x:Key="AgQ.ErrRateLimitedRpm">触发 Google 分钟级限流（429，配额仍充足），已自动重试一次；请稍等 1~2 分钟后再试</sys:String>
     <sys:String x:Key="AgQ.ErrNoValidStream">未收到有效流式响应（候选模型均不可用或网络异常）</sys:String>
     <sys:String x:Key="AgQ.ErrNoModelList">无法获取该账号的可用模型列表（fetchAvailableModels 失败），已中止激活以避免请求不存在的模型</sys:String>
+    <sys:String x:Key="AgQ.CliNotFound">未找到 Antigravity CLI（agy.exe），请先安装 Antigravity 命令行工具</sys:String>
+    <sys:String x:Key="AgQ.CliFailed">CLI 激活失败（未获得有效响应）</sys:String>
+    <sys:String x:Key="AgQ.CliOkFmt">已通过本地 CLI 激活：模型 {0}，耗时 {1}ms（{2}）</sys:String>
+    <sys:String x:Key="AgQ.CliOkGemini">Gemini 限额池</sys:String>
+    <sys:String x:Key="AgQ.CliOkThirdParty">Claude/GPT 限额池</sys:String>
+    <sys:String x:Key="AgQ.CliOkBoth">Gemini + Claude/GPT 限额池</sys:String>
+    <sys:String x:Key="AgQ.CliMissingHint">未检测到 Antigravity 命令行工具（agy.exe），无法执行真实激活。&#10;&#10;请按以下步骤安装后重试：&#10;1. 安装 Antigravity IDE（CLI 通常随其一同安装）；&#10;2. 或单独安装 Antigravity CLI；&#10;3. 确认 agy.exe 所在目录已加入系统 PATH（默认位于 %LOCALAPPDATA%\agy\bin）。&#10;&#10;安装完成后无需重启本软件，再次点击「激活」即可。</sys:String>
 
     <!-- ==================== 用量监控 ==================== -->
     <sys:String x:Key="Usage.Title">用量监控</sys:String>

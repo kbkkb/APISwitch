@@ -558,6 +558,13 @@
     <sys:String x:Key="AgQ.OkSummaryFmt">Quota activated ({0} · {1} · {2} ms)</sys:String>
     <sys:String x:Key="AgQ.ErrRateLimited">Current model hit its limit or no valid response (latest quota state synced)</sys:String>
     <sys:String x:Key="AgQ.ErrRateLimitedRpm">Google per-minute rate limit hit (429, quota still available); auto-retried once — please try again in 1-2 minutes</sys:String>
+    <sys:String x:Key="AgQ.CliNotFound">Antigravity CLI (agy.exe) not found — please install the Antigravity command line tool first</sys:String>
+    <sys:String x:Key="AgQ.CliFailed">CLI activation failed (no valid response)</sys:String>
+    <sys:String x:Key="AgQ.CliOkFmt">Activated via local CLI: model {0}, {1}ms ({2})</sys:String>
+    <sys:String x:Key="AgQ.CliOkGemini">Gemini quota pool</sys:String>
+    <sys:String x:Key="AgQ.CliOkThirdParty">Claude/GPT quota pool</sys:String>
+    <sys:String x:Key="AgQ.CliOkBoth">Gemini + Claude/GPT quota pools</sys:String>
+    <sys:String x:Key="AgQ.CliMissingHint">Antigravity command line tool (agy.exe) was not detected, so real activation cannot run.&#10;&#10;Please install it and try again:&#10;1. Install the Antigravity IDE (the CLI usually ships with it);&#10;2. or install the Antigravity CLI standalone;&#10;3. make sure the folder containing agy.exe is on your system PATH (default: %LOCALAPPDATA%\agy\bin\).&#10;&#10;No restart of APISwitch is needed — just click Activate again.</sys:String>
     <sys:String x:Key="AgQ.ErrNoValidStream">No valid stream response (all candidate models unavailable or network error)</sys:String>
     <sys:String x:Key="AgQ.ErrNoModelList">Could not fetch the account's available model list (fetchAvailableModels failed); activation aborted to avoid requesting non-existent models</sys:String>
 

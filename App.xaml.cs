@@ -583,11 +583,48 @@ public partial class App : System.Windows.Application
             sb.AppendLine("ag_exhausted_past=" + pExhPast.ActivationStatusText);
             var pRealFail = new Models.Profile { IsActivated = false, ActivationError = "token" };
             sb.AppendLine("ag_real_fail=" + pRealFail.ActivationStatusText);
+
+            // 3c) 关键回归：配额已恢复但 429 遗留标记未清时，不得再显示倒计时
+            var pStale = new Models.Profile
+            {
+                IsActivated = false,
+                QuotaExhausted = true,
+                QuotaExhaustedResetAt = DateTime.UtcNow.AddHours(3),
+                Quota5hFraction = 0.85,
+                QuotaWeeklyFraction = 0.62,
+                Quota5hResetTime = DateTime.UtcNow.AddHours(2).ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            };
+            sb.AppendLine("ag_stale_no_countdown=" + pStale.ActivationStatusText);
+            // 3d) 仍处用尽且重置时间在未来 → 显示倒计时（含天级格式）
+            var pTrueExh = new Models.Profile
+            {
+                IsActivated = false,
+                Quota5hFraction = 0.01,
+                QuotaWeeklyFraction = 0.004,
+                Quota5hResetTime = DateTime.UtcNow.AddHours(2).ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                QuotaWeeklyResetTime = DateTime.UtcNow.AddDays(5).AddHours(22).ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            };
+            sb.AppendLine("ag_true_exhausted=" + pTrueExh.ActivationStatusText);
             // 4) 批量激活按钮可见（曾误置 Collapsed 导致功能不可达）
             var mw2 = new MainWindow { Visibility = Visibility.Hidden };
             var batchBtn = mw2.FindName("BatchActivateBtn") as System.Windows.Controls.Control;
             sb.AppendLine("ag_batch_btn=" + (batchBtn != null && batchBtn.Visibility == Visibility.Visible ? "visible" : "hidden"));
             mw2.Close();
+            // 4b) 最小化到托盘回归：任务栏按钮必须消失、窗口必须隐藏、状态不得停留在 Minimized
+            //    （曾因先设 WindowState=Minimized 再 ShowInTaskbar=false，导致任务栏右侧残留最小化按钮）
+            try
+            {
+                var trayWin = new MainWindow { Visibility = Visibility.Hidden };
+                trayWin.MinimizeToTray();
+                sb.AppendLine("tray_min_taskbar=" + (trayWin.ShowInTaskbar ? "shown" : "hidden"));
+                sb.AppendLine("tray_min_visible=" + (trayWin.IsVisible ? "visible" : "hidden"));
+                sb.AppendLine("tray_min_state=" + (trayWin.WindowState == WindowState.Minimized ? "minimized" : "normal"));
+                trayWin.Close();
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("tray_probe_err=" + ex.Message);
+            }
         }
         catch (Exception ex)
         {
