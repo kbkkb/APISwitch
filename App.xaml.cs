@@ -610,16 +610,21 @@ public partial class App : System.Windows.Application
             var batchBtn = mw2.FindName("BatchActivateBtn") as System.Windows.Controls.Control;
             sb.AppendLine("ag_batch_btn=" + (batchBtn != null && batchBtn.Visibility == Visibility.Visible ? "visible" : "hidden"));
             mw2.Close();
-            // 4b) 最小化到托盘回归：任务栏按钮必须消失、窗口必须隐藏、状态不得停留在 Minimized
-            //    （曾因先设 WindowState=Minimized 再 ShowInTaskbar=false，导致任务栏右侧残留最小化按钮）
+            // 4b) 最小化回归：点标题栏"-"必须最小化到任务栏（任务栏按钮可见、状态为 Minimized），
+            //     而不是收进系统托盘。收托盘只属于"关闭窗口"路径。
             try
             {
-                var trayWin = new MainWindow { Visibility = Visibility.Hidden };
-                trayWin.MinimizeToTray();
-                sb.AppendLine("tray_min_taskbar=" + (trayWin.ShowInTaskbar ? "shown" : "hidden"));
-                sb.AppendLine("tray_min_visible=" + (trayWin.IsVisible ? "visible" : "hidden"));
-                sb.AppendLine("tray_min_state=" + (trayWin.WindowState == WindowState.Minimized ? "minimized" : "normal"));
-                trayWin.Close();
+                var minWin = new MainWindow { Visibility = Visibility.Hidden };
+                minWin.MinimizeToTaskbar();
+                sb.AppendLine("min_state=" + (minWin.WindowState == WindowState.Minimized ? "minimized" : "normal"));
+                sb.AppendLine("min_taskbar=" + (minWin.ShowInTaskbar ? "shown" : "hidden"));
+                sb.AppendLine("min_visible=" + (minWin.IsVisible ? "visible" : "hidden"));
+                // 4c) 关闭到托盘回归：窗口与任务栏按钮都必须消失
+                minWin.MinimizeToTray();
+                sb.AppendLine("tray_min_taskbar=" + (minWin.ShowInTaskbar ? "shown" : "hidden"));
+                sb.AppendLine("tray_min_visible=" + (minWin.IsVisible ? "visible" : "hidden"));
+                sb.AppendLine("tray_min_state=" + (minWin.WindowState == WindowState.Minimized ? "minimized" : "normal"));
+                minWin.Close();
             }
             catch (Exception ex)
             {

@@ -27,11 +27,6 @@ public partial class MainWindow : Window
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
-    // 拦截"最小化"系统命令（点击任务栏按钮 / Win+↓ / Win+M / Alt+Space 等都会发它）。
-    // 让窗口根本不进入 Minimized 状态，任务栏上就不会出现"最小化按钮"，
-    // 随后 ShowInTaskbar=false + Hide() 才能干净地把窗口收进托盘。
-    private const int WM_SYSCOMMAND = 0x0112;
-    private const int SC_MINIMIZE = 0xF020;
 
     ObservableCollection<Profile> _profiles = new();
     ObservableCollection<CodexRow> _codexCollection = new();
@@ -112,31 +107,11 @@ public partial class MainWindow : Window
             var handle = new WindowInteropHelper(this).Handle;
             int cornerPreference = DWMWCP_ROUND;
             DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPreference, sizeof(int));
-
-            // 拦截 SC_MINIMIZE：任务栏按钮点击 / Win+↓ / Win+M 一律转成"隐藏到托盘"，
-            // 窗口不会进入 Minimized 状态，任务栏上也就不会残留最小化按钮。
-            if (HwndSource.FromHwnd(handle) is HwndSource source)
-            {
-                source.AddHook(WndProc);
-            }
         }
         catch
         {
             // 兼容不支持 DWMWA_WINDOW_CORNER_PREFERENCE 的低版本系统
         }
-    }
-
-    IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == WM_SYSCOMMAND && (wParam.ToInt32() & 0xFFF0) == SC_MINIMIZE)
-        {
-            handled = true;
-            if (IsVisible)
-            {
-                MinimizeToTray();
-            }
-        }
-        return IntPtr.Zero;
     }
 
     public void RefreshAll()
@@ -181,39 +156,35 @@ public partial class MainWindow : Window
     {
         _agQuotaTimer?.Stop();
     }
-
+ 
     void OnWindowStateChanged(object? sender, EventArgs e)
     {
         if (_trayTransition) return;
-        if (WindowState == WindowState.Minimized)
-        {
-            // 兜底：万一 OS 绕过 WM_SYSCOMMAND 直接最小化，也立刻转成"隐藏到托盘"，
-            // 绝不在任务栏上留一个最小化按钮。
-            MinimizeToTray();
-        }
-        else if (IsActive)
+        // 最小化 = 最小化到任务栏（任务栏上留着这个任务的按钮，标准 Windows 行为），
+        // 这里不做任何拦截/改写；只有非最小化且处于前台时才刷新配额。
+        if (WindowState != WindowState.Minimized && IsActive)
         {
             OnForegroundEntered();
         }
     }
-
+ 
     void OnForegroundEntered()
     {
         _agQuotaTimer?.Stop();
         _agQuotaTimer?.Start();
-
+ 
         if ((Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity")
         {
             _ = RefreshAllAgQuotasAsync(silent: true);
         }
     }
-
+ 
     void OnTabChanged(object sender, SelectionChangedEventArgs e)
     {
         if (e.Source != Tabs || !IsLoaded || _isReorderingTabs) return;
         var tag = (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() ?? "";
         ApplyTabTheme(tag);
-
+ 
         switch (tag)
         {
             case "antigravity":
@@ -3254,19 +3225,8 @@ public partial class MainWindow : Window
             _notifyIcon.MouseClick += (_, e) =>
             {
                 if (e.Button != System.Windows.Forms.MouseButtons.Left) return;
-                // 左键 = 切换：窗口还看得见就收进托盘（与点标题栏"-"一致），
-                // 已经收进托盘了才唤出。双击会触发两次单击，净效果仍是"唤出"，行为可预期。
-                Dispatcher.Invoke(() =>
-                {
-                    if (IsVisible)
-                    {
-                        MinimizeToTray();
-                    }
-                    else
-                    {
-                        RestoreAndActivate();
-                    }
-                });
+                // 左键 = 唤出/前置主窗口（窗口被最小化到任务栏或收进托盘时都能一键找回）。
+                Dispatcher.Invoke(() => RestoreAndActivate());
             };
 
             _notifyIcon.ContextMenuStrip = ModernTrayMenu.Create(
@@ -3282,32 +3242,6 @@ public partial class MainWindow : Window
             );
         }
         catch { }
-    }
-
-    /// <summary>
-    /// 隐藏到托盘：任务栏按钮必须彻底消失，而不是变成一个"最小化按钮"蹲在任务栏右侧。
-    /// </summary>
-    public void MinimizeToTray()
-    {
-        _trayTransition = true;
-        try
-        {
-            // 1) 若此刻已被 OS 置成最小化（例如点任务栏按钮触发的兜底路径），
-            //    必须先恢复成 Normal。Windows 对"最小化中的窗口"执行 ShowInTaskbar=false
-            //    时，任务栏上那个最小化按钮不一定会被清掉；先归位再摘，按钮才会真正消失。
-            // 2) 顺序必须是 ShowInTaskbar=false → Hide()，反了就有概率残留任务栏按钮。
-            if (WindowState == WindowState.Minimized)
-            {
-                WindowState = WindowState.Normal;
-            }
-            ShowInTaskbar = false;
-            Hide();
-        }
-        finally
-        {
-            _trayTransition = false;
-        }
-        _agQuotaTimer?.Stop();
     }
 
     public void RestoreAndActivate()
@@ -3329,7 +3263,40 @@ public partial class MainWindow : Window
         Focus();
         OnForegroundEntered();
     }
-
+ 
+    /// <summary>
+    /// 最小化到任务栏：任务栏上必须留下这个任务的按钮（标准 Windows 行为）。
+    /// 与"收进系统托盘"是两件事——最小化绝不 Hide()。
+    /// </summary>
+    public void MinimizeToTaskbar()
+    {
+        ShowInTaskbar = true;
+        WindowState = WindowState.Minimized;
+    }
+ 
+    /// <summary>
+    /// 收进系统托盘（仅"关闭窗口"时使用）：窗口和任务栏按钮都消失，只留托盘图标。
+    /// </summary>
+    public void MinimizeToTray()
+    {
+        _trayTransition = true;
+        try
+        {
+            // 若此刻已被最小化，先恢复成 Normal：Windows 对"最小化中的窗口"执行
+            // ShowInTaskbar=false 时，任务栏上那个最小化按钮不一定会被清掉。
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+            }
+            ShowInTaskbar = false;
+            Hide();
+        }
+        finally
+        {
+            _trayTransition = false;
+        }
+        _agQuotaTimer?.Stop();
+    }
     void RestoreFromTray() => RestoreAndActivate();
 
     void ExitApp()
@@ -3363,7 +3330,7 @@ public partial class MainWindow : Window
         base.OnClosing(e);
     }
 
-    void OnMinWindow(object sender, RoutedEventArgs e) => MinimizeToTray();
+    void OnMinWindow(object sender, RoutedEventArgs e) => MinimizeToTaskbar();
 
     void OnMaxWindow(object sender, RoutedEventArgs e) =>
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;

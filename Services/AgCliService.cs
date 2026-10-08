@@ -171,99 +171,191 @@ public static class AgCliService
         return new Result(ok, rateLimited && !ok, message, usedModel, sw.ElapsedMilliseconds, geminiOk, thirdPartyOk);
     }
 
-    // ---------- 单轮执行 ----------
-
-    static async Task<(bool Ok, bool RateLimited, string Message)> RunOnceAsync(
-        string cli, string model, CancellationToken ct)
-    {
-        // 一次性空目录：CLI 不会扫描用户项目，也不会留下工作区记录
-        var workDir = Path.Combine(Path.GetTempPath(), "apiswitch-ag-activate-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(workDir);
-        try
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = cli,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8,
-            };
-
-            // 非交互单轮。注意：提示词必须紧贴 --print（--print=<prompt>），
-            // 否则 CLI 会把后一个 flag 误当作提示词而报错退出（实测 exit=2）。
-            psi.ArgumentList.Add($"--print={ActivationPrompt}");
-            psi.ArgumentList.Add("--output-format"); psi.ArgumentList.Add("json");
-            psi.ArgumentList.Add("--model"); psi.ArgumentList.Add(model);
-            psi.ArgumentList.Add("--effort"); psi.ArgumentList.Add("low");
-            psi.ArgumentList.Add("--disable-slash-commands");
-            psi.ArgumentList.Add("--print-timeout"); psi.ArgumentList.Add("90s");
-            // 临时空目录 + 一次性极短提示词，不存在真实工具调用；
-            // 跳过权限提示可确保 CLI 绝不因等待交互而挂起。
-            psi.ArgumentList.Add("--dangerously-skip-permissions");
-
-            using var proc = new Process { StartInfo = psi };
-            proc.Start();
-
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
-            var stderrTask = proc.StandardError.ReadToEndAsync(ct);
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(120));
-            try
-            {
-                await proc.WaitForExitAsync(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                try { proc.Kill(entireProcessTree: true); } catch { }
-                throw;
-            }
-
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
-
-            if (proc.ExitCode == 0 && !string.IsNullOrWhiteSpace(stdout))
-                return (true, false, "");
-
-            var combined = stdout + "\n" + stderr;
-            bool rl = combined.Contains("429", StringComparison.Ordinal)
-                   || combined.Contains("RESOURCE_EXHAUSTED", StringComparison.OrdinalIgnoreCase)
-                   || combined.Contains("quota", StringComparison.OrdinalIgnoreCase)
-                   || combined.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
-                   || combined.Contains("rate_limit", StringComparison.OrdinalIgnoreCase);
-            return (false, rl, SummarizeError(combined));
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return (false, false, ex.Message);
-        }
-        finally
-        {
-            try { Directory.Delete(workDir, true); } catch { }
-        }
-    }
-
-    static string SummarizeError(string combined)
-    {
-        if (string.IsNullOrWhiteSpace(combined)) return I18nService.T("AgQ.CliFailed");
-        // 取第一条有信息量的行，压掉堆栈与日志噪声
-        foreach (var raw in combined.Split('\n'))
-        {
-            var line = raw.Trim();
-            if (line.Length == 0) continue;
-            if (line.StartsWith("I2", StringComparison.Ordinal) || line.StartsWith("E2", StringComparison.Ordinal)) continue;
-            if (line.Length > 200) line = line[..200] + "…";
-            return line;
-        }
-        return I18nService.T("AgQ.CliFailed");
-    }
+     // ---------- 单轮执行 ----------
+ 
+     /// <summary>
+     /// 参数组合：从最完整到最简。不同版本的 CLI 支持的 flag 有差异，
+     /// 某个 flag 不被支持时（exit=2 / unknown option）自动降级重试，
+     /// 避免只因一个参数就让整个激活失败。
+     /// 注意：提示词必须紧贴 --print（--print=&lt;prompt&gt;），
+     /// 否则 CLI 会把后一个 flag 误当作提示词而报错退出（实测 exit=2）。
+     /// </summary>
+     static IEnumerable<List<string>> BuildArgSets(string model)
+     {
+         yield return new List<string>
+         {
+             $"--print={ActivationPrompt}",
+             "--output-format", "json",
+             "--model", model,
+             "--effort", "low",
+             "--disable-slash-commands",
+             "--print-timeout", "90s",
+             "--dangerously-skip-permissions",
+         };
+         yield return new List<string>
+         {
+             $"--print={ActivationPrompt}",
+             "--output-format", "json",
+             "--model", model,
+             "--effort", "low",
+             "--dangerously-skip-permissions",
+         };
+         yield return new List<string>
+         {
+             $"--print={ActivationPrompt}",
+             "--output-format", "json",
+             "--model", model,
+             "--dangerously-skip-permissions",
+         };
+         yield return new List<string>
+         {
+             $"--print={ActivationPrompt}",
+             "--output-format", "json",
+             "--model", model,
+         };
+         yield return new List<string>
+         {
+             $"--print={ActivationPrompt}",
+             "--model", model,
+         };
+     }
+ 
+     static async Task<(bool Ok, bool RateLimited, bool UsageError, string Message)> RunOnceAsync(
+         string cli, string model, CancellationToken ct)
+     {
+         // 一次性空目录：CLI 不会扫描用户项目，也不会留下工作区记录
+         var workDir = Path.Combine(Path.GetTempPath(), "apiswitch-ag-activate-" + Guid.NewGuid().ToString("N")[..8]);
+         Directory.CreateDirectory(workDir);
+         try
+         {
+             (bool Ok, bool RateLimited, bool UsageError, string Message)? last = null;
+             foreach (var args in BuildArgSets(model))
+             {
+                 var r = await RunAttemptAsync(cli, workDir, args, model, ct);
+                 if (r.Ok) return r;
+                 last = r;
+                 // 只有"参数用法错误"才值得换参数重试；
+                 // 429 / 鉴权 / 网络类错误换参数没有意义，直接返回真实原因。
+                 if (!r.UsageError) return r;
+             }
+             return last ?? (false, false, false, I18nService.T("AgQ.CliFailed"));
+         }
+         catch (OperationCanceledException)
+         {
+             throw;
+         }
+         catch (Exception ex)
+         {
+             return (false, false, false, ex.Message);
+         }
+         finally
+         {
+             try { Directory.Delete(workDir, true); } catch { }
+         }
+     }
+ 
+     /// <summary>单次尝试：全程后台隐藏执行，绝不在前台弹出任何控制台窗口。</summary>
+     static async Task<(bool Ok, bool RateLimited, bool UsageError, string Message)> RunAttemptAsync(
+         string cli, string workDir, List<string> args, string model, CancellationToken ct)
+     {
+         var psi = new ProcessStartInfo
+         {
+             FileName = cli,
+             WorkingDirectory = workDir,
+             RedirectStandardOutput = true,
+             RedirectStandardError = true,
+             RedirectStandardInput = true,
+             UseShellExecute = false,
+             // 关键：GUI 进程启动控制台程序时必须显式 CREATE_NO_WINDOW，
+             // 否则 Windows 会为子进程新建一个可见的控制台窗口（用户看到的"命令窗口"）。
+             CreateNoWindow = true,
+             WindowStyle = ProcessWindowStyle.Hidden,
+             StandardOutputEncoding = Encoding.UTF8,
+             StandardErrorEncoding = Encoding.UTF8,
+         };
+         foreach (var a in args) psi.ArgumentList.Add(a);
+ 
+         using var proc = new Process { StartInfo = psi };
+         proc.Start();
+ 
+         // 非交互保障：立刻关闭 stdin。CLI 若弹出"是否信任此目录"之类的提问，
+         // 读到 EOF 就会按默认值继续，绝不会挂起等待用户输入。
+         try
+         {
+             proc.StandardInput.Write("\n");
+             proc.StandardInput.Flush();
+             proc.StandardInput.Close();
+         }
+         catch { }
+ 
+         var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
+         var stderrTask = proc.StandardError.ReadToEndAsync(ct);
+ 
+         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+         cts.CancelAfter(TimeSpan.FromSeconds(120));
+         try
+         {
+             await proc.WaitForExitAsync(cts.Token);
+         }
+         catch (OperationCanceledException)
+         {
+             try { proc.Kill(entireProcessTree: true); } catch { }
+             throw;
+         }
+ 
+         var stdout = await stdoutTask;
+         var stderr = await stderrTask;
+ 
+         App.LogStartup(
+             $"AgCli: model={model} exit={proc.ExitCode} args=[{string.Join(" ", args)}] " +
+             $"out={stdout.Length}B err={stderr.Length}B head={(stderr.Length > 0 ? stderr : stdout).Replace("\n", " | ")[..Math.Min(200, (stderr.Length > 0 ? stderr : stdout).Length)]}");
+ 
+         if (proc.ExitCode == 0 && !string.IsNullOrWhiteSpace(stdout))
+             return (true, false, false, "");
+ 
+         var combined = stdout + "\n" + stderr;
+         bool rl = combined.Contains("429", StringComparison.Ordinal)
+                || combined.Contains("RESOURCE_EXHAUSTED", StringComparison.OrdinalIgnoreCase)
+                || combined.Contains("quota", StringComparison.OrdinalIgnoreCase)
+                || combined.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
+                || combined.Contains("rate_limit", StringComparison.OrdinalIgnoreCase);
+         bool usage = IsUsageError(proc.ExitCode, combined);
+         return (false, rl, usage, SummarizeError(combined, proc.ExitCode));
+     }
+ 
+     /// <summary>判断是否为"参数用法错误"（值得降级重试），而非配额/网络类错误。</summary>
+     static bool IsUsageError(int exitCode, string combined)
+     {
+         if (exitCode == 2) return true;
+         return combined.Contains("unknown option", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("unrecognized option", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("unexpected argument", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("Usage:", StringComparison.OrdinalIgnoreCase);
+     }
+ 
+     static string SummarizeError(string combined, int exitCode)
+     {
+         var fallback = I18nService.T("AgQ.CliFailed") + $" (exit={exitCode})";
+         if (string.IsNullOrWhiteSpace(combined)) return fallback;
+ 
+         var lines = combined.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+         if (lines.Count == 0) return fallback;
+ 
+         // 优先返回真正说明原因的行；CLI 的结构化日志（I2xxx/E2xxx 前缀）里就藏着真实错误，
+         // 以前被无条件跳过，导致用户只看到一句"激活失败"。
+         foreach (var kw in new[]
+         {
+             "error", "failed", "failure", "429", "quota", "exhaust", "permission", "denied",
+             "not found", "unauthor", "timed out", "timeout", "refused", "econn"
+         })
+         {
+             var hit = lines.FirstOrDefault(l => l.Contains(kw, StringComparison.OrdinalIgnoreCase));
+             if (hit != null) return Truncate(hit);
+         }
+         return Truncate(lines[0]);
+     }
+ 
+     static string Truncate(string s) => s.Length > 220 ? s[..220] + "…" : s;
 
     // ---------- 登录态备份 / 恢复 ----------
 
