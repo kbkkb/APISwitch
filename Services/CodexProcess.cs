@@ -240,12 +240,13 @@ public static class CodexProcess
         throw new FileNotFoundException("未检测到可启动的 Codex 客户端或快捷方式。");
     }
 
-    /// <summary>
-    /// 彻底重启 Codex 客户端
-    /// </summary>
-    public static async Task RestartCodexAsync()
-    {
-        await StopCodexAsync();
-        StartCodex();
-    }
-}
+     /// <summary>
+     /// 彻底重启 Codex 客户端。
+     /// 走通用重启流程（优雅关闭 → 强杀残留 → 等待释放 → 启动并验证新进程），
+     /// 返回真实结果，不再一味假定成功。
+     /// </summary>
+     public static Task<AppProcessRestart.Result> RestartCodexAsync() =>
+         AppProcessRestart.RestartAsync("Codex", GetCodexProcesses, StartCodex, Log);
+ 
+     static void Log(string msg) => App.LogStartup("CodexRestart: " + msg);
+ }

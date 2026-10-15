@@ -115,14 +115,15 @@ public partial class UsageMonitorWindow : Window
         int gen = ++_refreshGen;
 
         // 所有 SQLite 查询挪到后台线程执行，避免 UI 线程迟滞
-        var (s, dailyRows, pmTotals, agentTotals, events) = await Task.Run(() =>
+        var (s, dailyRows, pmTotals, agentTotals, events, perf) = await Task.Run(() =>
         {
             var summary = UsageStorage.GetSummary(effFromTs, effToTs);
             var daily = UsageStorage.GetDailyTotals(fromTs, toTs);
             var pm = UsageStorage.GetProviderModelTotals(effFromTs, effToTs);
             var ag = UsageStorage.GetAgentTotals(effFromTs, effToTs);
             var evs = UsageStorage.GetRecentEvents(effFromTs, effToTs, limit: 400);
-            return (summary, daily, pm, ag, evs);
+            var pf = UsageStorage.GetPerformance(effFromTs, effToTs);
+            return (summary, daily, pm, ag, evs, pf);
         }).ConfigureAwait(true);
 
         if (gen != _refreshGen) return; // 已有更新的刷新在途，丢弃本次结果
@@ -130,6 +131,8 @@ public partial class UsageMonitorWindow : Window
         InTokensText.Text = FormatTokens(s.TotalIn);
         OutTokensText.Text = FormatTokens(s.TotalOut);
         RequestsText.Text = s.Requests.ToString("N0", CultureInfo.CurrentCulture);
+        _currentInputTotal = s.TotalIn;
+        ApplyPerformanceCards(perf);
         RangeSummaryText.Text = $"{effFrom:MM-dd HH:mm} ~ {effTo:MM-dd HH:mm}";
 
         var hasData = s.Requests > 0 || s.TotalIn + s.TotalOut > 0;
@@ -169,6 +172,8 @@ public partial class UsageMonitorWindow : Window
                 OutTokens = gOut,
                 Requests = gReq,
                 Total = gTotal,
+                CacheReadTokens = models.Sum(m => m.CacheRead),
+                CacheWriteTokens = models.Sum(m => m.CacheWrite),
                 Models = models.Select(m =>
                 {
                     long mTotal = m.InTokens + m.OutTokens;
@@ -179,6 +184,8 @@ public partial class UsageMonitorWindow : Window
                         OutTokens = m.OutTokens,
                         Requests = m.Requests,
                         Total = mTotal,
+                        CacheReadTokens = m.CacheRead,
+                        CacheWriteTokens = m.CacheWrite,
                         ShareOfProvider = gTotal > 0 ? 100.0 * mTotal / gTotal : 0,
                     };
                 }).ToList(),
@@ -213,7 +220,8 @@ public partial class UsageMonitorWindow : Window
             long mgOut = g.Sum(x => x.OutTokens);
             long mgReq = g.Sum(x => x.Requests);
             long mgTotal = mgIn + mgOut;
-
+            long mgCacheRead = g.Sum(x => x.CacheRead);
+            long mgCacheWrite = g.Sum(x => x.CacheWrite);
             var displayName = string.IsNullOrEmpty(rep) ? I18nService.T("Usage.UnknownModel") : CleanModelName(rep);
 
             var providerRows = g
@@ -232,6 +240,8 @@ public partial class UsageMonitorWindow : Window
                         OutTokens = pOut,
                         Requests = p.Sum(x => x.Requests),
                         Total = pTotal,
+                        CacheReadTokens = p.Sum(x => x.CacheRead),
+                        CacheWriteTokens = p.Sum(x => x.CacheWrite),
                         ShareOfModel = mgTotal > 0 ? 100.0 * pTotal / mgTotal : 0,
                     };
                 })
@@ -245,6 +255,8 @@ public partial class UsageMonitorWindow : Window
                 OutTokens = mgOut,
                 Requests = mgReq,
                 Total = mgTotal,
+                CacheReadTokens = mgCacheRead,
+                CacheWriteTokens = mgCacheWrite,
                 Providers = providerRows,
             });
         }
@@ -279,6 +291,10 @@ public partial class UsageMonitorWindow : Window
             InTokens = ev.InTokens,
             OutTokens = ev.OutTokens,
             Total = ev.InTokens + ev.OutTokens,
+            CacheReadTokens = ev.CacheReadTokens,
+            CacheWriteTokens = ev.CacheWriteTokens,
+            DurationMs = ev.DurationMs,
+            TtftMs = ev.TtftMs,
         }).ToList();
     }
 
@@ -520,7 +536,68 @@ public partial class UsageMonitorWindow : Window
         if (e.LeftButton == MouseButtonState.Pressed) DragMove();
     }
 
+    /// <summary>
+    /// 把缓存命中率写进汇总卡片。
+    /// 命中率 = 命中 / (新增输入 + 命中 + 写入)。速度与首字已移到调用明细列
+    /// （属于单次调用维度，放顶部汇总没有意义），这里不再展示。
+    /// </summary>
+    void ApplyPerformanceCards(UsageStorage.PerformanceStats perf)
+    {
+        // 缓存命中率 = 命中 / (新增输入 + 命中 + 写入)
+        long cacheDenom = perf.CacheRead + perf.CacheWrite + _currentInputTotal;
+        CacheHitText.Text = cacheDenom > 0 && perf.CacheRead > 0
+            ? (perf.CacheRead * 100.0 / cacheDenom).ToString("0.0", CultureInfo.CurrentCulture) + "%"
+            : "—";
+        CacheHitDetailText.Text = perf.CacheRead > 0
+            ? I18nService.F("Usage.CacheHitDetailFmt", FormatTokens(perf.CacheRead), FormatTokens(perf.CacheWrite))
+            : I18nService.T("Usage.CacheHitNoData");
+    }
+
+    /// <summary>当前区间的新增输入 token 总量（缓存命中率分母用）。</summary>
+    long _currentInputTotal;
+
     void OnClose(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// 回填历史用量数据。
+    ///
+    /// 缓存命中 / 整轮耗时 / 首字这三个指标是后加的，而扫描是增量式的（按文件字节
+    /// 偏移推进，已消费的部分不会重读），所以老用户的 usage.db 里这些字段永远是 0，
+    /// 换版本也不会自己长出来。这里做一次全量重建来补齐。
+    ///
+    /// 破坏性操作：会先备份 usage.db 再清空事件表重扫，因此先弹确认。
+    /// 扫描涉及读全部会话日志，放后台线程避免界面卡死。
+    /// </summary>
+    async void OnBackfillClick(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(I18nService.T("Usage.BackfillConfirmMsg"),
+                I18nService.T("Usage.BackfillConfirmTitle"),
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        var btn = sender as System.Windows.Controls.Button;
+        if (btn != null) btn.IsEnabled = false;
+        try
+        {
+            // 全量重扫：备份 → 清空 → 重读全部会话日志
+            var result = await Task.Run(() => UsageScanner.BackfillAll());
+            var (total, withCache, withTiming) = await Task.Run(() => UsageStorage.CountPerfRows());
+
+            RefreshData();
+
+            MessageBox.Show(I18nService.F("Usage.BackfillDoneFmt", result.Written, withCache, withTiming),
+                I18nService.T("Usage.BackfillBtn"), MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(I18nService.F("Usage.BackfillFailFmt", ex.Message),
+                I18nService.T("Usage.BackfillBtn"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            if (btn != null) btn.IsEnabled = true;
+        }
+    }
 
     // ---------- 工具 ----------
 
@@ -617,6 +694,8 @@ public partial class UsageMonitorWindow : Window
         public long OutTokens { get; set; }
         public long Requests { get; set; }
         public long Total { get; set; }
+        public long CacheReadTokens { get; set; }
+        public long CacheWriteTokens { get; set; }
         public double ShareOfAll { get; set; }
         public List<ModelRowVM> Models { get; set; } = new();
 
@@ -643,6 +722,17 @@ public partial class UsageMonitorWindow : Window
         public string TotalText => FormatTokens(Total);
         public string ModelCountText => I18nService.F("Usage.ModelsFmt", Models.Count);
 
+        /// <summary>该供应商整体的缓存命中率（由其下各模型汇总）；无缓存数据时为—。</summary>
+        public string CacheText
+        {
+            get
+            {
+                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
+                if (denom <= 0 || CacheReadTokens <= 0) return "—";
+                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+            }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
     }
 
@@ -653,6 +743,8 @@ public partial class UsageMonitorWindow : Window
         public long OutTokens { get; set; }
         public long Requests { get; set; }
         public long Total { get; set; }
+        public long CacheReadTokens { get; set; }
+        public long CacheWriteTokens { get; set; }
         public double ShareOfProvider { get; set; }
 
         public double BarWidth => Math.Clamp(BarTrackWidth * ShareOfProvider / 100.0, 0, BarTrackWidth);
@@ -660,6 +752,17 @@ public partial class UsageMonitorWindow : Window
         public string ReqText => I18nService.F("Usage.AgentRequests", Requests.ToString("N0", CultureInfo.CurrentCulture));
         public string InOutText => I18nService.F("Usage.InOut", FormatTokens(InTokens), FormatTokens(OutTokens));
         public string TotalText => FormatTokens(Total);
+
+        /// <summary>该模型的缓存命中率 = 命中 / (新增输入 + 命中 + 写入)；无缓存数据时为—。</summary>
+        public string CacheText
+        {
+            get
+            {
+                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
+                if (denom <= 0 || CacheReadTokens <= 0) return "—";
+                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+            }
+        }
     }
 
     /// <summary>模型汇总分组：同一模型（归一化后）跨供应商合并的统计行。</summary>
@@ -672,6 +775,8 @@ public partial class UsageMonitorWindow : Window
         public long OutTokens { get; set; }
         public long Requests { get; set; }
         public long Total { get; set; }
+        public long CacheReadTokens { get; set; }
+        public long CacheWriteTokens { get; set; }
         public double ShareOfAll { get; set; }
         public List<ModelProviderRowVM> Providers { get; set; } = new();
 
@@ -698,6 +803,17 @@ public partial class UsageMonitorWindow : Window
         public string TotalText => FormatTokens(Total);
         public string ProviderCountText => I18nService.F("Usage.ProvidersFmt", Providers.Count);
 
+        /// <summary>该模型跨供应商合并后的整体缓存命中率；无缓存数据时为—。</summary>
+        public string CacheText
+        {
+            get
+            {
+                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
+                if (denom <= 0 || CacheReadTokens <= 0) return "—";
+                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+            }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
     }
 
@@ -711,6 +827,8 @@ public partial class UsageMonitorWindow : Window
         public long OutTokens { get; set; }
         public long Requests { get; set; }
         public long Total { get; set; }
+        public long CacheReadTokens { get; set; }
+        public long CacheWriteTokens { get; set; }
         public double ShareOfModel { get; set; }
 
         public string NameText => string.IsNullOrEmpty(Provider) ? I18nService.T("Usage.UnknownModel") : Provider;
@@ -722,6 +840,17 @@ public partial class UsageMonitorWindow : Window
         public string ReqText => I18nService.F("Usage.AgentRequests", Requests.ToString("N0", CultureInfo.CurrentCulture));
         public string InOutText => I18nService.F("Usage.InOut", FormatTokens(InTokens), FormatTokens(OutTokens));
         public string TotalText => FormatTokens(Total);
+
+        /// <summary>该供应商在此模型上的缓存命中率；无缓存数据时为—。</summary>
+        public string CacheText
+        {
+            get
+            {
+                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
+                if (denom <= 0 || CacheReadTokens <= 0) return "—";
+                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+            }
+        }
     }
 
     public class AgentRowVM
@@ -752,11 +881,48 @@ public partial class UsageMonitorWindow : Window
         public long OutTokens { get; set; }
         public long Total { get; set; }
 
+        public long CacheReadTokens { get; set; }
+        public long CacheWriteTokens { get; set; }
+        public long DurationMs { get; set; }
+        public long TtftMs { get; set; }
+
         public string AgentName => UsageMonitorWindow.AgentName(Agent);
         public Brush AgentBrush => AgentColors(Agent).fg;
         public Brush AgentBg => AgentColors(Agent).bg;
         public string InText => FormatTokens(InTokens);
         public string OutText => FormatTokens(OutTokens);
         public string TotalText => FormatTokens(Total);
+
+        /// <summary>本次调用的缓存命中率；无缓存数据时为空（UI 显示 —）。</summary>
+        public string CacheText
+        {
+            get
+            {
+                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
+                if (denom <= 0 || CacheReadTokens <= 0) return "—";
+                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+            }
+        }
+
+        /// <summary>输出速度（token/s）；无耗时时为空。</summary>
+        public string SpeedText
+        {
+            get
+            {
+                if (DurationMs <= 0 || OutTokens <= 0) return "—";
+                return (OutTokens * 1000.0 / DurationMs).ToString("0.#", CultureInfo.CurrentCulture) + " t/s";
+            }
+        }
+
+        /// <summary>首字耗时；无数据时为空。</summary>
+        public string TtftText
+        {
+            get
+            {
+                if (TtftMs <= 0) return "—";
+                if (TtftMs < 1000) return TtftMs + " ms";
+                return (TtftMs / 1000.0).ToString("0.00", CultureInfo.CurrentCulture) + " s";
+            }
+        }
     }
 }

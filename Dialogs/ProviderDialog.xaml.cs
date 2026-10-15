@@ -303,7 +303,9 @@ public partial class ProviderDialog : Window
                 OpenCodeFormatPanel.Visibility = Visibility.Collapsed;
                 DirectModelPanel.Visibility = Visibility.Visible;
                 ClaudeModelMappingSection.Visibility = Visibility.Collapsed;
-                CodexModelsSection.Visibility = Visibility.Visible;
+                 CodexModelsSection.Visibility = Visibility.Visible;
+                 // 新建 Codex 供应商默认开启自动获取：能零配置就用，拉不到再手动填
+                 if (existing == null) NativeCodexCheck.IsChecked = true;
                 SmallFastPanel.Visibility = Visibility.Collapsed;
                 SmallFastCol.Width = new GridLength(0);
                 SmallFastColSpace.Width = new GridLength(0);
@@ -429,8 +431,9 @@ public partial class ProviderDialog : Window
             OfficialCheck.IsChecked = x.IsOfficial;
             BaseUrlBox.Text = x.BaseUrl ?? "";
             SetKey(!string.IsNullOrWhiteSpace(x.ApiKey) ? x.ApiKey : x.BearerToken);
-            ModelCombo.Text = x.Model ?? "";
-            SetWireApi(x.WireApi);
+             ModelCombo.Text = x.Model ?? "";
+             NativeCodexCheck.IsChecked = x.AutoFetchModels;
+             ApplyNativeCodexState();
 
             if (x.CustomHeaders != null)
                 foreach (var kv in x.CustomHeaders)
@@ -1286,7 +1289,8 @@ public partial class ProviderDialog : Window
                 BearerToken = key,
                 CustomHeaders = headersDict,
                 ExtraOptions = optionsDict,
-                CustomModels = modelsList,
+                 CustomModels = modelsList,
+                 AutoFetchModels = NativeCodexCheck.IsChecked == true,
             };
 
             if (ResultCodex.WireApi == "chat" && !LocalProxyServer.IsCodexEnabled)
@@ -1378,4 +1382,24 @@ public partial class ProviderDialog : Window
         var id = sb.ToString().Trim('-');
         return id.Length > 0 ? id : "p" + Math.Abs(name.GetHashCode()).ToString("x8");
     }
+     /// <summary>
+     /// 切换"原生 Codex 模型"：开启时禁用模型配置区（不需要配置），
+     /// 关闭时恢复。原生模式下模型由 Codex 自带的 /model 切换器管理。
+     /// </summary>
+     private void NativeCodexCheck_Click(object sender, RoutedEventArgs e)
+     {
+         ApplyNativeCodexState();
+         UpdatePreview();
+     }
+ 
+     void ApplyNativeCodexState()
+     {
+         bool native = NativeCodexCheck.IsChecked == true;
+ 
+         // 模型配置区整体置灰，明确告诉用户"这里不用填"
+         if (CodexModelConfigPanel != null)
+             CodexModelConfigPanel.IsEnabled = !native;
+         if (NativeCodexHintWhenOn != null)
+             NativeCodexHintWhenOn.Visibility = native ? Visibility.Visible : Visibility.Collapsed;
+     }
 }

@@ -214,6 +214,8 @@
     <sys:String x:Key="Ag.LoginBtn">登录添加账号</sys:String>
     <sys:String x:Key="Ag.LoginTip">打开 Google 官方登录网页授权新账号</sys:String>
     <sys:String x:Key="Ag.BatchActivateBtn">⚡ 批量激活</sys:String>
+    <sys:String x:Key="Ag.BatchCancelTip">中止本次批量激活，已激活的结果会保留</sys:String>
+    <sys:String x:Key="Ag.BatchCancelBtn">取消批量</sys:String>
     <sys:String x:Key="Ag.BatchActivateTip">以安全防风控策略（真实指纹 + 拟人化延迟）激活账号限额并测通可用性</sys:String>
     <sys:String x:Key="Ag.LaunchIdeBtn">启动 IDE</sys:String>
     <sys:String x:Key="Ag.ImportToolsBtn">从 Tools 导入</sys:String>
@@ -284,6 +286,9 @@
     <sys:String x:Key="Msg.AgBatchProgressFmt">正在批量发送消息激活限额 ({0}/{1}): {2}…</sys:String>
     <sys:String x:Key="Msg.AgBatchCooldownFmt">已完成 ({0}/{1})，安全冷却中 {2:F1}s…</sys:String>
     <sys:String x:Key="Msg.AgBatchDoneFmt">⚡ 批量限额激活完成！成功 {0} 个，失败 {1} 个</sys:String>
+    <sys:String x:Key="Msg.AgBatchCanceledFmt">已取消批量激活：成功 {0}，失败 {1}，未处理 {2}</sys:String>
+    <sys:String x:Key="Msg.AgBatchCanceling">正在取消…</sys:String>
+    <sys:String x:Key="Msg.AgBatchCancelRequested">已请求取消，等待当前账号处理结束</sys:String>
     <sys:String x:Key="Msg.AgRefreshNone">当前没有账号存档可供刷新配额</sys:String>
     <sys:String x:Key="Msg.AgRefreshQuotaProFmt">已同时刷新 {0} 的 Gemini 与 GPT/Claude 配额</sys:String>
     <sys:String x:Key="Msg.AgRefreshQuotaFmt">已刷新 {0} 的 Gemini 与 Claude/GPT 周配额</sys:String>
@@ -296,9 +301,11 @@
     <sys:String x:Key="Msg.AgSwitchIdeCloseFail">无法自动关闭 Antigravity，请手动退出后重试</sys:String>
     <sys:String x:Key="Msg.AgSwitchFailFmt">切换失败：{0}</sys:String>
     <sys:String x:Key="Msg.AgIdeRestartFailFmt">已激活凭据，但重启 IDE 失败：{0}</sys:String>
+    <sys:String x:Key="Msg.AgIdeStartVerifyFail">反重力启动指令已发出，但未检测到主窗口（可能被单例锁拦截）。请手动启动一次确认</sys:String>
     <sys:String x:Key="Msg.ToggleCodexOnFmt">Codex 本地路由已开启 (端口 :{0})，已接管 Codex 请求</sys:String>
     <sys:String x:Key="Msg.RestartingFmt">正在重启 {0} 客户端…</sys:String>
     <sys:String x:Key="Msg.RestartedFmt">{0} 客户端已重启</sys:String>
+    <sys:String x:Key="Msg.RestartNoProcessFmt">{0} 启动指令已发出，但未检测到新进程（可能被系统拦截或启动较慢），请手动确认</sys:String>
     <sys:String x:Key="Msg.RestartFailFmt">重启 {0} 失败：{1}</sys:String>
     <sys:String x:Key="Msg.EditorBusy">已有正在编辑的供应商窗口，请先保存或关闭该窗口</sys:String>
     <sys:String x:Key="Msg.SavedCurrentFmt">已保存并同步生效当前配置「{0}」</sys:String>
@@ -360,7 +367,13 @@
     <sys:String x:Key="PD.NotesLabel">备注</sys:String>
     <sys:String x:Key="PD.NotesTag">例如：公司专用账号</sys:String>
     <sys:String x:Key="PD.WebsiteLabel">官网链接</sys:String>
+    <sys:String x:Key="Msg.CodexModelsAutoFetchedFmt">已自动获取 {0} 个模型并写入 Codex 模型目录</sys:String>
+    <sys:String x:Key="Msg.CodexModelsAutoFetchEmpty">未能从供应商获取模型列表，请检查 Base URL 与 API Key，或取消勾选后手动添加模型</sys:String>
     <sys:String x:Key="PD.ModelConfigTitle">模型配置</sys:String>
+    <sys:String x:Key="PD.NativeCodexModels">自动获取模型列表（无需手填）</sys:String>
+    <sys:String x:Key="PD.NativeCodexModelsDesc">保存时自动向供应商请求模型列表（GET /models）并写入 Codex 模型目录，之后即可在 Codex 的 /model 切换器里选择该供应商提供的全部模型。</sys:String>
+    <sys:String x:Key="PD.NativeCodexModelsTip">勾选后，若没有手动配置模型，保存时会自动从供应商拉取模型列表</sys:String>
+    <sys:String x:Key="PD.NativeCodexEnabledHint">已开启自动获取：保存时会从供应商拉取模型列表并写入 Codex 的 model_catalog_json，Codex 的 /model 切换器即可列出这些模型。若供应商不提供 /models 端点，请取消勾选并手动添加模型。</sys:String>
     <sys:String x:Key="PD.ClaudeDescDefault">Claude 客户端只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 角色 ID。选择模型映射后，将自动映射到供应商的实际模型，并保持本地路由开启。</sys:String>
     <sys:String x:Key="PD.ClaudeDescCli">为 Claude Code CLI 配置模型映射与上游格式。留空的档会自动沿用 Sonnet 模型，确保子 agent 调用的 Haiku 始终可用。</sys:String>
     <sys:String x:Key="PD.ClaudeDescDesktop">Claude Desktop 只接受 claude-sonnet-* / claude-opus-* / claude-haiku-* 三档角色 ID。选择模型映射后，CC Switch 会把这三档映射到供应商的实际模型，并在使用期间保持本地路由开启。</sys:String>
@@ -562,6 +575,7 @@
     <sys:String x:Key="AgQ.ErrNoModelList">无法获取该账号的可用模型列表（fetchAvailableModels 失败），已中止激活以避免请求不存在的模型</sys:String>
     <sys:String x:Key="AgQ.CliNotFound">未找到 Antigravity CLI（agy.exe），请先安装 Antigravity 命令行工具</sys:String>
     <sys:String x:Key="AgQ.CliFailed">CLI 激活失败（未获得有效响应）</sys:String>
+    <sys:String x:Key="AgQ.CliTimeout">激活超时：连续多个可用模型都未在时限内完成，已停止尝试</sys:String>
     <sys:String x:Key="AgQ.CliOkFmt">已通过本地 CLI 激活：模型 {0}，耗时 {1}ms（{2}）</sys:String>
     <sys:String x:Key="AgQ.CliOkGemini">Gemini 限额池</sys:String>
     <sys:String x:Key="AgQ.CliOkThirdParty">Claude/GPT 限额池</sys:String>
@@ -615,7 +629,18 @@
     <sys:String x:Key="Usage.ColIn">输入</sys:String>
     <sys:String x:Key="Usage.ColOut">输出</sys:String>
     <sys:String x:Key="Usage.ColTotal">总量</sys:String>
-    <sys:String x:Key="Usage.Note">说明：通过扫描 Codex / Claude Code / OpenCode / Pi 本地会话记录统计用量（应用未运行期间产生的调用也会被纳入），数据保留 90 天。</sys:String>
+    <sys:String x:Key="Usage.ColCache">缓存</sys:String>
+    <sys:String x:Key="Usage.ColSpeed">速度</sys:String>
+    <sys:String x:Key="Usage.ColTtft">首字</sys:String>
+    <sys:String x:Key="Usage.CacheHitRate">缓存命中率</sys:String>
+    <sys:String x:Key="Usage.CacheHitDetailFmt">命中 {0} · 写入 {1}</sys:String>
+    <sys:String x:Key="Usage.CacheHitNoData">暂无缓存数据</sys:String>
+    <sys:String x:Key="Usage.BackfillBtn">回填历史数据</sys:String>
+    <sys:String x:Key="Usage.BackfillConfirmTitle">回填历史用量数据？</sys:String>
+    <sys:String x:Key="Usage.BackfillConfirmMsg">将重新扫描全部本地会话日志并重建用量统计，用于补齐缓存命中、耗时与首字等指标。操作前会自动备份用量数据库（带时间戳），原事件表会被清空后重建。是否继续？</sys:String>
+    <sys:String x:Key="Usage.BackfillDoneFmt">回填完成：共写入 {0} 条记录，其中 {1} 条含缓存数据、{2} 条含耗时数据。</sys:String>
+    <sys:String x:Key="Usage.BackfillFailFmt">回填失败：{0}</sys:String>
+    <sys:String x:Key="Usage.Note">说明：通过扫描 Codex / Claude Code / OpenCode / Pi 本地会话记录统计用量（应用未运行期间产生的调用也会被纳入），数据保留 90 天。缓存命中率 = 命中 / (新增输入 + 命中 + 写入)；速度 = 输出 token / 整轮耗时；首字由各客户端的消息级时间戳推算（日志不记录流式首包，属近似值），无法推算时显示"—"。</sys:String>
 
     <!-- 用量监控重构新增 -->
     <sys:String x:Key="Usage.TabProviders">供应商明细</sys:String>

@@ -384,13 +384,13 @@
                     <ScrollViewer x:Name="AgScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="ProfileList" Margin="0,4,0,0"
-                                 Background="Transparent" BorderThickness="0"
-                                 VirtualizingPanel.IsVirtualizing="False"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}"
-                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
+                                Background="Transparent" BorderThickness="0"
+                                VirtualizingPanel.IsVirtualizing="False"
+                                ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                HorizontalContentAlignment="Stretch"
+                                ItemContainerStyle="{StaticResource CardItem}"
+                                PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -517,7 +517,7 @@
                                                             <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
-                                                                     Foreground="{StaticResource GreenBrush}"/>
+                                                                    Foreground="{StaticResource GreenBrush}"/>
 
                                                         <!-- Gemini Weekly -->
                                                         <Grid Margin="0,0,0,3">
@@ -528,7 +528,7 @@
                                                             <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaWeeklyPercentValue, Mode=OneWay}"
-                                                                     Foreground="{StaticResource AccentBrush}"/>
+                                                                    Foreground="{StaticResource AccentBrush}"/>
                                                     </StackPanel>
 
                                                     <Rectangle Grid.Column="1" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"/>
@@ -550,7 +550,7 @@
                                                             <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3p5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
-                                                                     Foreground="#10B981"/>
+                                                                    Foreground="#10B981"/>
 
                                                         <!-- Claude Weekly -->
                                                         <Grid Margin="0,0,0,3">
@@ -561,7 +561,7 @@
                                                             <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3pWeeklyPercentValue, Mode=OneWay}"
-                                                                     Foreground="#8B5CF6"/>
+                                                                    Foreground="#8B5CF6"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -577,9 +577,9 @@
                                                 <BeginStoryboard Name="ActivateSpin">
                                                     <Storyboard>
                                                         <DoubleAnimation Storyboard.TargetName="ActivateIconRotate"
-                                                                         Storyboard.TargetProperty="Angle"
-                                                                         From="0" To="360" Duration="0:0:0.8"
-                                                                         RepeatBehavior="Forever"/>
+                                                                        Storyboard.TargetProperty="Angle"
+                                                                        From="0" To="360" Duration="0:0:0.8"
+                                                                        RepeatBehavior="Forever"/>
                                                     </Storyboard>
                                                 </BeginStoryboard>
                                             </DataTrigger.EnterActions>
@@ -712,12 +712,12 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="CodexList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
-                                 VirtualizingPanel.IsVirtualizing="False"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}"
-                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
+                                VirtualizingPanel.IsVirtualizing="False"
+                                ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                HorizontalContentAlignment="Stretch"
+                                ItemContainerStyle="{StaticResource CardItem}"
+                                PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -888,12 +888,12 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="ClaudeList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
-                                 VirtualizingPanel.IsVirtualizing="False"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}"
-                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
+                                VirtualizingPanel.IsVirtualizing="False"
+                                ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                HorizontalContentAlignment="Stretch"
+                                ItemContainerStyle="{StaticResource CardItem}"
+                                PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -1071,12 +1071,12 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="DesktopList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
-                                 VirtualizingPanel.IsVirtualizing="False"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}"
-                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
+                                VirtualizingPanel.IsVirtualizing="False"
+                                ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                HorizontalContentAlignment="Stretch"
+                                ItemContainerStyle="{StaticResource CardItem}"
+                                PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -1197,20 +1197,20 @@
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
                             <TextBlock Text="{DynamicResource Oc.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                 <Border Style="{StaticResource Chip}">
-                                     <StackPanel Orientation="Horizontal">
-                                         <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                         <TextBlock x:Name="OcPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
-                                     </StackPanel>
-                                 </Border>
-                                 <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Oc.DefaultTip}">
-                                     <StackPanel Orientation="Horizontal">
-                                         <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                         <TextBlock x:Name="OcDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
-                                     </StackPanel>
-                                 </Border>
-                             </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="OcPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Oc.DefaultTip}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="OcDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1248,12 +1248,12 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="OcList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
-                                 VirtualizingPanel.IsVirtualizing="False"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}"
-                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
+                                VirtualizingPanel.IsVirtualizing="False"
+                                ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                HorizontalContentAlignment="Stretch"
+                                ItemContainerStyle="{StaticResource CardItem}"
+                                PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -1384,20 +1384,20 @@
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
                             <TextBlock Text="{DynamicResource Pi.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                 <Border Style="{StaticResource Chip}">
-                                     <StackPanel Orientation="Horizontal">
-                                         <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                         <TextBlock x:Name="PiPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
-                                     </StackPanel>
-                                 </Border>
-                                 <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Pi.DefaultTip}">
-                                     <StackPanel Orientation="Horizontal">
-                                         <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                         <TextBlock x:Name="PiDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
-                                     </StackPanel>
-                                 </Border>
-                             </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="PiPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Pi.DefaultTip}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
+                                        <TextBlock x:Name="PiDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1447,12 +1447,12 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
                         <ListBox x:Name="PiList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
-                                 VirtualizingPanel.IsVirtualizing="False"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 HorizontalContentAlignment="Stretch"
-                                 ItemContainerStyle="{StaticResource CardItem}"
-                                 PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
+                                VirtualizingPanel.IsVirtualizing="False"
+                                ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                HorizontalContentAlignment="Stretch"
+                                ItemContainerStyle="{StaticResource CardItem}"
+                                PreviewMouseLeftButtonDown="OnCardListPreviewMouseLeftButtonDown">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
@@ -1575,7 +1575,18 @@
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <ProgressBar IsIndeterminate="True" Width="180" Height="4" Foreground="{StaticResource AccentBrush}" Background="#E2E8F0" BorderThickness="0"/>
                     <TextBlock x:Name="BusyText" Text="{DynamicResource Common.Busy}" FontSize="13" FontWeight="Medium"
-                               Foreground="{StaticResource TextBrush}" Margin="0,14,0,0" HorizontalAlignment="Center"/>
+                                Foreground="{StaticResource TextBrush}" Margin="0,14,0,0" HorizontalAlignment="Center"
+                                TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center"/>
+                    <!-- 批量激活时遮罩本身必须提供取消入口：遮罩盖住全窗口，
+                          工具栏上的取消按钮会被遮罩挡住点不到。 -->
+                    <Button x:Name="BusyCancelBtn" Click="OnBatchCancelAntigravity"
+                            Visibility="Collapsed" Margin="0,16,0,0" Padding="16,7" HorizontalAlignment="Center"
+                            ToolTip="{DynamicResource Ag.BatchCancelTip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconClose}" Fill="#EF4444" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Ag.BatchCancelBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Border>
         </Grid>

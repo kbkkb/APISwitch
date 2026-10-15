@@ -214,6 +214,8 @@
     <sys:String x:Key="Ag.LoginBtn">Log in ＆ Add Account</sys:String>
     <sys:String x:Key="Ag.LoginTip">Open Google's official login page to authorize a new account</sys:String>
     <sys:String x:Key="Ag.BatchActivateBtn">⚡ Batch Activate</sys:String>
+    <sys:String x:Key="Ag.BatchCancelTip">Stop this batch activation; already activated accounts are kept</sys:String>
+    <sys:String x:Key="Ag.BatchCancelBtn">Cancel Batch</sys:String>
     <sys:String x:Key="Ag.BatchActivateTip">Activate account quotas with anti-risk-control strategy (real fingerprint + humanized delays)</sys:String>
     <sys:String x:Key="Ag.LaunchIdeBtn">Launch IDE</sys:String>
     <sys:String x:Key="Ag.ImportToolsBtn">Import from Tools</sys:String>
@@ -284,6 +286,9 @@
     <sys:String x:Key="Msg.AgBatchProgressFmt">Batch activating quotas ({0}/{1}): {2}…</sys:String>
     <sys:String x:Key="Msg.AgBatchCooldownFmt">Done ({0}/{1}), safety cooldown {2:F1}s…</sys:String>
     <sys:String x:Key="Msg.AgBatchDoneFmt">⚡ Batch quota activation done! {0} succeeded, {1} failed</sys:String>
+    <sys:String x:Key="Msg.AgBatchCanceledFmt">Batch activation canceled: {0} succeeded, {1} failed, {2} skipped</sys:String>
+    <sys:String x:Key="Msg.AgBatchCanceling">Canceling...</sys:String>
+    <sys:String x:Key="Msg.AgBatchCancelRequested">Cancellation requested; waiting for the current account to finish</sys:String>
     <sys:String x:Key="Msg.AgRefreshNone">No archived accounts to refresh</sys:String>
     <sys:String x:Key="Msg.AgRefreshQuotaProFmt">Refreshed {0}: Gemini ＆ GPT/Claude quotas</sys:String>
     <sys:String x:Key="Msg.AgRefreshQuotaFmt">Refreshed {0}: Gemini ＆ Claude/GPT weekly quotas</sys:String>
@@ -296,9 +301,11 @@
     <sys:String x:Key="Msg.AgSwitchIdeCloseFail">Could not close Antigravity automatically; quit it manually and retry</sys:String>
     <sys:String x:Key="Msg.AgSwitchFailFmt">Switch failed: {0}</sys:String>
     <sys:String x:Key="Msg.AgIdeRestartFailFmt">Credentials activated, but IDE restart failed: {0}</sys:String>
+    <sys:String x:Key="Msg.AgIdeStartVerifyFail">Antigravity launch was sent but no main window was detected (may be blocked by the single-instance lock). Please start it manually to confirm.</sys:String>
     <sys:String x:Key="Msg.ToggleCodexOnFmt">Codex router enabled (port :{0}); Codex requests taken over</sys:String>
     <sys:String x:Key="Msg.RestartingFmt">Restarting {0} client…</sys:String>
     <sys:String x:Key="Msg.RestartedFmt">{0} client restarted</sys:String>
+    <sys:String x:Key="Msg.RestartNoProcessFmt">{0} launch command was sent but no new process was detected (may be blocked by the system or slow to start). Please verify manually.</sys:String>
     <sys:String x:Key="Msg.RestartFailFmt">Restart {0} failed: {1}</sys:String>
     <sys:String x:Key="Msg.EditorBusy">A provider editor is already open — save or close it first</sys:String>
     <sys:String x:Key="Msg.SavedCurrentFmt">Saved ＆ applied to the active config "{0}"</sys:String>
@@ -360,7 +367,13 @@
     <sys:String x:Key="PD.NotesLabel">Notes</sys:String>
     <sys:String x:Key="PD.NotesTag">e.g. Work account</sys:String>
     <sys:String x:Key="PD.WebsiteLabel">Website</sys:String>
+    <sys:String x:Key="Msg.CodexModelsAutoFetchedFmt">Fetched {0} models from the provider and wrote them into the Codex model catalog</sys:String>
+    <sys:String x:Key="Msg.CodexModelsAutoFetchEmpty">Could not fetch the provider model list. Check Base URL and API Key, or uncheck this and add models manually.</sys:String>
     <sys:String x:Key="PD.ModelConfigTitle">Model Configuration</sys:String>
+    <sys:String x:Key="PD.NativeCodexModels">Auto-fetch model list (no manual entry)</sys:String>
+    <sys:String x:Key="PD.NativeCodexModelsDesc">On save, requests the provider model list (GET /models) and writes it into the Codex model catalog, so all models offered by this provider become selectable in the Codex /model picker.</sys:String>
+    <sys:String x:Key="PD.NativeCodexModelsTip">When checked, models are fetched from the provider on save if none were configured manually</sys:String>
+    <sys:String x:Key="PD.NativeCodexEnabledHint">Auto-fetch enabled: on save the provider model list is written into Codex model_catalog_json, making those models appear in the Codex /model picker. If the provider exposes no /models endpoint, uncheck this and add models manually.</sys:String>
     <sys:String x:Key="PD.ClaudeDescDefault">Claude only accepts claude-sonnet-* / claude-opus-* / claude-haiku-* role IDs. Model mapping translates them into the provider's real models and keeps the local router on.</sys:String>
     <sys:String x:Key="PD.ClaudeDescCli">Configure model mapping and upstream format for Claude Code CLI. Empty tiers fall back to the Sonnet model so sub-agent Haiku calls always work.</sys:String>
     <sys:String x:Key="PD.ClaudeDescDesktop">Claude Desktop only accepts claude-sonnet-* / claude-opus-* / claude-haiku-* role IDs. With mapping enabled, APISwitch maps these three tiers to the provider's real models and keeps the local router on while in use.</sys:String>
@@ -560,6 +573,7 @@
     <sys:String x:Key="AgQ.ErrRateLimitedRpm">Google per-minute rate limit hit (429, quota still available); auto-retried once — please try again in 1-2 minutes</sys:String>
     <sys:String x:Key="AgQ.CliNotFound">Antigravity CLI (agy.exe) not found — please install the Antigravity command line tool first</sys:String>
     <sys:String x:Key="AgQ.CliFailed">CLI activation failed (no valid response)</sys:String>
+    <sys:String x:Key="AgQ.CliTimeout">Activation timed out: none of the available models finished within the time limit; stopped retrying</sys:String>
     <sys:String x:Key="AgQ.CliOkFmt">Activated via local CLI: model {0}, {1}ms ({2})</sys:String>
     <sys:String x:Key="AgQ.CliOkGemini">Gemini quota pool</sys:String>
     <sys:String x:Key="AgQ.CliOkThirdParty">Claude/GPT quota pool</sys:String>
@@ -615,7 +629,18 @@
     <sys:String x:Key="Usage.ColIn">In</sys:String>
     <sys:String x:Key="Usage.ColOut">Out</sys:String>
     <sys:String x:Key="Usage.ColTotal">Total</sys:String>
-    <sys:String x:Key="Usage.Note">Note: usage is computed by scanning local Codex / Claude Code / OpenCode / Pi session records, so calls made while the app was not running are included. Data is kept for 90 days.</sys:String>
+    <sys:String x:Key="Usage.ColCache">Cache</sys:String>
+    <sys:String x:Key="Usage.ColSpeed">Speed</sys:String>
+    <sys:String x:Key="Usage.ColTtft">TTFT</sys:String>
+    <sys:String x:Key="Usage.CacheHitRate">Cache hit rate</sys:String>
+    <sys:String x:Key="Usage.CacheHitDetailFmt">hit {0} · write {1}</sys:String>
+    <sys:String x:Key="Usage.CacheHitNoData">No cache data yet</sys:String>
+    <sys:String x:Key="Usage.BackfillBtn">Backfill history</sys:String>
+    <sys:String x:Key="Usage.BackfillConfirmTitle">Backfill historical usage?</sys:String>
+    <sys:String x:Key="Usage.BackfillConfirmMsg">Rescan all local session logs and rebuild usage stats so the cache hit, duration and TTFT metrics are populated. The usage database is backed up automatically first (timestamped); the event table will be cleared and rebuilt. Continue?</sys:String>
+    <sys:String x:Key="Usage.BackfillDoneFmt">Backfill complete: {0} records written, {1} with cache data and {2} with timing data.</sys:String>
+    <sys:String x:Key="Usage.BackfillFailFmt">Backfill failed: {0}</sys:String>
+    <sys:String x:Key="Usage.Note">Note: usage is computed by scanning local Codex / Claude Code / OpenCode / Pi session records, so calls made while the app was not running are included. Data is kept for 90 days. Cache hit rate = hits / (fresh input + hits + writes); speed = output tokens / total duration; TTFT is derived from each client's message-level timestamps (logs do not record the first streamed packet, so it is an estimate) and shows "—" when it cannot be derived.</sys:String>
 
     <!-- Usage monitor redesign -->
     <sys:String x:Key="Usage.TabProviders">Providers</sys:String>

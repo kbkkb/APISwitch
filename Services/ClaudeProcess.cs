@@ -206,12 +206,13 @@ public static class ClaudeProcess
         throw new FileNotFoundException("未检测到可启动的 Claude 桌面客户端或快捷方式。");
     }
 
-    /// <summary>
-    /// 彻底重启 Claude 桌面客户端
-    /// </summary>
-    public static async Task RestartClaudeAsync()
-    {
-        await StopClaudeAsync();
-        StartClaude();
-    }
-}
+     /// <summary>
+     /// 彻底重启 Claude 桌面客户端。
+     /// 走通用重启流程（优雅关闭 → 强杀残留 → 等待释放 → 启动并验证新进程），
+     /// 返回真实结果，不再一味假定成功。
+     /// </summary>
+     public static Task<AppProcessRestart.Result> RestartClaudeAsync() =>
+         AppProcessRestart.RestartAsync("Claude", GetClaudeProcesses, StartClaude, Log);
+ 
+     static void Log(string msg) => App.LogStartup("ClaudeRestart: " + msg);
+ }

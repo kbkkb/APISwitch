@@ -895,7 +895,16 @@ public static class LocalProxyServer
 
         // 用量监控：从上游 SSE 末 chunk 捕获 token 统计
         long usagePromptTokens = 0, usageCompletionTokens = 0;
+        long usageCacheReadTokens = 0, usageCacheWriteTokens = 0;
+        long usageTtftMs = 0; // 首字耗时，0 表示没抓到（非流式或上游无内容）
         var usageSw = System.Diagnostics.Stopwatch.StartNew();
+
+        // 首字打点：只在首个真正产出内容的 chunk（推理 / 正文 / 工具调用）记一次，
+        // 后续 chunk 不覆盖。放在内容判定处而非循环入口，是因为上游首包常常只是 {"role":"assistant"}。
+        void StampTtft()
+        {
+            if (usageTtftMs == 0) usageTtftMs = usageSw.ElapsedMilliseconds;
+        }
 
         using var stream = await upstreamResp.Content.ReadAsStreamAsync();
         using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -926,6 +935,15 @@ public static class LocalProxyServer
                         usagePromptTokens = tt * 3 / 4;
                         usageCompletionTokens = tt - usagePromptTokens;
                     }
+
+                    // 缓存 token：OpenAI 兼容格式藏在 prompt_tokens_details.cached_tokens，
+                    // Anthropic 原生格式直接给顶层 cache_read_input_tokens / cache_creation_input_tokens。
+                    // 两种都试，谁先命中用谁；都没有则留 0（UI 显示"暂无缓存数据"）。
+                    if (usageObj["prompt_tokens_details"]?["cached_tokens"]?.GetValue<long>() is long ptdCached)
+                        usageCacheReadTokens = ptdCached;
+                    if (usageObj["cache_read_input_tokens"]?.GetValue<long>() is long ar) usageCacheReadTokens = ar;
+                    if (usageObj["cache_creation_input_tokens"]?.GetValue<long>() is long ac) usageCacheWriteTokens = ac;
+
                     continue; // usage chunk 无业务内容
                 }
 
@@ -949,6 +967,7 @@ public static class LocalProxyServer
 
                 if (!string.IsNullOrEmpty(reasoningChunk))
                 {
+                    StampTtft();
                     if (!hasAddedReasoningItem)
                     {
                         hasAddedReasoningItem = true;
@@ -980,6 +999,7 @@ public static class LocalProxyServer
                 var contentChunk = delta["content"]?.GetValue<string>();
                 if (!string.IsNullOrEmpty(contentChunk))
                 {
+                    StampTtft();
                     if (!hasAddedMsgItem)
                     {
                         hasAddedMsgItem = true;
@@ -1028,6 +1048,7 @@ public static class LocalProxyServer
                 // C. Check tool calls
                 if (delta["tool_calls"] is JsonArray toolCallsArr)
                 {
+                    StampTtft();
                     foreach (var tc in toolCallsArr)
                     {
                         if (tc is not JsonObject tcObj) continue;
@@ -1091,12 +1112,13 @@ public static class LocalProxyServer
             catch { }
         }
 
-        // 用量监控：落库本次请求的 token 消耗（Codex 经网关的请求）
+        // 用量监控：落库本次请求的 token 消耗与性能指标（Codex 经网关的请求）
         usageSw.Stop();
         if (usagePromptTokens > 0 || usageCompletionTokens > 0)
         {
             UsageStorage.RecordUsage(UsageStorage.AgentCodex, provider.Id ?? "", provider.Name ?? "",
-                model ?? "", usagePromptTokens, usageCompletionTokens);
+                model ?? "", usagePromptTokens, usageCompletionTokens, null,
+                usageCacheReadTokens, usageCacheWriteTokens, usageSw.ElapsedMilliseconds, usageTtftMs);
         }
 
         // Finish tool-call items and include them in the final Responses output.
@@ -1542,11 +1564,13 @@ public static class LocalProxyServer
     /// <summary>
     /// 透传上游响应流，同时扫描 SSE data 行中的 usage 字段用于用量监控。
     /// 非 SSE 响应（纯 JSON/二进制）不受影响，原样拷贝。
+    /// 同时采集性能指标：整轮耗时（Stopwatch）、首字耗时（首个内容 chunk）、缓存 token。
     /// </summary>
     private static async Task TeeCopyWithUsageAsync(HttpResponseMessage upstreamResp, System.IO.Stream outStream,
         string agent, string providerId, string providerName, string model = "")
     {
         long inTokens = 0, outTokens = 0;
+        long cacheReadTokens = 0, cacheWriteTokens = 0;
         var contentType = upstreamResp.Content.Headers.ContentType?.MediaType ?? "";
 
         if (!contentType.Contains("event-stream", StringComparison.OrdinalIgnoreCase))
@@ -1555,6 +1579,9 @@ public static class LocalProxyServer
             await upstreamResp.Content.CopyToAsync(outStream);
             return;
         }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long ttftMs = 0;
 
         await using var upstream = await upstreamResp.Content.ReadAsStreamAsync();
         using var reader = new System.IO.StreamReader(upstream, Encoding.UTF8);
@@ -1573,6 +1600,11 @@ public static class LocalProxyServer
             {
                 if (JsonNode.Parse(dataStr) is JsonObject obj)
                 {
+                    // 首字打点：首个真正带内容的 chunk。
+                    // OpenAI 风格看 choices[0].delta.content；Anthropic 风格看 type=content_block_delta。
+                    // 不把 message_start / response.created 这类空壳事件算进去。
+                    if (ttftMs == 0 && HasStreamContent(obj)) ttftMs = sw.ElapsedMilliseconds;
+
                     // Anthropic: message_delta.usage；OpenAI: usage
                     if (obj["usage"] is JsonObject u)
                     {
@@ -1580,21 +1612,55 @@ public static class LocalProxyServer
                         else if (u["prompt_tokens"]?.GetValue<long>() is long pt) inTokens = pt;
                         if (u["output_tokens"]?.GetValue<long>() is long ot) outTokens = ot;
                         else if (u["completion_tokens"]?.GetValue<long>() is long ct) outTokens = ct;
+
+                        // 缓存 token：OpenAI 兼容格式在 prompt_tokens_details.cached_tokens，
+                        // Anthropic 原生格式给顶层 cache_read_input_tokens / cache_creation_input_tokens。
+                        if (u["prompt_tokens_details"]?["cached_tokens"]?.GetValue<long>() is long ptd) cacheReadTokens = ptd;
+                        if (u["cache_read_input_tokens"]?.GetValue<long>() is long ar) cacheReadTokens = ar;
+                        if (u["cache_creation_input_tokens"]?.GetValue<long>() is long ac) cacheWriteTokens = ac;
                     }
                     else if (obj["message"]?["usage"] is JsonObject mu)
                     {
                         if (mu["input_tokens"]?.GetValue<long>() is long it2) inTokens = it2;
                         if (mu["output_tokens"]?.GetValue<long>() is long ot2) outTokens = ot2;
+                        if (mu["prompt_tokens_details"]?["cached_tokens"]?.GetValue<long>() is long ptd2) cacheReadTokens = ptd2;
+                        if (mu["cache_read_input_tokens"]?.GetValue<long>() is long ar2) cacheReadTokens = ar2;
+                        if (mu["cache_creation_input_tokens"]?.GetValue<long>() is long ac2) cacheWriteTokens = ac2;
                     }
                 }
             }
             catch { }
         }
 
+        sw.Stop();
+
         if (inTokens > 0 || outTokens > 0)
         {
-            UsageStorage.RecordUsage(agent, providerId, providerName, model, inTokens, outTokens);
+            UsageStorage.RecordUsage(agent, providerId, providerName, model, inTokens, outTokens, null,
+                cacheReadTokens, cacheWriteTokens, sw.ElapsedMilliseconds, ttftMs);
         }
+    }
+
+    /// <summary>
+    /// 判断一个 SSE chunk 是否携带实际生成内容（用于首字耗时打点）。
+    /// 只识别 OpenAI Chat Completions 与 Anthropic Messages 两种主流格式；
+    /// 无法识别时返回 false，首字显示为"—"，不影响 token 统计。
+    /// </summary>
+    static bool HasStreamContent(JsonObject obj)
+    {
+        // OpenAI: choices[0].delta.content / reasoning_content
+        if (obj["choices"]?[0]?["delta"] is JsonObject d)
+        {
+            if (d["content"]?.GetValue<string>() is { Length: > 0 }) return true;
+            if (d["reasoning_content"]?.GetValue<string>() is { Length: > 0 }) return true;
+            if (d["reasoning"]?.GetValue<string>() is { Length: > 0 }) return true;
+        }
+
+        // Anthropic: type=content_block_delta 且 delta.text 非空
+        if (obj["type"]?.GetValue<string>() == "content_block_delta" &&
+            obj["delta"]?["text"]?.GetValue<string>() is { Length: > 0 }) return true;
+
+        return false;
     }
 
     private static async Task WriteErrorAsync(HttpListenerContext ctx, int statusCode, string message)

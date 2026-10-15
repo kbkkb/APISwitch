@@ -103,7 +103,7 @@ public partial class App : System.Windows.Application
         }
     }
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         LogStartup($"OnStartup start, args=[{string.Join(" ", e.Args)}]");
         // 语言字典需在任何 UI / 诊断路径之前就绪（selftest / render-test 同样需要本地化文本）
@@ -123,7 +123,13 @@ public partial class App : System.Windows.Application
         }
         if (e.Args.Contains("--selftest"))
         {
-            RunSelfTest();
+            await RunSelfTest();
+            Shutdown();
+            return;
+        }
+        if (e.Args.Contains("--backfill-usage"))
+        {
+            RunBackfillUsage();
             Shutdown();
             return;
         }
@@ -282,7 +288,7 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 
-    static void RunSelfTest()
+    static async Task RunSelfTest()
     {
         var sb = new StringBuilder();
         var sandbox = Path.Combine(Path.GetTempPath(), "apiswitch-selftest-home");
@@ -444,6 +450,23 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             sb.AppendLine("ui_tabs_render_err=" + ex);
+        }
+
+        // 用量监控窗口：缓存/速度/首字三张卡片与调用明细的新列是独立的一套 XAML，
+        // 上面的主窗口遍历覆盖不到。这里单独实例化并切到调用明细面板，
+        // 确保 XAML 能完整解析、StaticResource（IconRocket 等）与命名元素都就位。
+        try
+        {
+            var umw = new Dialogs.UsageMonitorWindow { Visibility = Visibility.Hidden };
+            umw.UpdateLayout();
+            umw.TabCallsRadio.IsChecked = true;
+            umw.UpdateLayout();
+            umw.Close();
+            sb.AppendLine("ui_usage_monitor_render=ok");
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("ui_usage_monitor_render_err=" + ex);
         }
         // ===== 思考强度（模型级）写入断言 =====
         try
@@ -630,6 +653,83 @@ public partial class App : System.Windows.Application
             {
                 sb.AppendLine("tray_probe_err=" + ex.Message);
             }
+            // 4d) CLI 失败分类回归（用户截图中的真实报因）：
+            //     exit=0 的 JSON 里带 error 必须判失败；"模型不被接受"与"参数用法错误"都要识别出来，
+            //     否则不会降级参数、也不会换下一个可用模型。
+            try
+            {
+                var json = "{\"conversation_id\":\"\",\"status\":\"ERROR\",\"response\":\"\",\"error\":\"invalid model selection (--model\\\"gemini-2.5-flash-lite\\\" --effort \\\"low\\\"): --effort is not supported\"}";
+                var err = Services.AgCliService.ExtractJsonError(json);
+                sb.AppendLine("cli_json_error=" + (err ?? "null"));
+                sb.AppendLine("cli_is_model=" + Services.AgCliService.IsModelError(json));
+                sb.AppendLine("cli_is_usage=" + Services.AgCliService.IsUsageError(0, json));
+                // 成功输出不得被误判为错误
+                sb.AppendLine("cli_json_ok_ignored=" + (Services.AgCliService.ExtractJsonError("{\"status\":\"OK\",\"response\":\"hi\"}") == null));
+                // 配额类错误要能被识别（不该去换模型/降级参数）
+                var quota = "{\"status\":\"ERROR\",\"error\":\"429 RESOURCE_EXHAUSTED: quota exceeded\"}";
+                sb.AppendLine("cli_quota_error=" + (Services.AgCliService.ExtractJsonError(quota) ?? "null"));
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("cli_probe_err=" + ex.Message);
+            }
+            // 4e) 模型排序回归：CLI 激活必须"最新优先"，
+            //     老模型（gemini-2.5 等）多已被官方下线，先试它只会白白卡很久再失败。
+            try
+            {
+                var ordered = Services.AgQuotaService.OrderByVersionDescending(new List<string>
+                {
+                    "gemini-2.5-flash-lite", "gemini-3.8-flash-low", "gemini-3-pro", "gemini-2.5-pro",
+                });
+                sb.AppendLine("cli_model_order=" + string.Join(",", ordered));
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("cli_order_err=" + ex.Message);
+            }
+            // 4f) CLI 自报模型解析 + 最便宜挑选（用真实 CLI 输出做回归）：
+            //     CLI 的模型名是带思考档位的显示名，和 Google API 的命名不是一套，
+            // // 必须按 CLI 自报的列表选，否则永远 "model not recognized"。
+            try
+            {
+                var raw = "error: invalid model selection (--model \"__x__\" --effort \"\"): model __x__ is not recognized as a known model or custom model in settings\n" +
+                           "Available models:\n" +
+                           "  Gemini 3.8 Flash (High)\n  Gemini 3.8 Flash (Medium)\n  Gemini 3.8 Flash (Low)\n" +
+                           "  Gemini 3.7 Flash (High)\n  Gemini 3.7 Flash (Medium)\n  Gemini 3.7 Flash (Low)\n" +
+                           "  Gemini 3.6 Flash (High)\n  Gemini 3.6 Flash (Medium)\n  Gemini 3.6 Flash (Low)\n" +
+                           "  Gemini 3.1 Pro (High)\n  Gemini 3.1 Pro (Low)\n" +
+                           "  Claude Sonnet 4.6 (Thinking)\n  Claude Opus 4.6 (Thinking)\n  GPT-OSS 120B (Medium)";
+                var parsed = Services.AgCliService.ParseAvailableModels(raw);
+                sb.AppendLine("cli_parsed_count=" + parsed.Count);
+                sb.AppendLine("cli_parsed_first=" + (parsed.Count > 0 ? parsed[0] : "none"));
+                var gem = Services.AgCliService.PickCheapest(parsed, geminiPool: true);
+                var tp = Services.AgCliService.PickCheapest(parsed, geminiPool: false);
+                sb.AppendLine("cli_pick_gemini=" + (gem.Count > 0 ? gem[0] : "none"));
+                sb.AppendLine("cli_pick_thirdparty=" + (tp.Count > 0 ? tp[0] : "none"));
+                // 没有该章节时不得凭空造模型
+                sb.AppendLine("cli_parse_empty_ok=" + (Services.AgCliService.ParseAvailableModels("some other error").Count == 0));
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("cli_parse_err=" + ex.Message);
+            }
+            // 4g) 忙碌遮罩不得禁用整个窗口：
+            //     窗口一旦 IsEnabled=false，点击它只会激活窗口而不派发点击，
+            //     且部分自定义按钮样式没有禁用态视觉反馈，界面看着正常却点不动。
+            try
+            {
+                var busyWin = new MainWindow { Visibility = Visibility.Hidden };
+                busyWin.SetBusy("selftest");
+                sb.AppendLine("busy_window_enabled=" + (busyWin.IsEnabled ? "yes" : "no"));
+                sb.AppendLine("busy_overlay=" + (busyWin.BusyOverlay.Visibility == Visibility.Visible ? "visible" : "hidden"));
+                busyWin.ClearBusy();
+                sb.AppendLine("busy_after_clear=" + (busyWin.BusyOverlay.Visibility == Visibility.Visible ? "visible" : "hidden"));
+                busyWin.Close();
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("busy_probe_err=" + ex.Message);
+            }
         }
         catch (Exception ex)
         {
@@ -654,6 +754,28 @@ public partial class App : System.Windows.Application
                 sb.AppendLine("pd_" + mode + "_model_combo=" + (combo != null ? "yes" : "no"));
                 dlg.Close();
             }
+            // 4h) 批量激活取消按钮：默认隐藏（不占工具栏），点击后由代码显出
+            try
+            {
+                var mwC = new MainWindow { Visibility = Visibility.Hidden };
+                var cancelBtn = mwC.FindName("BusyCancelBtn") as System.Windows.Controls.Control;
+                sb.AppendLine("batch_cancel_exists=" + (cancelBtn != null));
+                sb.AppendLine("batch_cancel_hidden_by_default=" + (cancelBtn != null && cancelBtn.Visibility != Visibility.Visible));
+                // 关键回归：取消按钮必须位于忙碌遮罩内部。遮罩盖住整个窗口，
+                // 放在工具栏上会被遮罩挡住点不到（用户实际遇到的问题）。
+                var inOverlay = false;
+                for (System.Windows.DependencyObject? d = cancelBtn; d != null; d = System.Windows.Media.VisualTreeHelper.GetParent(d))
+                {
+                    if (ReferenceEquals(d, mwC.BusyOverlay)) { inOverlay = true; break; }
+                }
+                sb.AppendLine("batch_cancel_inside_overlay=" + inOverlay);
+                mwC.Close();
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("batch_cancel_err=" + ex.Message);
+            }
+
             sb.AppendLine("pd_dialog_probe=ok");
         }
         catch (Exception ex)
@@ -715,6 +837,35 @@ public partial class App : System.Windows.Application
             sb.AppendLine("activate_outer_err=" + ex.Message);
         }
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "apiswitch-activate.txt"), sb.ToString());
+    }
+
+    /// <summary>
+    /// 回填历史用量数据：备份 usage.db → 清空事件表 → 全量重扫本地会话日志。
+    /// 用于缓存/耗时/首字指标上线后补齐老数据——增量扫描按字节偏移推进，
+    /// 不会重读已消费的文件，老行里的新字段会永远是 0。
+    /// 报告写入 %TEMP%\apiswitch-backfill.txt。
+    /// </summary>
+    static void RunBackfillUsage()
+    {
+        var sb = new StringBuilder();
+        try
+        {
+            sb.AppendLine($"start={DateTime.Now:O}");
+            var result = UsageScanner.BackfillAll();
+            var (total, withCache, withTiming) = UsageStorage.CountPerfRows();
+            sb.AppendLine($"backup={result.BackupPath ?? "(none)"}");
+            sb.AppendLine($"written={result.Written}");
+            sb.AppendLine($"total_rows={total}");
+            sb.AppendLine($"rows_with_cache={withCache}");
+            sb.AppendLine($"rows_with_timing={withTiming}");
+        }
+        catch (Exception ex)
+        {
+            sb.AppendLine("error=" + ex);
+        }
+        var outPath = Path.Combine(Path.GetTempPath(), "apiswitch-backfill.txt");
+        File.WriteAllText(outPath, sb.ToString());
+        try { Console.WriteLine(sb.ToString()); } catch { }
     }
 
     static void RunProbe()

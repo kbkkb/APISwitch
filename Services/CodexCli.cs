@@ -270,8 +270,10 @@ public static class CodexCli
                 }
             }
 
-            // Only include models configured by the user (CustomModels and Model).
-            // Do NOT append unconfigured first-party models so they stay hidden in Codex UI.
+            // 模型目录：来自用户手动配置的 CustomModels + Model。
+            // 注意：绝不能"不写目录"——第三方中转站的模型名（如 gpt-6-astra）
+            // 并不在 Codex 内置目录里，去掉自定义目录后 Codex 只会显示默认模型，
+            // 供应商的其它模型全部消失。必须写目录，Codex 的 /model 切换器才能列出它们。
             if (catalogModels.Count > 0)
             {
                 var catalogRoot = new JsonObject
@@ -288,8 +290,16 @@ public static class CodexCli
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(p.Model)) model["model"] = p.Model;
-        else if (p.IsOfficial) model.Remove("model");
+        // 固定 model：配了才写；没配必须移除，否则会残留上一个供应商的 model，
+        // 导致切换供应商后仍在用旧模型发请求（旧代码只对官方供应商清理，是个 bug）。
+        if (!string.IsNullOrWhiteSpace(p.Model))
+        {
+            model["model"] = p.Model;
+        }
+        else
+        {
+            model.Remove("model");
+        }
 
         FileUtil.AtomicWriteText(ConfigPath, TomlSerializer.Serialize(model));
         ApplyAuth(p);

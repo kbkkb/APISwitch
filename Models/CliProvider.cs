@@ -161,7 +161,16 @@ public class CodexProvider
     public string? BearerToken { get; set; }
     public Dictionary<string, string> CustomHeaders { get; set; } = new();
     public Dictionary<string, string> ExtraOptions { get; set; } = new();
-    public List<ProviderModelEntry> CustomModels { get; set; } = new();
+     public List<ProviderModelEntry> CustomModels { get; set; } = new();
+ 
+     /// <summary>
+     /// 自动从供应商拉取模型列表（GET {base_url}/models）。
+     /// 开启后保存时若用户没有手动配置模型，APISwitch 会拉取供应商真实提供的模型
+     /// 并写入 Codex 的 model_catalog_json，用户无需逐个手填即可在 Codex 的
+     /// /model 切换器里看到该供应商的全部模型。
+     /// 关闭则完全手动配置；供应商不提供 /models 端点时此项无效。
+     /// </summary>
+     public bool AutoFetchModels { get; set; }
 
     static string MakeId(string name)
     {

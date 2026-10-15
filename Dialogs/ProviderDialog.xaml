@@ -412,8 +412,24 @@
                         </StackPanel>
 
                         <!-- Codex / OpenCode Models Configuration Section -->
-                        <StackPanel x:Name="CodexModelsSection">
-                            <Grid Margin="0,0,0,8">
+                         <StackPanel x:Name="CodexModelsSection">
+                             <!-- 自动获取模型：保存时从供应商 /models 拉取，无需手填 -->
+                             <Border x:Name="NativeCodexPanel" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
+                                 <Grid>
+                                     <Grid.ColumnDefinitions>
+                                         <ColumnDefinition Width="Auto"/>
+                                         <ColumnDefinition Width="*"/>
+                                     </Grid.ColumnDefinitions>
+                                     <CheckBox x:Name="NativeCodexCheck" Grid.Column="0" VerticalAlignment="Top" Margin="0,1,10,0"
+                                               Click="NativeCodexCheck_Click" ToolTip="{DynamicResource PD.NativeCodexModelsTip}"/>
+                                     <StackPanel Grid.Column="1">
+                                         <TextBlock Text="{DynamicResource PD.NativeCodexModels}" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource TextBrush}"/>
+                                         <TextBlock Text="{DynamicResource PD.NativeCodexModelsDesc}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                     </StackPanel>
+                                 </Grid>
+                             </Border>
+                             <StackPanel x:Name="CodexModelConfigPanel">
+                                 <Grid Margin="0,0,0,8">
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{DynamicResource PD.ModelConfigTitle}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextBrush}"/>
                                     <TextBlock Text="{DynamicResource PD.ModelsDesc}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
@@ -427,7 +443,14 @@
                                     </Button>
                                     <Button Content="{DynamicResource PD.AddModelBtn}" Style="{StaticResource GhostButton}" Click="AddModel_Click"/>
                                 </StackPanel>
-                            </Grid>
+                             </Grid>
+ 
+                             <!-- 原生模式开启时的提示（告诉用户模型去哪切） -->
+                             <Border x:Name="NativeCodexHintWhenOn" Visibility="Collapsed" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
+                                 <StackPanel>
+                                     <TextBlock Text="{DynamicResource PD.NativeCodexEnabledHint}" FontSize="11" Foreground="#1E40AF" TextWrapping="Wrap"/>
+                                 </StackPanel>
+                             </Border>
 
                             <!-- Fetched Models Temporary Pool Banner & Quick Selector -->
                             <Border x:Name="FetchedModelsBar" Visibility="Collapsed" Background="#F0FDF4" BorderBrush="#BBF7D0" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
@@ -498,7 +521,8 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </StackPanel>
+                             </StackPanel>
+                             </StackPanel>
 
                         <Separator Background="#E2E8F0" Margin="0,4,0,14"/>
 

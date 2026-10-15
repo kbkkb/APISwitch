@@ -45,7 +45,7 @@ public partial class MainWindow : Window
 
     System.Windows.Threading.DispatcherTimer? _agQuotaTimer;
     bool _isRefreshingAgQuotas = false;
-
+    CancellationTokenSource? _batchCts;
     System.Windows.Forms.NotifyIcon? _notifyIcon;
     bool _isExiting = false;
     bool _trayTransition = false;
@@ -86,6 +86,7 @@ public partial class MainWindow : Window
             }
             InitAgQuotaTimer();
             InitTrayIcon();
+            InitBusyWatchdog();
             App.LogStartup("MainWindow Loaded: finished");
         };
         App.LogStartup("MainWindow ctor: finished");
@@ -156,7 +157,7 @@ public partial class MainWindow : Window
     {
         _agQuotaTimer?.Stop();
     }
- 
+
     void OnWindowStateChanged(object? sender, EventArgs e)
     {
         if (_trayTransition) return;
@@ -167,24 +168,24 @@ public partial class MainWindow : Window
             OnForegroundEntered();
         }
     }
- 
+
     void OnForegroundEntered()
     {
         _agQuotaTimer?.Stop();
         _agQuotaTimer?.Start();
- 
+
         if ((Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity")
         {
             _ = RefreshAllAgQuotasAsync(silent: true);
         }
     }
- 
+
     void OnTabChanged(object sender, SelectionChangedEventArgs e)
     {
         if (e.Source != Tabs || !IsLoaded || _isReorderingTabs) return;
         var tag = (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() ?? "";
         ApplyTabTheme(tag);
- 
+
         switch (tag)
         {
             case "antigravity":
@@ -428,45 +429,89 @@ public partial class MainWindow : Window
         var count = _profiles.Count;
         int successCount = 0;
         int failCount = 0;
+        bool canceled = false;
 
-        for (int i = 0; i < _profiles.Count; i++)
+        _batchCts?.Cancel();
+        _batchCts?.Dispose();
+        _batchCts = new CancellationTokenSource();
+        var ct = _batchCts.Token;
+
+        // 取消入口必须放在遮罩内部：遮罩盖住整个窗口，工具栏上的按钮会被挡住点不到
+        BusyCancelBtn.Visibility = Visibility.Visible;
+
+        try
         {
-            var p = _profiles[i];
-            p.IsActivating = true;
-            Dispatcher.Invoke(() => ProfileList.Items.Refresh());
-            SetBusy(I18nService.F("Msg.AgBatchProgressFmt", i + 1, count, p.Email));
+            for (int i = 0; i < _profiles.Count; i++)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    canceled = true;
+                    break;
+                }
 
-            try
-            {
-                var (ok, latencyMs, msg, rateLimited) = await AgQuotaService.ActivateAccountQuotaAsync(p);
-                if (ok) successCount++;
-                else failCount++;
-            }
-            catch (Exception ex)
-            {
-                failCount++;
-                p.IsActivated = false;
-                p.ActivationError = ex.Message;
-                ProfileStore.Save(p);
-            }
-            finally
-            {
-                p.IsActivating = false;
-            }
+                var p = _profiles[i];
+                p.IsActivating = true;
+                Dispatcher.Invoke(() => ProfileList.Items.Refresh());
+                SetBusy(I18nService.F("Msg.AgBatchProgressFmt", i + 1, count, p.Email));
 
-            await RefreshAntigravityAsync();
+                try
+                {
+                    var (ok, latencyMs, msg, rateLimited) = await AgQuotaService.ActivateAccountQuotaAsync(p, ct);
+                    if (ok) successCount++;
+                    else failCount++;
+                }
+                catch (OperationCanceledException)
+                {
+                    canceled = true;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    failCount++;
+                    p.IsActivated = false;
+                    p.ActivationError = ex.Message;
+                    ProfileStore.Save(p);
+                }
+                finally
+                {
+                    p.IsActivating = false;
+                }
 
-            if (i < _profiles.Count - 1)
-            {
-                var delay = Random.Shared.Next(1500, 3000);
-                SetBusy(I18nService.F("Msg.AgBatchCooldownFmt", i + 1, count, delay / 1000.0));
-                await Task.Delay(delay);
+                await RefreshAntigravityAsync();
+
+                if (i < _profiles.Count - 1)
+                {
+                    var delay = Random.Shared.Next(1500, 3000);
+                    SetBusy(I18nService.F("Msg.AgBatchCooldownFmt", i + 1, count, delay / 1000.0));
+                    try { await Task.Delay(delay, ct); }
+                    catch (OperationCanceledException) { canceled = true; break; }
+                }
             }
         }
+        finally
+        {
+            // 关键：无论循环是否抛异常/被取消，都必须收起忙碌遮罩并恢复按钮，
+            // 否则遮罩会把界面永久卡死、取消按钮也会一直挂着。
+            ClearBusy();
+            BusyCancelBtn.Visibility = Visibility.Collapsed;
+            _batchCts?.Dispose();
+            _batchCts = null;
+        }
 
-        ClearBusy();
         await RefreshAntigravityAsync();
-        ShowToast(I18nService.F("Msg.AgBatchDoneFmt", successCount, failCount));
+
+        if (canceled)
+            ShowToast(I18nService.F("Msg.AgBatchCanceledFmt", successCount, failCount, count - successCount - failCount));
+        else
+            ShowToast(I18nService.F("Msg.AgBatchDoneFmt", successCount, failCount));
+    }
+
+    void OnBatchCancelAntigravity(object sender, RoutedEventArgs e)
+    {
+        if (_batchCts == null || _batchCts.IsCancellationRequested) return;
+        _batchCts.Cancel();
+        SetBusy(I18nService.T("Msg.AgBatchCanceling"));
+        ShowToast(I18nService.T("Msg.AgBatchCancelRequested"));
     }
 
     async void OnCardRefreshQuota(object sender, RoutedEventArgs e)
@@ -504,7 +549,7 @@ public partial class MainWindow : Window
         SetBusy(I18nService.F("Msg.AgSwitchingFmt", target.Email));
         try
         {
-            var stopped = await Task.Run(AgProcess.StopIdeAsync);
+            var stopped = await Task.Run(() => AgProcess.StopIdeAsync(LogAg));
             if (!stopped)
             {
                 ClearBusy();
@@ -553,14 +598,24 @@ public partial class MainWindow : Window
 
         if (AutoRestartCheck.IsChecked == true)
         {
-            try { await Task.Run(AgProcess.StartIde); }
-            catch (Exception ex) { ClearBusy(); ShowToast(I18nService.F("Msg.AgIdeRestartFailFmt", ex.Message), isError: true); return; }
+            // 启动后必须验证主窗口真的出现了：被单例锁挡掉会静默退出，
+            // 以前不验证，白屏了也提示"已重启"。
+            var started = await Task.Run(() => AgProcess.StartIdeAndWaitAsync(LogAg));
+            if (!started)
+            {
+                ClearBusy();
+                ShowToast(I18nService.T("Msg.AgIdeStartVerifyFail"), isError: true);
+                return;
+            }
         }
 
         ClearBusy();
         await RefreshAntigravityAsync();
         ShowToast((AutoRestartCheck.IsChecked == true ? I18nService.F("Msg.AgSwitchedRestartFmt", target.Email) : I18nService.F("Msg.AgSwitchedFmt", target.Email)));
     }
+
+    /// <summary>反重力 IDE 重启过程的日志（排查白屏用）。</summary>
+    static void LogAg(string msg) => App.LogStartup("AgRestart: " + msg);
 
     void OnCardDeleteAntigravity(object sender, RoutedEventArgs e)
     {
@@ -571,34 +626,37 @@ public partial class MainWindow : Window
         _ = RefreshAntigravityAsync();
     }
 
-    async Task RefreshAllAgQuotasAsync(bool silent)
+    async Task RefreshAllAgQuotasAsync(bool silent, CancellationToken ct = default)
     {
         if (_isRefreshingAgQuotas) return;
         _isRefreshingAgQuotas = true;
 
         try
         {
-            await RefreshAntigravityAsync();
-
             if (_profiles.Count == 0)
             {
                 if (!silent) ShowToast(I18nService.T("Msg.AgRefreshNone"));
                 return;
             }
 
+            // 性能关键：账号列表刷新（进程枚举 + SQLite + 文件加载）与配额请求互相独立，
+            // 以前是串行 await，白白多等一整个列表刷新的时间。现在并发跑。
+            var listTask = RefreshAntigravityAsync();
+
             var targets = _profiles.ToList();
             using var semaphore = new SemaphoreSlim(4);
 
             var tasks = targets.Select(async p =>
             {
-                await semaphore.WaitAsync();
+                await semaphore.WaitAsync(ct);
                 try
                 {
+                    ct.ThrowIfCancellationRequested();
                     await AgQuotaService.RefreshQuotaAsync(p);
-                    Dispatcher.Invoke(() =>
-                    {
-                        ProfileList.Items.Refresh();
-                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch
                 {
@@ -611,6 +669,7 @@ public partial class MainWindow : Window
             });
 
             await Task.WhenAll(tasks);
+            await listTask;
 
             Dispatcher.Invoke(() =>
             {
@@ -620,6 +679,10 @@ public partial class MainWindow : Window
                     ShowToast(I18nService.F("Msg.AgRefreshAllDoneFmt", _profiles.Count));
                 }
             });
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消：静默结束，界面状态由调用方收尾
         }
         finally
         {
@@ -2094,8 +2157,11 @@ public partial class MainWindow : Window
         ShowToast(I18nService.F("Msg.RestartingFmt", "Claude"));
         try
         {
-            await ClaudeProcess.RestartClaudeAsync();
-            ShowToast(I18nService.F("Msg.RestartedFmt", "Claude"));
+            var r = await ClaudeProcess.RestartClaudeAsync();
+            if (r.Ok)
+                ShowToast(I18nService.F("Msg.RestartedFmt", "Claude"));
+            else
+                ShowToast(I18nService.F("Msg.RestartNoProcessFmt", "Claude"), isError: true);
         }
         catch (Exception ex)
         {
@@ -2474,6 +2540,25 @@ public partial class MainWindow : Window
                 }
             }
         }
+        // 自动获取模型：用户没有手动配置时，从供应商 /models 拉取真实模型列表，
+        // 这样无需逐个手填，Codex 的 /model 切换器就能列出该供应商提供的全部模型。
+        // （第三方中转站的模型名不在 Codex 内置目录里，不写自定义目录就只剩默认模型。）
+        if (p.AutoFetchModels && p.CustomModels.Count == 0)
+        {
+            var fetched = await TryFetchCodexModelsAsync(p);
+            if (fetched.Count > 0)
+            {
+                p.CustomModels = fetched
+                    .Select(m => new Models.ProviderModelEntry { Id = m, Name = m, ContextWindow = "1m" })
+                    .ToList();
+                if (idx >= 0) _codexProviders[idx] = p;
+                ShowToast(I18nService.F("Msg.CodexModelsAutoFetchedFmt", fetched.Count));
+            }
+            else
+            {
+                ShowToast(I18nService.T("Msg.CodexModelsAutoFetchEmpty"), isError: true);
+            }
+        }
         CliStore.SaveCodex(_codexProviders);
 
         var currentId = CodexCli.CurrentProviderId();
@@ -2499,14 +2584,34 @@ public partial class MainWindow : Window
         ShowToast(isCurrent ? I18nService.F("Msg.SavedCurrentFmt", p.Name) : I18nService.F("Msg.SavedProviderFmt", p.Name));
     }
 
+    /// <summary>
+    /// 从 Codex 供应商的 /models 端点拉取真实模型列表。失败返回空列表（不阻塞保存）。
+    /// </summary>
+    async Task<List<string>> TryFetchCodexModelsAsync(Models.CodexProvider p)
+    {
+        try
+        {
+            var key = !string.IsNullOrWhiteSpace(p.ApiKey) ? p.ApiKey : p.BearerToken;
+            return await Services.ModelFetchService.FetchModelsAsync(p.BaseUrl ?? "", key, p.CustomHeaders);
+        }
+        catch (Exception ex)
+        {
+            App.LogStartup($"CodexAutoFetch: {p.Name} failed: {ex.Message}");
+            return new List<string>();
+        }
+    }
+
 
     async void OnRestartCodex(object sender, RoutedEventArgs e)
     {
         ShowToast(I18nService.F("Msg.RestartingFmt", "Codex"));
         try
         {
-            await CodexProcess.RestartCodexAsync();
-            ShowToast(I18nService.F("Msg.RestartedFmt", "Codex"));
+            var r = await CodexProcess.RestartCodexAsync();
+            if (r.Ok)
+                ShowToast(I18nService.F("Msg.RestartedFmt", "Codex"));
+            else
+                ShowToast(I18nService.F("Msg.RestartNoProcessFmt", "Codex"), isError: true);
         }
         catch (Exception ex)
         {
@@ -3263,7 +3368,7 @@ public partial class MainWindow : Window
         Focus();
         OnForegroundEntered();
     }
- 
+
     /// <summary>
     /// 最小化到任务栏：任务栏上必须留下这个任务的按钮（标准 Windows 行为）。
     /// 与"收进系统托盘"是两件事——最小化绝不 Hide()。
@@ -3273,7 +3378,7 @@ public partial class MainWindow : Window
         ShowInTaskbar = true;
         WindowState = WindowState.Minimized;
     }
- 
+
     /// <summary>
     /// 收进系统托盘（仅"关闭窗口"时使用）：窗口和任务栏按钮都消失，只留托盘图标。
     /// </summary>
@@ -3398,18 +3503,50 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
 
-    void SetBusy(string text)
+    /// <summary>
+    /// 进入忙碌状态：只显示遮罩，绝不把整个 Window 设为 IsEnabled=false。
+    /// 原因：WPF 窗口被禁用后，点击它只会"激活窗口"而不派发点击事件
+    /// （部分自定义按钮样式没有 IsEnabled=False 的视觉反馈，界面看起来完全正常却点不动），
+    /// 且一旦某条路径漏调 ClearBusy，窗口就永久卡在禁用态。
+    public void SetBusy(string text)
     {
         BusyText.Text = text;
+        _busySince = DateTime.UtcNow;
         BusyOverlay.Visibility = Visibility.Visible;
-        IsEnabled = false;
     }
 
-    void ClearBusy()
+    public void ClearBusy()
     {
         BusyOverlay.Visibility = Visibility.Collapsed;
-        IsEnabled = true;
+        _busySince = DateTime.MinValue;
     }
+    /// <summary>
+    /// 兜底看门狗：忙碌遮罩绝不允许永久停留。
+    /// 即使将来某条异步路径漏调 ClearBusy，界面也不会被遮罩卡死。
+    /// </summary>
+    void InitBusyWatchdog()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(10)
+        };
+        timer.Tick += (_, _) =>
+        {
+            if (BusyOverlay.Visibility == Visibility.Visible &&
+                DateTime.UtcNow - _busySince > BusyMaxDuration)
+            {
+                App.LogStartup($"BusyWatchdog: overlay stuck since {_busySince:O}, force clearing");
+                ClearBusy();
+            }
+        };
+        timer.Start();
+    }
+
+    /// <summary>忙碌遮罩允许停留的最长时间，超过则由看门狗强制收起。</summary>
+    static readonly TimeSpan BusyMaxDuration = TimeSpan.FromMinutes(10);
+
+    /// <summary>本次忙碌状态的起始时刻（UTC）。</summary>
+    DateTime _busySince = DateTime.MinValue;
 
     static bool Confirm(string msg) =>
         MessageBox.Show(msg, "APISwitch", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;

@@ -33,7 +33,9 @@ APISwitch provides deep native configuration management and local protocol trans
 - **Cross-Client Provider Sharing**: One-click copy of provider configurations across Claude CLI, Claude Desktop, Codex, OpenCode, and Pi with intelligent field mapping (`Auth Token` ↔ `Bearer Token` / `API Key`). Enter once, use everywhere.
 - **Model Pool Management**: Dedicated model pool mechanism for OpenCode and Pi, clearly distinguishing "In Config" from "Not in Config" states, supporting on-demand activation and batch maintenance.
 - **Default Model & Reasoning Effort**: Set a default model for OpenCode and Pi; configure per-model reasoning effort (reasoning effort / thinking budget) across Codex, Claude CLI, Claude Desktop, OpenCode and Pi.
+- **Codex Model Auto-Fetch**: On save, APISwitch requests the provider's model list (`GET /models`) and writes it into the Codex model catalog, so every model the provider offers becomes selectable in Codex's `/model` switcher — no manual entry required.
 - **One-Click cc-switch Migration**: Built-in migration wizard directly reads `~/.cc-switch/cc-switch.db`, allowing checkbox selection to import existing providers with automatic deduplication and overwriting.
+- **Safe Client Restart**: When restarting MSIX-packaged Electron clients such as Codex and Claude, APISwitch closes them gracefully first, then verifies that the new process actually appeared — retrying once and reporting the real outcome if it did not, instead of claiming success while the client never came back.
 
 ### 2. Built-in Local Protocol Routing Gateway
 - **High-Performance Local Gateway**: Built-in lightweight HTTP gateway service (listening on `127.0.0.1:15725` by default, configurable Host and Port in settings, supports LAN sharing).
@@ -49,15 +51,18 @@ APISwitch provides deep native configuration management and local protocol trans
 - Switch between Simplified Chinese and English instantly (Settings → General & System → Interface Language), covering the main window, settings dialog, system tray, provider editors and more.
 - Changes apply immediately with no restart; tray menu and toast messages update in sync.
 
-### 4. Usage Monitoring & Analytics
+### 4. Usage Monitoring & Analytics (extended in v0.3.1 with performance metrics)
 - **Token Usage Dashboard**: A dedicated monitoring window summarizing total / input / output tokens and request counts over any selected time range.
+- **Cache Hit Rate**: A summary card shows the share of input served from cache over the selected range (hits / (fresh input + hits + writes)), with the hit and write token counts in the sub-label. The same figure is shown per row in Recent Calls and in the per-model / per-provider drill-downs, so you can pinpoint both high-cache and zero-cache hotspots.
+- **Output Speed & Time to First Token**: Recent Calls shows, for each request, the output speed in tokens/s and the time to first token. Both are derived from message-level timestamps — client logs do not record the first streamed packet, so they are estimates and render as "—" when they cannot be derived.
 - **Daily Trend Chart**: Stacked bar chart of daily consumption. Days without calls are rendered as empty bars, so active and idle days stay visually distinct.
 - **Click a Bar to Drill Down**: Selecting a day highlights its bar, shows the day's total above the bar, and switches the summary cards, provider breakdown, client breakdown and call details to that day. Click again to deselect; click another bar to switch.
-- **Provider Drill-Down**: Expand any provider to inspect its per-model consumption.
+- **Provider Drill-Down**: Expand any provider to inspect its per-model consumption and cache hit rate.
 - **Client Breakdown**: Separate statistics for Codex, Claude CLI, Claude Desktop, OpenCode and Pi.
-- **Recent Calls**: The latest 400 calls with time, client, provider, model and in/out/total tokens, rendered with a virtualized list so scrolling stays smooth even with large datasets.
+- **Recent Calls**: The latest 400 calls with time, client, provider, model, in/out/total tokens, cache hit rate, speed and time to first token, rendered with a virtualized list so scrolling stays smooth even with large datasets.
 - **Cross-Provider Model Aggregation**: Model names differing only by casing, organization prefix (`zai-org/`), `:variant` suffixes, date-snapshot suffixes, `-free` channel markers or Modal deployment names are automatically merged into one logical model. Expand a group to inspect each provider's share and the original raw names.
 - **Local Session Scanning**: Usage produced while APISwitch was not running is captured by scanning local session files (Codex `~/.codex/sessions`, Claude Code `~/.claude/projects`, Pi `~/.pi/agent/sessions`, OpenCode `opencode.db`). Incremental scanning avoids double counting and runs automatically when you open the monitoring window.
+- **Historical Backfill**: Cache, duration and first-token metrics were added after the original token counters, and incremental scanning never re-reads files it has already consumed — so those fields stay at 0 in old data. Use **Backfill history** in the bottom-right of the window to rebuild everything in one pass; the database is backed up automatically first.
 - **Persistent & Self-Cleaning**: Stored in SQLite and survives restarts; records older than 90 days are pruned automatically.
 - **Dial-Style Date/Time Picker**: Custom calendar panel plus a clock dial for hour and minute — click or drag to change values in real time. 24 hours are all reachable in a single click via the dual-ring hour dial.
 
@@ -133,8 +138,9 @@ dotnet build -c Release
 ## Roadmap
 
 - [x] **Multi-Language Support (i18n)**: Simplified Chinese / English interface switching, applied instantly without restart.
-- [ ] **Antigravity Quota Activation**: Activate account quota cycles via official Google streaming handshake (in development, not yet released).
+- [x] **Antigravity Quota Activation**: Activate account quota cycles via the official Google streaming handshake. Supports single and batch activation (cancelable at any time), reports latency and failure reasons, and counts down to the reset time when a 429 quota-exhausted response is hit.
 - [x] **Token Usage & Analytics (v0.3.0)**: Dedicated usage monitoring window with daily trend chart, provider / client / model breakdowns, cross-provider model aggregation and local session scanning.
+- [x] **Usage Performance Metrics & Backfill (v0.3.1)**: Cache hit rate, output speed and time to first token across summary cards, recent calls and per-model / per-provider drill-downs, plus one-click backfill of historical data.
 - [ ] **More Agent Platforms**: Continuous expansion to emerging AI coding assistants, terminal agents, and developer platforms.
 
 ---

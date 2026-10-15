@@ -17,6 +17,35 @@ public static class AgQuotaService
     public static readonly string ClientId = Deobf(CidBytes);
     public static readonly string ClientSecret = Deobf(CsecBytes);
 
+    /// <summary>记住上次真正可用的 loadCodeAssist 地址，避免每次都从第一个 URL 顺序试探。</summary>
+    private static string? _preferredTierUrl;
+
+    /// <summary>记住上次真正可用的 retrieveUserQuotaSummary 地址，同理。</summary>
+    private static string? _preferredQuotaUrl;
+
+    /// <summary>单次 HTTP 请求超时：宁可快速失败换下一个地址，也不要让用户干等。</summary>
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(8);
+
+     /// <summary>
+     /// 把上次成功的地址排到最前面。这样后续刷新不必每次从第一个 URL 顺序试探，
+     /// 是刷新变慢的主要原因之一。
+     /// </summary>
+     private static string[] OrderByPreferred(string[] urls, string? preferred)
+     {
+         if (string.IsNullOrEmpty(preferred)) return urls;
+         var p = preferred;
+         var ordered = urls.Where(u => string.Equals(u, p, StringComparison.Ordinal)).ToList();
+         ordered.AddRange(urls.Where(u => !string.Equals(u, p, StringComparison.Ordinal)));
+         return ordered.ToArray();
+     }
+
+    /// <summary>发送请求并带上统一超时；超时/取消都按失败处理，绝不无限等待。</summary>
+    private static async Task<HttpResponseMessage> SendWithTimeoutAsync(HttpRequestMessage req, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(RequestTimeout);
+        return await Http.SendAsync(req, cts.Token);
+    }
     private static readonly HttpClient Http = new()
     {
         Timeout = TimeSpan.FromSeconds(15)
@@ -131,9 +160,10 @@ public static class AgQuotaService
                 req.Headers.UserAgent.ParseAdd("antigravity/2.13.0");
                 req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
-                var resp = await Http.SendAsync(req);
+                var resp = await SendWithTimeoutAsync(req, CancellationToken.None);
                 if (resp.IsSuccessStatusCode)
                 {
+                    _preferredTierUrl = url;
                     var json = await resp.Content.ReadAsStringAsync();
                     ParseTier(profile, json);
                     using var doc = JsonDocument.Parse(json);
@@ -326,6 +356,18 @@ public static class AgQuotaService
         var pool = lowTier.Count > 0 ? lowTier : (flash.Count > 0 ? flash : gemini);
         return pool.OrderBy(ExtractModelVersion).ToList();
     }
+    /// <summary>
+    /// 按版本号降序（最新优先）。CLI 激活专用：老模型（如 gemini-2.5）多已被官方下线，
+    /// CLI 会直接拒绝，所以必须优先试最新的，而不是最便宜/最老的。
+    /// </summary>
+    public static List<string> OrderByVersionDescending(List<string> models)
+    {
+        if (models == null || models.Count == 0) return new List<string>();
+        return models
+            .OrderByDescending(ExtractModelVersion)
+            .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
     /// <summary>
     /// 从账号实时拉回的可用模型中筛选 Claude/GPT 候选：sonnet 优先，其次任意 claude，按版本升序。
@@ -375,7 +417,7 @@ public static class AgQuotaService
     /// 1. 动态拉取当前账号可用模型，使用最老/最低开销的 gemini flash-low 模型（向后兼容 + 极低消耗）。
     /// 2. Starter账号仅测Gemini；Pro账号依次激活Gemini与GPT/Claude并采用拟人化延迟。
     /// </summary>
-    public static async Task<(bool ok, long latencyMs, string message, bool rateLimited)> ActivateAccountQuotaAsync(Profile profile)
+    public static async Task<(bool ok, long latencyMs, string message, bool rateLimited)> ActivateAccountQuotaAsync(Profile profile, CancellationToken ct = default)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -410,7 +452,8 @@ public static class AgQuotaService
             return (false, sw.ElapsedMilliseconds, profile.ActivationError, false);
         }
 
-        var cliResult = await AgCliService.ActivateAsync(profile);
+        ct.ThrowIfCancellationRequested();
+        var cliResult = await AgCliService.ActivateAsync(profile, ct);
         // CLI 跑完无论成败都同步一次最新配额，保证徽章与剩余百分比是最新的
         await RefreshQuotaAsync(profile);
 
@@ -689,7 +732,7 @@ public static class AgQuotaService
                         if (found != null) return;
                         var name = prop.Name;
                         if ((name.Contains("reset", StringComparison.OrdinalIgnoreCase) ||
-                             name.Contains("quotaReset", StringComparison.OrdinalIgnoreCase)) &&
+                            name.Contains("quotaReset", StringComparison.OrdinalIgnoreCase)) &&
                             prop.Value.ValueKind == JsonValueKind.String &&
                             DateTime.TryParse(prop.Value.GetString(), System.Globalization.CultureInfo.InvariantCulture,
                                 System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var dt))
@@ -887,12 +930,12 @@ public static class AgQuotaService
 
         // 1. 优先调用 loadCodeAssist 确定订阅阶梯 (Starter / Pro / Ultra) 与关联 project
         string? companionProject = null;
-        var tierUrls = new[]
+        var tierUrls = OrderByPreferred(new[]
         {
 "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:loadCodeAssist",
 "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
 "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
-        };
+        }, _preferredTierUrl);
 
         foreach (var url in tierUrls)
         {
@@ -902,9 +945,10 @@ public static class AgQuotaService
                 ApplyAntigravityHeaders(req, token, profile);
                 req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
-                var resp = await Http.SendAsync(req);
+                var resp = await SendWithTimeoutAsync(req, CancellationToken.None);
                 if (resp.IsSuccessStatusCode)
                 {
+                    _preferredTierUrl = url;
                     var json = await resp.Content.ReadAsStringAsync();
                     ParseTier(profile, json);
                     try
@@ -934,12 +978,12 @@ public static class AgQuotaService
 
         // 2. 优先调用 retrieveUserQuotaSummary 查询完整 Gemini 与 GPT/Claude 配额组
         // 关键：带上有效 project（如 aicode-consumers），避免 Starter 免费版因未带 project 返回 403 Forbidden
-        var quotaUrls = new[]
+        var quotaUrls = OrderByPreferred(new[]
         {
 "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
 "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
 "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
-        };
+        }, _preferredQuotaUrl);
 
         foreach (var url in quotaUrls)
         {
@@ -949,9 +993,10 @@ public static class AgQuotaService
                 ApplyAntigravityHeaders(req, token, profile);
                 req.Content = new StringContent(projectPayload, Encoding.UTF8, "application/json");
 
-                var resp = await Http.SendAsync(req);
+                var resp = await SendWithTimeoutAsync(req, CancellationToken.None);
                 if (resp.IsSuccessStatusCode)
                 {
+                    _preferredQuotaUrl = url;
                     var json = await resp.Content.ReadAsStringAsync();
                     App.LogStartup($"AgQuota: {profile.Email} url={url}");
                     ParseQuotaSummary(profile, json);
@@ -965,7 +1010,7 @@ public static class AgQuotaService
                     using var reqEmpty = new HttpRequestMessage(HttpMethod.Post, url);
                     ApplyAntigravityHeaders(reqEmpty, token, profile);
                     reqEmpty.Content = new StringContent("{}", Encoding.UTF8, "application/json");
-                    var respEmpty = await Http.SendAsync(reqEmpty);
+                    var respEmpty = await SendWithTimeoutAsync(reqEmpty, CancellationToken.None);
                     if (respEmpty.IsSuccessStatusCode)
                     {
                         var json = await respEmpty.Content.ReadAsStringAsync();

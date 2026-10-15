@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading;
+ using System.Text;
+ using System.Text.Json;
+ using System.Threading;
 using System.Threading.Tasks;
 using APISwitch.Models;
 using Microsoft.Data.Sqlite;
@@ -28,8 +29,26 @@ namespace APISwitch.Services;
 /// </summary>
 public static class AgCliService
 {
-    /// <summary>激活提示词：极短，单轮即可触发真实配额注册。</summary>
-    public const string ActivationPrompt = "hi";
+     /// <summary>激活提示词：极短，单轮即可触发真实配额注册。</summary>
+     public const string ActivationPrompt = "hi";
+ 
+     /// <summary>每个配额池最多尝试多少个候选模型（全部来自账号实时可用列表）。</summary>
+     private const int MaxModelAttempts = 3;
+ 
+     /// <summary>单次 CLI 调用超时（秒）。冷启动 + 一次最小请求足够，超时即判失败换下一个。</summary>
+     private const int AttemptTimeoutSeconds = 60;
+ 
+     /// <summary>整个激活流程的时间预算，超过就停手并给出明确提示，绝不久久卡住。</summary>
+     private static readonly TimeSpan TotalBudget = TimeSpan.FromSeconds(150);
+ 
+     /// <summary>
+     /// 记住"已被证明可用"的参数组下标。某个模型成功后，后续模型直接从这组开始，
+     /// 不再把不支持的参数从头试一遍——那是之前"越试越久、长时间卡住"的主因。
+     /// </summary>
+     private static int PreferredArgSet;
+ 
+     /// <summary>当前优先使用的参数组（供日志/诊断）。</summary>
+     internal static int PreferredArgSetIndex => PreferredArgSet;
 
     public sealed record Result(
         bool Ok,
@@ -102,36 +121,64 @@ public static class AgCliService
         string? usedModel = null;
         string message = "";
 
-        try
-        {
+         try
+         {
+             ct.ThrowIfCancellationRequested();
             // 4. 把目标账号凭据写到 CLI 读取的位置
             await AgToolsService.ApplySystemCredentialsAsync(profile);
 
-            // 5. 拉取该账号真实可用模型（唯一信任来源，绝不硬编码）
-            var available = await AgQuotaService.FetchAvailableModelNamesAsync(profile, profile.AccessToken!);
-            var geminiModels = AgQuotaService.ResolveGeminiModels(available);
-            var claudeModels = AgQuotaService.ResolveClaudeModels(available);
-
-            // 6. Gemini 池：最便宜模型 + 最低思考强度
-            if (geminiModels.Count > 0)
-            {
-                usedModel = geminiModels[0];
-                var r = await RunOnceAsync(cli, usedModel, ct);
-                geminiOk = r.Ok;
-                rateLimited |= r.RateLimited;
-                if (!r.Ok && !string.IsNullOrEmpty(r.Message)) message = r.Message;
-            }
-
-            // 7. 3P 池与 Gemini 池独立，尽量一并激活；加一点间隔模拟人类节奏
-            if (claudeModels.Count > 0)
-            {
-                await Task.Delay(Random.Shared.Next(600, 1200), ct);
-                var r = await RunOnceAsync(cli, claudeModels[0], ct);
-                thirdPartyOk = r.Ok;
-                rateLimited |= r.RateLimited;
-                if (r.Ok && usedModel == null) usedModel = claudeModels[0];
-                if (!r.Ok && string.IsNullOrEmpty(message) && !string.IsNullOrEmpty(r.Message)) message = r.Message;
-            }
+             // 5. 模型来源（按可靠性排序）：
+             //    a) CLI 自报的可用模型——这是唯一能直接被 --model 接受的命名体系
+             //       （形如 "Gemini 3.8 Flash (Low)"，思考档位写在名字里，所以没有 --effort 参数）；
+             //    b) Google API 返回的可用模型（命名体系不同，仅作兜底）。
+             var cliModels = await ProbeCliModelsAsync(cli, ct);
+             var available = await AgQuotaService.FetchAvailableModelNamesAsync(profile, profile.AccessToken!);
+             var geminiModels = PickCheapest(cliModels, geminiPool: true);
+             var claudeModels = PickCheapest(cliModels, geminiPool: false);
+             if (geminiModels.Count == 0)
+                 geminiModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveGeminiModels(available));
+             if (claudeModels.Count == 0)
+                 claudeModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveClaudeModels(available));
+             App.LogStartup($"AgCli: {profile.Email} cliModels={cliModels.Count} apiModels={available.Count} " +
+                            $"gemini=[{string.Join(" | ", geminiModels.Take(4))}] claude=[{string.Join(" | ", claudeModels.Take(4))}] " +
+                            $"preferredArgSet={PreferredArgSet}");
+ 
+             // 6. Gemini 池：依次尝试实时可用列表里的候选模型（最新优先），
+             //    某个模型 CLI 不接受就换下一个；总时长有上限，绝不无限卡住。
+             if (geminiModels.Count > 0)
+             {
+                 foreach (var m in geminiModels.Take(MaxModelAttempts))
+                 {
+                     if (sw.Elapsed > TotalBudget) { message = I18nService.T("AgQ.CliTimeout"); break; }
+                     App.LogStartup($"AgCli: {profile.Email} gemini try model={m}");
+                     var r = await RunOnceAsync(cli, m, ct);
+                     geminiOk = r.Ok;
+                     if (r.Ok) { usedModel = m; break; }
+                     rateLimited |= r.RateLimited;
+                     if (!string.IsNullOrEmpty(r.Message)) message = r.Message;
+                     // 配额用尽 / 鉴权网络类硬失败：换模型没有意义，立刻停
+                     if (r.RateLimited || (!r.ModelInvalid && !r.UsageError)) break;
+                     await Task.Delay(Random.Shared.Next(200, 500), ct);
+                 }
+             }
+ 
+             // 7. 3P 池与 Gemini 池独立，尽量一并激活；同样最新优先依次尝试
+             if (claudeModels.Count > 0 && sw.Elapsed <= TotalBudget)
+             {
+                 await Task.Delay(Random.Shared.Next(400, 800), ct);
+                 foreach (var m in claudeModels.Take(MaxModelAttempts))
+                 {
+                     if (sw.Elapsed > TotalBudget) { message = I18nService.T("AgQ.CliTimeout"); break; }
+                     App.LogStartup($"AgCli: {profile.Email} claude try model={m}");
+                     var r = await RunOnceAsync(cli, m, ct);
+                     thirdPartyOk = r.Ok;
+                     if (r.Ok) { if (usedModel == null) usedModel = m; break; }
+                     rateLimited |= r.RateLimited;
+                     if (!r.Ok && string.IsNullOrEmpty(message) && !string.IsNullOrEmpty(r.Message)) message = r.Message;
+                     if (r.RateLimited || (!r.ModelInvalid && !r.UsageError)) break;
+                     await Task.Delay(Random.Shared.Next(200, 500), ct);
+                 }
+             }
         }
         catch (OperationCanceledException)
         {
@@ -174,71 +221,70 @@ public static class AgCliService
      // ---------- 单轮执行 ----------
  
      /// <summary>
-     /// 参数组合：从最完整到最简。不同版本的 CLI 支持的 flag 有差异，
-     /// 某个 flag 不被支持时（exit=2 / unknown option）自动降级重试，
-     /// 避免只因一个参数就让整个激活失败。
+     /// 参数组合：从"最可能被支持"到"最简"。
+     /// 已知事实（实测）：--effort / --disable-slash-commands / --print-timeout 不被支持
+     /// （思考档位写在模型名里，如 "Gemini 3.8 Flash (Low)"），所以绝不放进来的——
+     /// 放进来只会让每次尝试都先失败一次，白白卡很久。
+     /// model 为 null 时表示"不指定模型"，让 CLI 用它自己的默认模型（最后兜底）。
      /// 注意：提示词必须紧贴 --print（--print=&lt;prompt&gt;），
      /// 否则 CLI 会把后一个 flag 误当作提示词而报错退出（实测 exit=2）。
      /// </summary>
-     static IEnumerable<List<string>> BuildArgSets(string model)
+     static List<List<string>> BuildArgSets(string? model)
      {
-         yield return new List<string>
+         var sets = new List<List<string>>();
+         if (!string.IsNullOrEmpty(model))
+         {
+             sets.Add(new()
+             {
+                 $"--print={ActivationPrompt}",
+                 "--output-format", "json",
+                 "--model", model,
+                 "--dangerously-skip-permissions",
+             });
+             sets.Add(new()
+             {
+                 $"--print={ActivationPrompt}",
+                 "--output-format", "json",
+                 "--model", model,
+             });
+         }
+         // 完全不指定模型：让 CLI 用它自己的默认模型
+         sets.Add(new()
          {
              $"--print={ActivationPrompt}",
              "--output-format", "json",
-             "--model", model,
-             "--effort", "low",
-             "--disable-slash-commands",
-             "--print-timeout", "90s",
              "--dangerously-skip-permissions",
-         };
-         yield return new List<string>
+         });
+         sets.Add(new()
          {
              $"--print={ActivationPrompt}",
              "--output-format", "json",
-             "--model", model,
-             "--effort", "low",
-             "--dangerously-skip-permissions",
-         };
-         yield return new List<string>
-         {
-             $"--print={ActivationPrompt}",
-             "--output-format", "json",
-             "--model", model,
-             "--dangerously-skip-permissions",
-         };
-         yield return new List<string>
-         {
-             $"--print={ActivationPrompt}",
-             "--output-format", "json",
-             "--model", model,
-         };
-         yield return new List<string>
-         {
-             $"--print={ActivationPrompt}",
-             "--model", model,
-         };
+         });
+         return sets;
      }
  
-     static async Task<(bool Ok, bool RateLimited, bool UsageError, string Message)> RunOnceAsync(
-         string cli, string model, CancellationToken ct)
+     /// <summary>
+     /// 探测 CLI 自己认哪些模型：用一个不存在的模型名触发它的参数校验，
+     /// 错误信息里会带 "Available models:" 全列表。不发出任何真实请求，不耗额度。
+     /// </summary>
+     static async Task<List<string>> ProbeCliModelsAsync(string cli, CancellationToken ct)
      {
-         // 一次性空目录：CLI 不会扫描用户项目，也不会留下工作区记录
-         var workDir = Path.Combine(Path.GetTempPath(), "apiswitch-ag-activate-" + Guid.NewGuid().ToString("N")[..8]);
+         var workDir = Path.Combine(Path.GetTempPath(), "apiswitch-ag-probe-" + Guid.NewGuid().ToString("N")[..8]);
          Directory.CreateDirectory(workDir);
          try
          {
-             (bool Ok, bool RateLimited, bool UsageError, string Message)? last = null;
-             foreach (var args in BuildArgSets(model))
+             const string bogus = "__apiswitch_probe__";
+             var args = new List<string>
              {
-                 var r = await RunAttemptAsync(cli, workDir, args, model, ct);
-                 if (r.Ok) return r;
-                 last = r;
-                 // 只有"参数用法错误"才值得换参数重试；
-                 // 429 / 鉴权 / 网络类错误换参数没有意义，直接返回真实原因。
-                 if (!r.UsageError) return r;
-             }
-             return last ?? (false, false, false, I18nService.T("AgQ.CliFailed"));
+                 $"--print={ActivationPrompt}",
+                 "--output-format", "json",
+                 "--model", bogus,
+                 "--dangerously-skip-permissions",
+             };
+             var r = await RunAttemptAsync(cli, workDir, args, bogus, ct);
+             var models = ParseAvailableModels(r.Raw);
+             App.LogStartup($"AgCli: probe exit-model-list count={models.Count} [{string.Join(" | ", models)}]");
+             return models;
          }
          catch (OperationCanceledException)
          {
@@ -246,7 +292,8 @@ public static class AgCliService
          }
          catch (Exception ex)
          {
-             return (false, false, false, ex.Message);
+             App.LogStartup($"AgCli: probe failed: {ex.Message}");
+             return new List<string>();
          }
          finally
          {
@@ -254,9 +301,135 @@ public static class AgCliService
          }
      }
  
+     /// <summary>
+     /// 解析 CLI 错误信息里的 "Available models:" 列表。条目形如
+     /// "Gemini 3.8 Flash (Low)" / "Claude Sonnet 4.6 (Thinking)"，整行即模型名。
+     /// </summary>
+     internal static List<string> ParseAvailableModels(string text)
+     {
+         var result = new List<string>();
+         if (string.IsNullOrEmpty(text)) return result;
+ 
+         var lines = text.Replace("\r\n", "\n").Split('\n');
+         bool inSection = false;
+         foreach (var raw in lines)
+         {
+             var line = raw.Trim();
+             if (!inSection)
+             {
+                 if (line.Contains("Available models", StringComparison.OrdinalIgnoreCase)) inSection = true;
+                 continue;
+             }
+             if (line.Length == 0)
+             {
+                 if (result.Count > 0) break;   // 列表结束后遇到空行即结束
+                 continue;
+             }
+             // 列表结束后若又出现 JSON/日志噪声，立刻停
+             if (line.StartsWith("{") || line.StartsWith("\"") || line.StartsWith("error:", StringComparison.OrdinalIgnoreCase))
+                 break;
+             if (!result.Contains(line, StringComparer.OrdinalIgnoreCase)) result.Add(line);
+             if (result.Count >= 60) break;
+         }
+         return result;
+     }
+ 
+     /// <summary>
+     /// 从 CLI 自报模型里挑最便宜的候选：Flash 优先于 Pro、低思考档优先、
+     /// 同档位取版本更新的（老版本多已下线）。geminiPool=false 时取 Claude/GPT 池。
+     /// </summary>
+     internal static List<string> PickCheapest(List<string> models, bool geminiPool)
+     {
+         if (models == null || models.Count == 0) return new List<string>();
+         return models
+             .Where(m => geminiPool
+                 ? m.Contains("Gemini", StringComparison.OrdinalIgnoreCase)
+                 : !m.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
+             .OrderBy(EffortRank)
+             .ThenBy(PoolRank)
+             .ThenByDescending(ModelNumber)
+             .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)
+             .ToList();
+     }
+ 
+     // 思考档位越便宜排越前：Low &lt; Medium &lt; High/Thinking
+     static int EffortRank(string m)
+     {
+         if (m.Contains("(Low)", StringComparison.OrdinalIgnoreCase)) return 0;
+         if (m.Contains("(Medium)", StringComparison.OrdinalIgnoreCase)) return 1;
+         if (m.Contains("(High)", StringComparison.OrdinalIgnoreCase)) return 2;
+         if (m.Contains("(Thinking)", StringComparison.OrdinalIgnoreCase)) return 1;
+         return 3;
+     }
+ 
+     // 家族便宜程度：Gemini 池 Flash&lt;Pro；3P 池 Sonnet&lt;GPT&lt;Opus
+     static int PoolRank(string m)
+     {
+         if (m.Contains("Flash", StringComparison.OrdinalIgnoreCase)) return 0;
+         if (m.Contains("Sonnet", StringComparison.OrdinalIgnoreCase)) return 0;
+         if (m.Contains("GPT", StringComparison.OrdinalIgnoreCase)) return 1;
+         if (m.Contains("Pro", StringComparison.OrdinalIgnoreCase)) return 1;
+         if (m.Contains("Opus", StringComparison.OrdinalIgnoreCase)) return 2;
+         return 3;
+     }
+ 
+     static double ModelNumber(string m)
+     {
+         var match = System.Text.RegularExpressions.Regex.Match(m, @"(\d+(?:\.\d+)?)");
+         if (match.Success && double.TryParse(match.Groups[1].Value,
+                 System.Globalization.NumberStyles.Float,
+                 System.Globalization.CultureInfo.InvariantCulture, out var v))
+             return v;
+         return 0;
+     }
+ 
+     static async Task<Attempt> RunOnceAsync(string cli, string? model, CancellationToken ct)
+     {
+         // 一次性空目录：CLI 不会扫描用户项目，也不会留下工作区记录
+         var workDir = Path.Combine(Path.GetTempPath(), "apiswitch-ag-activate-" + Guid.NewGuid().ToString("N")[..8]);
+         Directory.CreateDirectory(workDir);
+         try
+         {
+             Attempt? last = null;
+             var sets = BuildArgSets(model);
+             // 从上次证明可用的参数组开始，避免每个模型都把不支持的老参数重试一遍（那样会一直卡）
+             for (int i = PreferredArgSet; i < sets.Count; i++)
+             {
+                 var r = await RunAttemptAsync(cli, workDir, sets[i], model, ct);
+                 if (r.Ok)
+                 {
+                     PreferredArgSet = i;
+                     return r;
+                 }
+                 last = r;
+                 // 模型不被接受时不要在这层继续降级参数（换模型更有意义），交给上层换下一个候选；
+                 // 参数用法错误才降级重试；429 / 鉴权 / 网络类错误直接返回真实原因。
+                 if (r.ModelInvalid && !r.UsageError) return r;
+                 if (!r.UsageError) return r;
+             }
+             return last ?? new Attempt(false, false, false, false, I18nService.T("AgQ.CliFailed"));
+         }
+         catch (OperationCanceledException)
+         {
+             throw;
+         }
+         catch (Exception ex)
+         {
+             return new Attempt(false, false, false, false, ex.Message);
+         }
+         finally
+         {
+             try { Directory.Delete(workDir, true); } catch { }
+         }
+     }
+ 
+     /// <summary>单次尝试的结果分类。</summary>
+     readonly record struct Attempt(
+         bool Ok, bool RateLimited, bool UsageError, bool ModelInvalid, string Message, string Raw = "");
+ 
      /// <summary>单次尝试：全程后台隐藏执行，绝不在前台弹出任何控制台窗口。</summary>
-     static async Task<(bool Ok, bool RateLimited, bool UsageError, string Message)> RunAttemptAsync(
-         string cli, string workDir, List<string> args, string model, CancellationToken ct)
+     static async Task<Attempt> RunAttemptAsync(
+         string cli, string workDir, List<string> args, string? model, CancellationToken ct)
      {
          var psi = new ProcessStartInfo
          {
@@ -292,7 +465,7 @@ public static class AgCliService
          var stderrTask = proc.StandardError.ReadToEndAsync(ct);
  
          using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-         cts.CancelAfter(TimeSpan.FromSeconds(120));
+         cts.CancelAfter(TimeSpan.FromSeconds(AttemptTimeoutSeconds));
          try
          {
              await proc.WaitForExitAsync(cts.Token);
@@ -310,26 +483,77 @@ public static class AgCliService
              $"AgCli: model={model} exit={proc.ExitCode} args=[{string.Join(" ", args)}] " +
              $"out={stdout.Length}B err={stderr.Length}B head={(stderr.Length > 0 ? stderr : stdout).Replace("\n", " | ")[..Math.Min(200, (stderr.Length > 0 ? stderr : stdout).Length)]}");
  
-         if (proc.ExitCode == 0 && !string.IsNullOrWhiteSpace(stdout))
-             return (true, false, false, "");
- 
-         var combined = stdout + "\n" + stderr;
+         // CLI 用 --output-format json 时，失败也常常是 exit=0 + JSON {"status":"ERROR","error":"..."}。
+         // 只看退出码会把这种失败误判成成功，必须解析 JSON 里的 error 字段。
+         var jsonError = ExtractJsonError(stdout);
+         var combined = stdout + "\n" + stderr + (jsonError != null ? "\n" + jsonError : "");
+         if (proc.ExitCode == 0 && jsonError == null && !string.IsNullOrWhiteSpace(stdout))
+             return new Attempt(true, false, false, false, "", combined);
          bool rl = combined.Contains("429", StringComparison.Ordinal)
                 || combined.Contains("RESOURCE_EXHAUSTED", StringComparison.OrdinalIgnoreCase)
                 || combined.Contains("quota", StringComparison.OrdinalIgnoreCase)
                 || combined.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
                 || combined.Contains("rate_limit", StringComparison.OrdinalIgnoreCase);
+         bool modelInvalid = IsModelError(combined);
          bool usage = IsUsageError(proc.ExitCode, combined);
-         return (false, rl, usage, SummarizeError(combined, proc.ExitCode));
+         return new Attempt(false, rl, usage, modelInvalid, SummarizeError(combined, proc.ExitCode), combined);
+     }
+ 
+     /// <summary>
+     /// 从 --output-format json 的输出里提取错误。CLI 失败时也可能退出码为 0，
+     /// 只把错误放在 JSON 的 status/error 字段里。
+     /// </summary>
+     internal static string? ExtractJsonError(string stdout)
+     {
+         var text = stdout.Trim();
+         if (text.Length == 0 || text[0] != '{') return null;
+         try
+         {
+             using var doc = JsonDocument.Parse(text);
+             var root = doc.RootElement;
+             if (root.ValueKind != JsonValueKind.Object) return null;
+ 
+             if (root.TryGetProperty("error", out var err) &&
+                err.ValueKind == JsonValueKind.String &&
+                 !string.IsNullOrWhiteSpace(err.GetString()))
+                 return err.GetString()!;
+ 
+             if (root.TryGetProperty("status", out var st) &&
+                 st.ValueKind == JsonValueKind.String &&
+                 string.Equals(st.GetString(), "ERROR", StringComparison.OrdinalIgnoreCase))
+                 return "status=ERROR";
+ 
+             return null;
+         }
+         catch
+         {
+             // 输出不是完整 JSON（被截断/混入日志行），忽略
+             return null;
+         }
+     }
+ 
+     /// <summary>判断是否为"这个模型 CLI 不接受"——值得换下一个候选模型重试。</summary>
+     internal static bool IsModelError(string combined)
+     {
+         return combined.Contains("invalid model", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("model selection", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("unknown model", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("unsupported model", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("model not found", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("no such model", StringComparison.OrdinalIgnoreCase);
      }
  
      /// <summary>判断是否为"参数用法错误"（值得降级重试），而非配额/网络类错误。</summary>
-     static bool IsUsageError(int exitCode, string combined)
+     internal static bool IsUsageError(int exitCode, string combined)
      {
          if (exitCode == 2) return true;
          return combined.Contains("unknown option", StringComparison.OrdinalIgnoreCase)
              || combined.Contains("unrecognized option", StringComparison.OrdinalIgnoreCase)
              || combined.Contains("unexpected argument", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("unknown flag", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("invalid option", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("is not supported", StringComparison.OrdinalIgnoreCase)
+             || combined.Contains("not supported", StringComparison.OrdinalIgnoreCase)
              || combined.Contains("Usage:", StringComparison.OrdinalIgnoreCase);
      }
  
