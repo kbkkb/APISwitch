@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using APISwitch.Services;
@@ -9,6 +9,7 @@ public partial class UpdateDialog : Window
 {
     private readonly UpdateInfo _info;
     private CancellationTokenSource? _cts;
+    private string _currentNotesLang = "zh-CN";
 
     public UpdateDialog(UpdateInfo info)
     {
@@ -26,12 +27,54 @@ public partial class UpdateDialog : Window
             ? ""
             : I18nService.F("UD.SizeFmt", info.SizeFormatted);
 
-        ReleaseNotesText.Text = info.ReleaseNotes;
-
         if (string.IsNullOrEmpty(info.DownloadUrl))
         {
             BtnInstall.Content = I18nService.T("UD.GoGitHubDownload");
         }
+
+        _currentNotesLang = I18nService.ResolvedLanguage.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? "zh-CN" : "en-US";
+        UpdateNotesDisplay();
+
+        I18nService.LanguageChanged += OnLanguageChanged;
+        Closed += (s, e) => I18nService.LanguageChanged -= OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged()
+    {
+        _currentNotesLang = I18nService.ResolvedLanguage.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? "zh-CN" : "en-US";
+        UpdateNotesDisplay();
+    }
+
+    private void OnSelectZh(object sender, RoutedEventArgs e)
+    {
+        _currentNotesLang = "zh-CN";
+        UpdateNotesDisplay();
+    }
+
+    private void OnSelectEn(object sender, RoutedEventArgs e)
+    {
+        _currentNotesLang = "en-US";
+        UpdateNotesDisplay();
+    }
+
+    private void UpdateNotesDisplay()
+    {
+        bool isZh = _currentNotesLang.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+
+        var activeBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0xFF));
+        var activeFg = (System.Windows.Media.Brush)FindResource("AccentBrush");
+        var inactiveBg = System.Windows.Media.Brushes.Transparent;
+        var inactiveFg = (System.Windows.Media.Brush)FindResource("TextDimBrush");
+
+        BtnLangZh.Background = isZh ? activeBg : inactiveBg;
+        BtnLangZh.Foreground = isZh ? activeFg : inactiveFg;
+        BtnLangZh.FontWeight = isZh ? FontWeights.SemiBold : FontWeights.Normal;
+
+        BtnLangEn.Background = !isZh ? activeBg : inactiveBg;
+        BtnLangEn.Foreground = !isZh ? activeFg : inactiveFg;
+        BtnLangEn.FontWeight = !isZh ? FontWeights.SemiBold : FontWeights.Normal;
+
+        ReleaseNotesText.Text = _info.GetLocalizedReleaseNotes(_currentNotesLang);
     }
 
     private void OnOpenGitHub(object sender, RoutedEventArgs e)

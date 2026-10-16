@@ -161,6 +161,41 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (e.Args.Length >= 2 && e.Args[0] == "--render-usage")
+        {
+            var outputPath = e.Args[1];
+            int days = e.Args.Length >= 3 && int.TryParse(e.Args[2], out var d) ? d : 180;
+            try
+            {
+                var win = new Dialogs.UsageMonitorWindow();
+                win.Show();
+                win.UpdateLayout();
+                if (days == 365) win.Quick365DRadio.IsChecked = true;
+                else if (days == 180) win.Quick180DRadio.IsChecked = true;
+                else if (days == 30) win.Quick30DRadio.IsChecked = true;
+                else if (days == 7) win.Quick7DRadio.IsChecked = true;
+                else if (days == 1) win.Quick1DRadio.IsChecked = true;
+                await Task.Delay(1500);
+                win.UpdateLayout();
+                var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)Math.Max(win.ActualWidth, 100), (int)Math.Max(win.ActualHeight, 100), 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                rtb.Render(win);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                using (var fs = File.Open(outputPath, FileMode.Create, FileAccess.Write))
+                {
+                    encoder.Save(fs);
+                }
+                win.Close();
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText(outputPath + ".err", ex.ToString());
+            }
+            Shutdown();
+            return;
+        }
+
         if (e.Args.Length >= 2 && e.Args[0] == "--apply-desktop")
         {
             var targetName = e.Args[1];
@@ -777,6 +812,34 @@ public partial class App : System.Windows.Application
             }
 
             sb.AppendLine("pd_dialog_probe=ok");
+
+            // Bilingual release notes probe
+            try
+            {
+                var testBody = "## 简体中文\r\n- 中文日志条目\r\n## English\r\n- English log entry";
+                var (zhParsed, enParsed) = ReleaseNotesHelper.ParseBilingual(testBody);
+                var zhOk = zhParsed.Contains("中文日志条目");
+                var enOk = enParsed.Contains("English log entry");
+
+                var localZh = ReleaseNotesHelper.GetLocalReleaseNotes("0.3.2", "zh-CN");
+                var localEn = ReleaseNotesHelper.GetLocalReleaseNotes("0.3.2", "en-US");
+                var localZhOk = !string.IsNullOrEmpty(localZh);
+                var localEnOk = !string.IsNullOrEmpty(localEn);
+
+                var uInfo = new UpdateInfo
+                {
+                    ReleaseNotesZh = zhParsed,
+                    ReleaseNotesEn = enParsed
+                };
+                var uZh = uInfo.GetLocalizedReleaseNotes("zh-CN");
+                var uEn = uInfo.GetLocalizedReleaseNotes("en-US");
+
+                sb.AppendLine($"bilingual_probe=ok;zhParsed={zhOk};enParsed={enOk};localZh={localZhOk};localEn={localEnOk};uZh={!string.IsNullOrEmpty(uZh)};uEn={!string.IsNullOrEmpty(uEn)}");
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("bilingual_probe_err=" + ex.Message);
+            }
         }
         catch (Exception ex)
         {

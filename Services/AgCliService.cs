@@ -135,12 +135,13 @@ public static class AgCliService
              var available = await AgQuotaService.FetchAvailableModelNamesAsync(profile, profile.AccessToken!);
              var geminiModels = PickCheapest(cliModels, geminiPool: true);
              var claudeModels = PickCheapest(cliModels, geminiPool: false);
+             var argonModels = PickArgonModels(cliModels, available);
              if (geminiModels.Count == 0)
                  geminiModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveGeminiModels(available));
              if (claudeModels.Count == 0)
                  claudeModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveClaudeModels(available));
              App.LogStartup($"AgCli: {profile.Email} cliModels={cliModels.Count} apiModels={available.Count} " +
-                            $"gemini=[{string.Join(" | ", geminiModels.Take(4))}] claude=[{string.Join(" | ", claudeModels.Take(4))}] " +
+                            $"gemini=[{string.Join(" | ", geminiModels.Take(4))}] argon=[{string.Join(" | ", argonModels.Take(3))}] claude=[{string.Join(" | ", claudeModels.Take(4))}] " +
                             $"preferredArgSet={PreferredArgSet}");
  
              // 6. Gemini 池：依次尝试实时可用列表里的候选模型（最新优先），
@@ -159,6 +160,21 @@ public static class AgCliService
                      // 配额用尽 / 鉴权网络类硬失败：换模型没有意义，立刻停
                      if (r.RateLimited || (!r.ModelInvalid && !r.UsageError)) break;
                      await Task.Delay(Random.Shared.Next(200, 500), ct);
+                 }
+             }
+
+             // 6.5 Gemini 4 Argon 独立配额池（仅当该账号在 API 侧支持非 disabled 的 Argon 模型时一并激活）
+             if (argonModels.Count > 0 && sw.Elapsed <= TotalBudget)
+             {
+                 await Task.Delay(Random.Shared.Next(300, 600), ct);
+                 foreach (var m in argonModels.Take(2))
+                 {
+                     if (sw.Elapsed > TotalBudget) break;
+                     App.LogStartup($"AgCli: {profile.Email} argon try model={m}");
+                     var r = await RunOnceAsync(cli, m, ct);
+                     if (r.Ok) { if (usedModel == null) usedModel = m; break; }
+                     if (r.RateLimited || (!r.ModelInvalid && !r.UsageError)) break;
+                     await Task.Delay(Random.Shared.Next(200, 400), ct);
                  }
              }
  
@@ -337,18 +353,47 @@ public static class AgCliService
      /// <summary>
      /// 从 CLI 自报模型里挑最便宜的候选：Flash 优先于 Pro、低思考档优先、
      /// 同档位取版本更新的（老版本多已下线）。geminiPool=false 时取 Claude/GPT 池。
+     /// Argon 属于独立配额池，由 PickArgonModels 单独处理。
      /// </summary>
      internal static List<string> PickCheapest(List<string> models, bool geminiPool)
      {
          if (models == null || models.Count == 0) return new List<string>();
          return models
              .Where(m => geminiPool
-                 ? m.Contains("Gemini", StringComparison.OrdinalIgnoreCase)
+                 ? m.Contains("Gemini", StringComparison.OrdinalIgnoreCase) && !m.Contains("Argon", StringComparison.OrdinalIgnoreCase)
                  : !m.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
              .OrderBy(EffortRank)
              .ThenBy(PoolRank)
              .ThenByDescending(ModelNumber)
              .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)
+             .ToList();
+     }
+
+     /// <summary>
+     /// 筛选 Gemini 4 Argon 独立配额池候选模型（Low 优先）。
+     /// 若 API 可用列表仅包含 gemini-4-argon-disabled（表示该账号未开通独立 Argon 额度），则返回空列表。
+     /// </summary>
+     internal static List<string> PickArgonModels(List<string> cliModels, List<string> apiModels)
+     {
+         bool hasEnabledArgonInApi = apiModels != null && apiModels.Any(m =>
+             m.Contains("argon", StringComparison.OrdinalIgnoreCase) &&
+             !m.Contains("disabled", StringComparison.OrdinalIgnoreCase));
+         if (!hasEnabledArgonInApi) return new List<string>();
+
+         if (cliModels != null && cliModels.Count > 0)
+         {
+             var fromCli = cliModels
+                 .Where(m => m.Contains("Argon", StringComparison.OrdinalIgnoreCase))
+                 .OrderBy(EffortRank)
+                 .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)
+                 .ToList();
+             if (fromCli.Count > 0) return fromCli;
+         }
+
+         return apiModels!
+             .Where(m => m.Contains("argon", StringComparison.OrdinalIgnoreCase) &&
+                         !m.Contains("disabled", StringComparison.OrdinalIgnoreCase))
+             .OrderBy(m => m.Contains("low", StringComparison.OrdinalIgnoreCase) ? 0 : (m.Contains("medium", StringComparison.OrdinalIgnoreCase) ? 1 : 2))
              .ToList();
      }
  

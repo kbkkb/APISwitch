@@ -9,9 +9,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>APISwitch</AssemblyName>
     <RootNamespace>APISwitch</RootNamespace>
-    <Version>0.3.1</Version>
-    <FileVersion>0.3.1.0</FileVersion>
-    <AssemblyVersion>0.3.1.0</AssemblyVersion>
+    <Version>0.3.2</Version>
+    <FileVersion>0.3.2.0</FileVersion>
+    <AssemblyVersion>0.3.2.0</AssemblyVersion>
     <Product>APISwitch</Product>
     <Description>第三方 API 和谷歌官方订阅切换与管理</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
@@ -30,6 +30,10 @@
   <ItemGroup>
     <Using Include="System.Windows.MessageBox" Alias="MessageBox" />
     <Using Include="System.Windows.Application" Alias="Application" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="RELEASE_NOTES*.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -231,9 +231,12 @@
     <sys:String x:Key="Ag.DeleteTip">Delete local archive</sys:String>
     <sys:String x:Key="Ag.CurrentBadge">● Active</sys:String>
     <sys:String x:Key="Ag.GeminiModels">Gemini Models</sys:String>
+    <sys:String x:Key="Ag.GeminiArgonModels">Gemini 4 Argon</sys:String>
     <sys:String x:Key="Ag.ClaudeGptModels">Claude ＆ GPT Models</sys:String>
     <sys:String x:Key="Ag.FiveHourLabel">5H dynamic quota</sys:String>
     <sys:String x:Key="Ag.WeeklyLabel">Weekly base quota</sys:String>
+    <sys:String x:Key="Ag.ArgonSharedWithGemini">Shared with Gemini</sys:String>
+    <sys:String x:Key="Ag.ArgonNotAvailable">No separate quota</sys:String>
     <sys:String x:Key="Ag.EmptyTitle">No archived accounts yet</sys:String>
     <sys:String x:Key="Ag.EmptyDesc">Import accounts from Antigravity Tools, or log in a new Google account on the web</sys:String>
     <sys:String x:Key="Ag.EmptyImport">📥 Import from Tools</sys:String>
@@ -529,6 +532,12 @@
     <sys:String x:Key="UD.DownloadDone">Download complete! Restarting to update…</sys:String>
     <sys:String x:Key="UD.DownloadFailFmt">Download failed: {0}</sys:String>
     <sys:String x:Key="UD.OpenBrowserFail">Cannot open browser: {0}</sys:String>
+    <sys:String x:Key="UD.NoNotesProvided">(No release notes provided by author)</sys:String>
+    <sys:String x:Key="UD.AlreadyLatest">No newer version found in repository. You are running the latest version.</sys:String>
+    <sys:String x:Key="UD.NoUpdateTitle">No Updates</sys:String>
+    <sys:String x:Key="UD.LangZh">中文</sys:String>
+    <sys:String x:Key="UD.LangEn">English</sys:String>
+    <sys:String x:Key="UD.SwitchLangTip">Switch changelog language</sys:String>
 
     <!-- ==================== Antigravity Profile Card / Quota ==================== -->
     <sys:String x:Key="Ag.ActivatedLatencyFmt">● Activated ({0} ms)</sys:String>
@@ -542,7 +551,16 @@
     <sys:String x:Key="Ag.ActTipPending">Handshake activation has not run yet — click "Activate" on a card or "Batch Activate" on the toolbar</sys:String>
     <sys:String x:Key="Ag.TierStarterFree">Starter (Free)</sys:String>
     <sys:String x:Key="Ag.TierPro">Google AI Pro</sys:String>
+    <sys:String x:Key="Ag.TierProPaid">Google AI Pro (Subscription)</sys:String>
+    <sys:String x:Key="Ag.TierProPromo">Google AI Pro (Promotional)</sys:String>
     <sys:String x:Key="Ag.TierUltra">Google AI Ultra</sys:String>
+    <sys:String x:Key="Ag.TierStarterTooltip">Starter tier with free baseline quotas</sys:String>
+    <sys:String x:Key="Ag.TierProPaidTooltip">Paid Subscription: Full access to independent Gemini 4 Argon quota and advanced models</sys:String>
+    <sys:String x:Key="Ag.TierProPromoTooltip">Promotional/Trial access: Supports Gemini 3.8 and Claude 3.7, no independent Argon quota</sys:String>
+    <sys:String x:Key="Ag.TierProTooltip">Google AI Pro tier</sys:String>
+    <sys:String x:Key="Ag.TierUltraTooltip">Google AI Ultra: Maximum rate limits and unrestricted model access</sys:String>
+    <sys:String x:Key="Ag.ArgonQuotaTooltip">Gemini 4 Argon independent weekly quota pool (Subscription exclusive)</sys:String>
+    <sys:String x:Key="Ag.ArgonRequiresPaidPro">Gemini 4 Argon quota is only available for Google AI Pro (Subscription) and Ultra accounts</sys:String>
     <sys:String x:Key="Ag.No5hLimit">No 5H limit</sys:String>
     <sys:String x:Key="Ag.NotActivatedShort">Not activated</sys:String>
     <sys:String x:Key="Ag.FullStandby">Full quota, standing by</sys:String>
@@ -592,6 +610,8 @@
     <sys:String x:Key="Usage.Quick1D">Last 1 Day</sys:String>
     <sys:String x:Key="Usage.Quick1W">Last 1 Week</sys:String>
     <sys:String x:Key="Usage.Quick30D">Last 30 Days</sys:String>
+    <sys:String x:Key="Usage.Quick180D">6 Months</sys:String>
+    <sys:String x:Key="Usage.Quick1Y">1 Year</sys:String>
     <sys:String x:Key="Usage.Hour">Hour</sys:String>
     <sys:String x:Key="Usage.Minute">Min</sys:String>
     <sys:String x:Key="Usage.Now">Now</sys:String>
@@ -621,6 +641,10 @@
     <sys:String x:Key="Usage.AgentCodex">Codex</sys:String>
     <sys:String x:Key="Usage.AgentClaudeCli">Claude CLI</sys:String>
     <sys:String x:Key="Usage.AgentClaudeDesktop">Claude Desktop</sys:String>
+    <sys:String x:Key="Usage.AgentStepCode">StepCode</sys:String>
+    <sys:String x:Key="Usage.AgentZCode">zcode</sys:String>
+    <sys:String x:Key="Usage.AgentDsh">dsh</sys:String>
+    <sys:String x:Key="Usage.AgentGeminiCli">Gemini CLI</sys:String>
     <sys:String x:Key="Usage.AgentRequests">{0} requests</sys:String>
     <sys:String x:Key="Usage.ColTime">Time</sys:String>
     <sys:String x:Key="Usage.ColAgent">Client</sys:String>
@@ -640,7 +664,7 @@
     <sys:String x:Key="Usage.BackfillConfirmMsg">Rescan all local session logs and rebuild usage stats so the cache hit, duration and TTFT metrics are populated. The usage database is backed up automatically first (timestamped); the event table will be cleared and rebuilt. Continue?</sys:String>
     <sys:String x:Key="Usage.BackfillDoneFmt">Backfill complete: {0} records written, {1} with cache data and {2} with timing data.</sys:String>
     <sys:String x:Key="Usage.BackfillFailFmt">Backfill failed: {0}</sys:String>
-    <sys:String x:Key="Usage.Note">Note: usage is computed by scanning local Codex / Claude Code / OpenCode / Pi session records, so calls made while the app was not running are included. Data is kept for 90 days. Cache hit rate = hits / (fresh input + hits + writes); speed = output tokens / total duration; TTFT is derived from each client's message-level timestamps (logs do not record the first streamed packet, so it is an estimate) and shows "—" when it cannot be derived.</sys:String>
+    <sys:String x:Key="Usage.Note">Note: usage is computed by scanning local Codex / Claude Code / OpenCode / Pi / Gemini CLI session records, so calls made while the app was not running are included. Data is kept for 1 year. Cache hit rate = hits / (fresh input + hits + writes); speed = output tokens / total duration; TTFT is derived from each client's message-level timestamps (logs do not record the first streamed packet, so it is an estimate) and shows "—" when it cannot be derived.</sys:String>
 
     <!-- Usage monitor redesign -->
     <sys:String x:Key="Usage.TabProviders">Providers</sys:String>
@@ -652,6 +676,11 @@
     <sys:String x:Key="Usage.TrendTitle">Daily Usage Trend</sys:String>
     <sys:String x:Key="Usage.LegendIn">Input</sys:String>
     <sys:String x:Key="Usage.LegendOut">Output</sys:String>
+    <sys:String x:Key="Usage.ChartModeBar">Bar Chart</sys:String>
+    <sys:String x:Key="Usage.ChartModeHeatmap">Heatmap</sys:String>
+    <sys:String x:Key="Usage.HeatmapLess">Less</sys:String>
+    <sys:String x:Key="Usage.HeatmapMore">More</sys:String>
+    <sys:String x:Key="Usage.ChartTooltipTotal">Total: {0}</sys:String>
     <sys:String x:Key="Usage.NoData">No usage data in this time range</sys:String>
     <sys:String x:Key="Usage.NoDataTip">Send a few requests from any client (Codex / Claude Code / OpenCode / Pi), or adjust the time range</sys:String>
     <sys:String x:Key="Usage.ExpandTip">Expand to see the model breakdown of this provider</sys:String>

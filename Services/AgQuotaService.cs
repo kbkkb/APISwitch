@@ -157,7 +157,7 @@ public static class AgQuotaService
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post, url);
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                req.Headers.UserAgent.ParseAdd("antigravity/2.13.0");
+                req.Headers.TryAddWithoutValidation("User-Agent", "antigravity/hub/2.23.1 (os_type=windows; arch=amd64; aidev_client)");
                 req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
                 var resp = await SendWithTimeoutAsync(req, CancellationToken.None);
@@ -262,9 +262,9 @@ public static class AgQuotaService
     private static void ApplyAntigravityHeaders(HttpRequestMessage req, string token, Profile profile)
     {
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        req.Headers.UserAgent.ParseAdd("antigravity/2.13.0");
+        req.Headers.TryAddWithoutValidation("User-Agent", "antigravity/hub/2.23.1 (os_type=windows; arch=amd64; aidev_client)");
         req.Headers.TryAddWithoutValidation("x-client-name", "antigravity");
-        req.Headers.TryAddWithoutValidation("x-client-version", "2.13.0");
+        req.Headers.TryAddWithoutValidation("x-client-version", "2.23.1");
         req.Headers.TryAddWithoutValidation("x-machine-id", GetMachineId(profile));
     }
 
@@ -305,9 +305,18 @@ public static class AgQuotaService
                     {
                         var list = new List<string>();
                         var quotaSummary = new List<string>();
+                        bool hasActiveArgon = false;
+                        bool hasDisabledArgon = false;
                         foreach (var prop in modelsElem.EnumerateObject())
                         {
                             list.Add(prop.Name);
+                            if (prop.Name.Contains("argon", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (prop.Value.TryGetProperty("disabled", out var dis) && dis.GetBoolean())
+                                    hasDisabledArgon = true;
+                                else
+                                    hasActiveArgon = true;
+                            }
                             // per-model 配额信息（diagnose：判断 429 是否源于模型级限额）
                             if (prop.Value.TryGetProperty("quotaInfo", out var qi) &&
                                 qi.TryGetProperty("remainingFraction", out var rf) &&
@@ -315,6 +324,14 @@ public static class AgQuotaService
                             {
                                 quotaSummary.Add($"{prop.Name}={rfd:0.##}");
                             }
+                        }
+                        if (hasActiveArgon)
+                        {
+                            profile.IsPaidSubscription = true;
+                        }
+                        else if (hasDisabledArgon && profile.IsProTier && !profile.IsUltra)
+                        {
+                            profile.IsPaidSubscription = false;
                         }
                         if (list.Count > 0)
                         {
@@ -333,7 +350,7 @@ public static class AgQuotaService
     /// 从账号实时拉回的可用模型中筛选 Gemini 候选，严格按“开销从低到高”分层：
     ///   1) flash + low/lite（最低开销档）
     ///   2) 任意 flash
-    ///   3) 任意 gemini
+    ///   3) 任意 gemini（不含独立配额池的 argon 与 disabled 占位项）
     /// 同层内按版本升序（最老优先，保证向后兼容）。
     /// **绝不使用硬编码模型名**——拉取失败时返回空列表，由调用方报明确错误，
     /// 避免拿猜测的模型名去打 Google 导致 404/429 误判。
@@ -344,7 +361,9 @@ public static class AgQuotaService
             return new List<string>();
 
         var gemini = availableModels
-            .Where(m => m.Contains("gemini", StringComparison.OrdinalIgnoreCase))
+            .Where(m => m.Contains("gemini", StringComparison.OrdinalIgnoreCase) &&
+                        !m.Contains("argon", StringComparison.OrdinalIgnoreCase) &&
+                        !m.Contains("disabled", StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (gemini.Count == 0) return new List<string>();
 
@@ -654,7 +673,7 @@ public static class AgQuotaService
         }
     }
 
-    /// <summary>取四个配额桶中最小的剩余比例（无数据返回 null）。</summary>
+    /// <summary>取各配额桶中最小的剩余比例（无数据返回 null）。</summary>
     private static double? MinRemainingFraction(Profile profile)
     {
         double? min = null;
@@ -666,6 +685,8 @@ public static class AgQuotaService
         Consider(profile.QuotaWeeklyFraction);
         Consider(profile.Quota3p5hFraction);
         Consider(profile.Quota3pWeeklyFraction);
+        Consider(profile.QuotaArgon5hFraction);
+        Consider(profile.QuotaArgonWeeklyFraction);
         return min;
     }
 
@@ -687,6 +708,8 @@ public static class AgQuotaService
         Consider(profile.QuotaWeeklyResetTime);
         Consider(profile.Quota3p5hResetTime);
         Consider(profile.Quota3pWeeklyResetTime);
+        Consider(profile.QuotaArgon5hResetTime);
+        Consider(profile.QuotaArgonWeeklyResetTime);
         return earliest;
     }
     /// <summary>流式握手结果三态。</summary>
@@ -1050,6 +1073,10 @@ public static class AgQuotaService
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-weekly", profile.QuotaWeeklyFraction ?? 0, ParseResetUtc(profile.QuotaWeeklyResetTime));
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "3p-5h", profile.Quota3p5hFraction ?? 0, ParseResetUtc(profile.Quota3p5hResetTime));
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "3p-weekly", profile.Quota3pWeeklyFraction ?? 0, ParseResetUtc(profile.Quota3pWeeklyResetTime));
+            if (profile.QuotaArgon5hFraction.HasValue)
+                UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-argon-5h", profile.QuotaArgon5hFraction.Value, ParseResetUtc(profile.QuotaArgon5hResetTime));
+            if (profile.QuotaArgonWeeklyFraction.HasValue)
+                UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-argon-weekly", profile.QuotaArgonWeeklyFraction.Value, ParseResetUtc(profile.QuotaArgonWeeklyResetTime));
             ProfileStore.Save(profile);
             return true;
         }
@@ -1081,13 +1108,17 @@ public static class AgQuotaService
             profile.Quota3p5hResetTime = null;
             profile.Quota3pWeeklyFraction = null;
             profile.Quota3pWeeklyResetTime = null;
+            profile.QuotaArgon5hFraction = null;
+            profile.QuotaArgon5hResetTime = null;
+            profile.QuotaArgonWeeklyFraction = null;
+            profile.QuotaArgonWeeklyResetTime = null;
 
             bool isFree = !profile.IsProTier;
 
             foreach (var group in groups.EnumerateArray())
             {
                 var groupName = group.TryGetProperty("displayName", out var gn) ? gn.GetString() ?? "" : "";
-                bool isGeminiGroup = groupName.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+                bool isArgonGroup = groupName.Contains("Argon", StringComparison.OrdinalIgnoreCase);
                 bool is3pGroup = groupName.Contains("Claude", StringComparison.OrdinalIgnoreCase) || groupName.Contains("GPT", StringComparison.OrdinalIgnoreCase);
 
                 if (!group.TryGetProperty("buckets", out var buckets)) continue;
@@ -1102,8 +1133,23 @@ public static class AgQuotaService
                     bool is5h = bucketId.Contains("5h", StringComparison.OrdinalIgnoreCase) || window.Equals("5h", StringComparison.OrdinalIgnoreCase);
                     bool isWeekly = bucketId.Contains("weekly", StringComparison.OrdinalIgnoreCase) || window.Equals("weekly", StringComparison.OrdinalIgnoreCase);
 
+                    bool isArgon = isArgonGroup || bucketId.Contains("argon", StringComparison.OrdinalIgnoreCase);
                     bool is3p = bucketId.StartsWith("3p", StringComparison.OrdinalIgnoreCase) || is3pGroup;
-                    if (is3p)
+
+                    if (isArgon)
+                    {
+                        if (is5h && !isFree)
+                        {
+                            profile.QuotaArgon5hFraction = fraction;
+                            profile.QuotaArgon5hResetTime = resetTime;
+                        }
+                        else if (isWeekly)
+                        {
+                            profile.QuotaArgonWeeklyFraction = fraction;
+                            profile.QuotaArgonWeeklyResetTime = resetTime;
+                        }
+                    }
+                    else if (is3p)
                     {
                         if (is5h && !isFree)
                         {
@@ -1130,6 +1176,15 @@ public static class AgQuotaService
                         }
                     }
                 }
+            }
+
+            if (profile.QuotaArgonWeeklyFraction.HasValue || profile.QuotaArgon5hFraction.HasValue)
+            {
+                profile.IsPaidSubscription = true;
+            }
+            else if (profile.IsProTier && !profile.IsUltra)
+            {
+                profile.IsPaidSubscription = false;
             }
         }
         catch { }

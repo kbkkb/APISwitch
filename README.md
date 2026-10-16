@@ -17,19 +17,21 @@ APISwitch provides deep native configuration management and local protocol trans
 
 | Client / Tool | Management Target | Native Config & Storage Location |
 |---|---|---|
-| **Google Antigravity** | Google account subscriptions, session snapshots, quota monitoring | `%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb` |
-| **OpenAI Codex** | API providers, local protocol bridging & seamless model hot-switching | `~/.codex/config.toml` + `~/.codex/auth.json` |
-| **Anthropic Claude Code CLI** | CLI environment variables for API providers | `~/.claude/settings.json` (`ANTHROPIC_*` in `env`) |
-| **Claude Desktop** | Custom model mapping & routing gateway takeover | `%APPDATA%\Claude\claude_desktop_config.json` |
-| **OpenCode** | Provider & model pool configuration with one-click activation | `~/.config/opencode/opencode.json` |
-| **Pi** | Minimal Coding Agent multi-model configuration & authentication | `~/.pi/agent/models.json` + `auth.json` |
+| **Google Antigravity** | Google account subscriptions (smart distinction for PRO vs EXP), session snapshots, quota monitoring | `%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb` |
+| **OpenAI Codex** | API providers, local protocol bridging & seamless model hot-switching, usage tracking | `~/.codex/config.toml` + `~/.codex/auth.json` |
+| **Anthropic Claude Code CLI** | CLI environment variables for API providers, session usage analytics | `~/.claude/settings.json` (`ANTHROPIC_*` in `env`) |
+| **Claude Desktop** | Custom model mapping & routing gateway takeover, usage monitoring | `%APPDATA%\Claude\claude_desktop_config.json` |
+| **OpenCode** | Provider & model pool configuration with one-click activation, session usage analytics | `~/.config/opencode/opencode.json` + `opencode.db` |
+| **Pi** | Minimal Coding Agent multi-model configuration, authentication & usage analytics | `~/.pi/agent/models.json` + `auth.json` + `sessions/` |
+| **StepCode / zcode / dsh** | Terminal and specialized coding agent local session scanning & token metrics | `~/.stepcode/`, `~/.zcode/`, `~/.dsh/` logs |
+| **Gemini CLI** | Google Gemini command-line interface session scanning and token monitoring | `%TEMP%\gemini_chat_*.json` |
 
 ---
 
 ## Key Features
 
 ### 1. Unified Multi-Tool Management & Zero-Intrusion Switching
-- **Antigravity Quick Account Switching**: Save credential snapshots and switch Google accounts with one click. Automatically captures and synchronizes the latest credentials before switching (preventing Refresh Token rotation expiration). Optionally auto-closes and smoothly restarts the IDE.
+- **Antigravity Quick Account Switching & Gemini 4 Quota Monitoring**: Save credential snapshots and switch Google accounts with one click. Automatically captures and synchronizes latest credentials before switching (preventing Refresh Token rotation expiration). **Full support for real-time Gemini 4 (Argon) 5H & weekly quota monitoring with a triple-column quota panel**; gracefully distinguishes Paid Subscriptions (PRO, dedicated Gemini 4 pool) from Promotional Quotas (EXP) with badge highlights. Optionally auto-closes and smoothly restarts the IDE.
 - **Cross-Client Provider Sharing**: One-click copy of provider configurations across Claude CLI, Claude Desktop, Codex, OpenCode, and Pi with intelligent field mapping (`Auth Token` ↔ `Bearer Token` / `API Key`). Enter once, use everywhere.
 - **Model Pool Management**: Dedicated model pool mechanism for OpenCode and Pi, clearly distinguishing "In Config" from "Not in Config" states, supporting on-demand activation and batch maintenance.
 - **Default Model & Reasoning Effort**: Set a default model for OpenCode and Pi; configure per-model reasoning effort (reasoning effort / thinking budget) across Codex, Claude CLI, Claude Desktop, OpenCode and Pi.
@@ -51,20 +53,18 @@ APISwitch provides deep native configuration management and local protocol trans
 - Switch between Simplified Chinese and English instantly (Settings → General & System → Interface Language), covering the main window, settings dialog, system tray, provider editors and more.
 - Changes apply immediately with no restart; tray menu and toast messages update in sync.
 
-### 4. Usage Monitoring & Analytics (extended in v0.3.1 with performance metrics)
+### 4. Usage Monitoring & Analytics (Enhanced in v0.3.2)
 - **Token Usage Dashboard**: A dedicated monitoring window summarizing total / input / output tokens and request counts over any selected time range.
-- **Cache Hit Rate**: A summary card shows the share of input served from cache over the selected range (hits / (fresh input + hits + writes)), with the hit and write token counts in the sub-label. The same figure is shown per row in Recent Calls and in the per-model / per-provider drill-downs, so you can pinpoint both high-cache and zero-cache hotspots.
-- **Output Speed & Time to First Token**: Recent Calls shows, for each request, the output speed in tokens/s and the time to first token. Both are derived from message-level timestamps — client logs do not record the first streamed packet, so they are estimates and render as "—" when they cannot be derived.
-- **Daily Trend Chart**: Stacked bar chart of daily consumption. Days without calls are rendered as empty bars, so active and idle days stay visually distinct.
-- **Click a Bar to Drill Down**: Selecting a day highlights its bar, shows the day's total above the bar, and switches the summary cards, provider breakdown, client breakdown and call details to that day. Click again to deselect; click another bar to switch.
-- **Provider Drill-Down**: Expand any provider to inspect its per-model consumption and cache hit rate.
-- **Client Breakdown**: Separate statistics for Codex, Claude CLI, Claude Desktop, OpenCode and Pi.
-- **Recent Calls**: The latest 400 calls with time, client, provider, model, in/out/total tokens, cache hit rate, speed and time to first token, rendered with a virtualized list so scrolling stays smooth even with large datasets.
-- **Cross-Provider Model Aggregation**: Model names differing only by casing, organization prefix (`zai-org/`), `:variant` suffixes, date-snapshot suffixes, `-free` channel markers or Modal deployment names are automatically merged into one logical model. Expand a group to inspect each provider's share and the original raw names.
-- **Local Session Scanning**: Usage produced while APISwitch was not running is captured by scanning local session files (Codex `~/.codex/sessions`, Claude Code `~/.claude/projects`, Pi `~/.pi/agent/sessions`, OpenCode `opencode.db`). Incremental scanning avoids double counting and runs automatically when you open the monitoring window.
-- **Historical Backfill**: Cache, duration and first-token metrics were added after the original token counters, and incremental scanning never re-reads files it has already consumed — so those fields stay at 0 in old data. Use **Backfill history** in the bottom-right of the window to rebuild everything in one pass; the database is backed up automatically first.
-- **Persistent & Self-Cleaning**: Stored in SQLite and survives restarts; records older than 90 days are pruned automatically.
-- **Dial-Style Date/Time Picker**: Custom calendar panel plus a clock dial for hour and minute — click or drag to change values in real time. 24 hours are all reachable in a single click via the dual-ring hour dial.
+- **Long Range Quick Options & Contribution Heatmap Grid (v0.3.2 New)**:
+  - Quick range selector includes `Last 1 Day`, `Last 1 Week`, `Last 30 Days`, **`6 Months` (180 days)**, and **`1 Year` (365 days)**;
+  - For extended time spans, automatically switches to a GitHub / Claude-style **Contribution Heatmap Grid**: 7 rows (Monday to Sunday) across weeks, rendered with 5-tier logarithmic indigo shading to prevent single high-volume spikes from wiping out regular activity;
+  - Adaptive default mode (bar chart for short ranges $\le 31$ days, heatmap grid for long ranges $> 31$ days) with an instant **Bar Chart / Heatmap manual toggle button** in the top-right header and dynamic legends;
+  - Hover tooltip displays precise day totals, input/output breakdown, and weekday; click any cell to drill down into that day's statistics across all cards and detail lists.
+- **Broad Multi-Client Support**: Seamlessly scans local session files from Codex, Claude CLI, Claude Desktop, OpenCode, Pi, **Gemini CLI**, **StepCode**, **zcode**, and **dsh** with incremental delta scanning.
+- **Deep Performance Metrics**: Real-time tracking of **Cache Hit Rate** (`hits / (fresh input + hits + writes)`), **Output Speed** (tokens/s), and **Time to First Token (TTFT)** across summary cards, recent calls, and provider/model groupings.
+- **Cross-Provider Model Aggregation**: Normalizes and combines differing naming conventions for the same model across providers for unified analytics.
+- **Historical Backfill & 400-Day Extended Retention**: Data is safely stored in SQLite with retention and scanning extended to 400 days (over 1 year of full coverage); includes automated backup and one-click historical re-scanning.
+- **Dial-Style Date/Time Picker**: Custom calendar panel plus a clock dial for hour and minute with dual-ring 24-hour navigation.
 
 ### 5. Data Backup & Multi-Device Roaming
 - **One-Click Full Export**: Bundle all tool provider configurations and Antigravity account data into a standardized JSON backup file.
@@ -141,7 +141,8 @@ dotnet build -c Release
 - [x] **Antigravity Quota Activation**: Activate account quota cycles via the official Google streaming handshake. Supports single and batch activation (cancelable at any time), reports latency and failure reasons, and counts down to the reset time when a 429 quota-exhausted response is hit.
 - [x] **Token Usage & Analytics (v0.3.0)**: Dedicated usage monitoring window with daily trend chart, provider / client / model breakdowns, cross-provider model aggregation and local session scanning.
 - [x] **Usage Performance Metrics & Backfill (v0.3.1)**: Cache hit rate, output speed and time to first token across summary cards, recent calls and per-model / per-provider drill-downs, plus one-click backfill of historical data.
-- [ ] **More Agent Platforms**: Continuous expansion to emerging AI coding assistants, terminal agents, and developer platforms.
+- [x] **More Agent Platforms & Heatmap Grid (v0.3.2)**: Extended usage monitoring to Gemini CLI, StepCode, zcode, and dsh; refined Google Pro subscription tier vs promotional quota detection; introduced long-range Contribution Heatmap Grid and 400-day data retention.
+- [ ] **Automated Routing & Health Check**: Support automated load balancing, model routing rules, and upstream health-checked failover.
 
 ---
 

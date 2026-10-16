@@ -17,19 +17,21 @@ APISwitch 针对主流 AI 编程助手与客户端提供深度的原生配置管
 
 | 应用 / 客户端 | 管理对象 | 核心配置文件 / 本地存储位置 |
 |---|---|---|
-| **Google Antigravity** | Google 官方账号订阅、登录态快照、配额监控 | `%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb` |
-| **OpenAI Codex** | API 供应商管理、本地协议桥接与模型热切 | `~/.codex/config.toml` + `~/.codex/auth.json` |
-| **Anthropic Claude Code CLI** | 终端命令行 API 供应商环境参数 | `~/.claude/settings.json`（`env` 中 `ANTHROPIC_*`） |
-| **Claude Desktop** | 桌面客户端自定义模型映射与路由接管 | `%APPDATA%\Claude\claude_desktop_config.json` |
-| **OpenCode** | 供应商与模型池配置、一键入库激活 | `~/.config/opencode/opencode.json` |
-| **Pi** | Minimal Coding Agent 模型配置与鉴权管理 | `~/.pi/agent/models.json` + `auth.json` |
+| **Google Antigravity** | Google 官方账号订阅（智能区分正价 PRO 与体验 EXP）、登录态快照、配额监控 | `%APPDATA%\Antigravity IDE\User\globalStorage\state.vscdb` |
+| **OpenAI Codex** | API 供应商管理、本地协议桥接与模型热切、用量统计 | `~/.codex/config.toml` + `~/.codex/auth.json` |
+| **Anthropic Claude Code CLI** | 终端命令行 API 供应商环境参数、会话用量分析 | `~/.claude/settings.json`（`env` 中 `ANTHROPIC_*`） |
+| **Claude Desktop** | 桌面客户端自定义模型映射与路由接管、用量监控 | `%APPDATA%\Claude\claude_desktop_config.json` |
+| **OpenCode** | 供应商与模型池配置、一键入库激活、会话用量分析 | `~/.config/opencode/opencode.json` + `opencode.db` |
+| **Pi** | Minimal Coding Agent 模型配置、鉴权管理与用量分析 | `~/.pi/agent/models.json` + `auth.json` + `sessions/` |
+| **StepCode / zcode / dsh** | 终端与国产 Agent 客户端本地会话扫描与 Token 用量统计 | `~/.stepcode/`、`~/.zcode/`、`~/.dsh/` 本地日志 |
+| **Gemini CLI** | Google Gemini 命令行工具会话扫描与用量监控 | `%TEMP%\gemini_chat_*.json` |
 
 ---
 
 ## 核心特性
 
 ### 1. 多工具统一管理与零侵入切换
-- **Antigravity 账号快捷切换**：凭证快照存档，一键切换 Google 账号；切换前自动捕获并同步当前账号最新凭证（防 Refresh Token 轮换失效）；支持切换后自动关闭并平滑重启 IDE。
+- **Antigravity 账号快捷切换与 Gemini 4 配额监控**：凭证快照存档，一键切换 Google 账号；切换前自动捕获并同步当前账号最新凭证（防 Refresh Token 轮换失效）；**全新支持 Gemini 4 (Argon) 独立 5H 与周配额实时查看与三栏额度监控**；优雅区分正价订阅（PRO，独享独立 Gemini 4 额度池）与体验专享（EXP），卡片徽章高亮标注，支持切换后自动关闭并平滑重启 IDE。
 - **跨端供应商智能互通**：支持在 Claude CLI、Claude Desktop、Codex、OpenCode、Pi 之间一键互相复制供应商配置，智能完成字段自动映射（Auth Token ↔ Bearer Token / API Key），一次录入，全端复用。
 - **模型配置池化管理**：针对 OpenCode 与 Pi 提供模型配置池机制，清晰标记「已加入配置 / 未加入配置」状态，支持按需激活与批量维护。
 - **默认模型与思考强度**：OpenCode、Pi 支持设置默认模型；Codex、Claude CLI、Claude Desktop、OpenCode、Pi 五端均支持为每个模型单独配置思考强度（reasoning effort / thinking budget）。
@@ -51,20 +53,18 @@ APISwitch 针对主流 AI 编程助手与客户端提供深度的原生配置管
 - 支持简体中文 / English 一键切换（设置 → 常规与系统 → 界面语言），覆盖主界面、设置弹窗、系统托盘、供应商编辑等全部窗口。
 - 切换即时生效，无需重启应用；托盘菜单与提示Toast 同步更新。
 
-### 4. 用量监控与统计分析（v0.3.0 新增，v0.3.1 扩展性能指标）
+### 4. 用量监控与统计分析（v0.3.2 全面增强）
 - **Token 用量总览**：独立用量监控窗口，汇总任意时间区间内的总 Token / 输入 Token / 输出 Token 与请求数。
-- **缓存命中率**：顶部卡片展示区间内缓存命中占比（命中 / (新增输入 + 命中 + 写入)），副标题标注命中与写入的 token 量；调用明细与「按模型」「按供应商」下钻行同样逐项展示，定位高缓存与零缓存的热点。
-- **输出速度与首字耗时**：调用明细每行展示本次请求的输出速度（token/s）与首字耗时。两者由消息级时间戳推算，各客户端日志不记录流式首包，属近似值，无法推算时显示「—」。
-- **每日趋势图**：堆叠柱形图展示每日输入/输出消耗，自动补齐无调用日期，空闲日以空柱呈现，活跃与空闲一目了然。
-- **点击柱子下钻当天**：选中某天即高亮该柱、柱顶显示当日总消耗，下方汇总卡片、供应商明细、客户端汇总、调用明细全部联动切换为当天数据；再次点击取消选择，点击其他柱子切换选择。
-- **供应商明细下钻**：按供应商分组，可展开查看各模型的消耗占比与缓存命中。
-- **客户端汇总**：按 Codex / Claude CLI / Claude Desktop / OpenCode / Pi 分别统计。
-- **调用明细**：最近 400 条调用记录（时间、客户端、供应商、模型、入/出/总 Token、缓存命中率、速度、首字），采用虚拟化列表，海量数据滚动与切换丝滑不卡顿。
-- **跨供应商模型归并**：不同供应商对同一模型的命名差异（大小写、组织前缀如 `zai-org/`、`:variant` 变体、日期快照后缀、`-free` 通道标记、Modal 部署长名）自动归一化合并，展开可见各供应商细分与原始模型名，统计不再割裂。
-- **本地会话扫描**：应用未运行期间客户端产生的用量也能被统计——直接扫描本地会话文件（Codex `~/.codex/sessions`、Claude Code `~/.claude/projects`、Pi `~/.pi/agent/sessions`、OpenCode `opencode.db`），增量扫描避免重复计数，打开监控窗口时自动补扫。
-- **历史数据回填**：性能指标（缓存 / 耗时 / 首字）为后加字段，增量扫描不会重读已消费的文件，老数据里这些字段会停留在 0。窗口右下角提供「回填历史数据」，自动备份数据库后全量重建，一次补齐历史用量。
-- **持久化与自动清理**：数据存储于 SQLite，重启不丢，自动清理 90 天前旧数据。
-- **表盘式日期时间选择**：自绘日历面板 + 时钟表盘选择时/分，点击或按住拖动即可实时切换，小时盘双环设计让 24 小时一键可达。
+- **长周期与 GitHub / Claude 风格方格热力图（v0.3.2 新增）**：
+  - 快捷范围支持 `近一天`、`近一周`、`近30天`、**`半年`（180天）**、**`一年`（365天）**；
+  - 长周期下自动呈现仿 GitHub / Claude 风格的**贡献热力方格图（Contribution Heatmap Grid）**：7 行（周一至周日）严谨横纵排布，对数刻度 5 阶优雅靛紫着色，避免突发大流量洗白日常活跃；
+  - 智能自适应模式（短周期默认柱状图，长周期默认方格图），并在卡片右上角提供**柱状图 / 方格图一键手动切换**；
+  - 鼠标悬停显示精确 Tooltip，点击任意方格下钻锁定当天，全窗口指标与列表即时联动过滤。
+- **多客户端全面兼容**：支持扫描 Codex、Claude CLI、Claude Desktop、OpenCode、Pi、**Gemini CLI**、**StepCode**、**zcode**、**dsh** 本地日志，增量极速入库，打开窗口自动补扫。
+- **性能指标下钻**：实时统计**缓存命中率**（`命中 / (新增输入 + 命中 + 写入)`）、**输出速度**（token/s）与**首字耗时**，覆盖顶部卡片、明细列表与跨供应商模型分组。
+- **跨供应商模型归并**：不同供应商对同一模型的命名差异自动归一化合并，清晰展现全局模型用量占比。
+- **历史数据回填与 400 天长效留存**：数据持久化于 SQLite，扫描与留存上限扩充至 400 天（完整覆盖 1 年以上）；支持一键自动备份数据库并全量回填历史数据。
+- **表盘式日期时间选择**：自绘日历面板 + 时钟表盘选择时/分，支持 24 小时双环直达。
 
 ### 5. 数据备份与多设备漫游
 - **一键全量导出**：将所有工具的供应商配置与 Antigravity 账号数据一键打包导出为标准 JSON 备份文件。
@@ -141,7 +141,8 @@ dotnet build -c Release
 - [x] **Antigravity 限额激活功能**：通过 Google 官方流式握手激活账号配额周期，支持单个激活与批量激活（可随时取消），激活结果含耗时与失败原因，429 配额用尽时可倒计时至重置。
 - [x] **Token 统计与用量分析（v0.3.0）**：独立用量监控窗口，含每日趋势图、供应商/客户端/模型多维汇总、跨供应商模型归并与本地会话扫描。
 - [x] **用量性能指标与历史回填（v0.3.1）**：缓存命中率、输出速度、首字耗时，覆盖汇总卡片、调用明细与按模型/供应商下钻；新增历史数据一键回填。
-- [ ] **更多 Agent 平台支持**：持续扩展对主流及新兴 AI 编程助手、终端 Agent 平台的统一配置与协议转译管理。
+- [x] **更多 Agent 平台支持与方格热力图（v0.3.2）**：扩展 Gemini CLI、StepCode、zcode、dsh 用量监控，智能区分 Google Pro 体验版与订阅版，上线半年/一年长周期方格热力图与 400 天数据留存。
+- [ ] **自动化规则与路由策略**：计划支持基于模型、用量、耗时及供应商健康度的自动化负载均衡与故障转移路由。
 
 ---
 

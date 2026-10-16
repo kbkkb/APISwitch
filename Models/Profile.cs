@@ -19,6 +19,7 @@ public class Profile : INotifyPropertyChanged
     public string? IdToken { get; set; }
     public long? ExpiryTimestamp { get; set; }
     public string? SubscriptionTier { get; set; }
+    public bool? IsPaidSubscription { get; set; }
 
     // 5H Quota (Gemini)
     public double? Quota5hFraction { get; set; }
@@ -33,6 +34,12 @@ public class Profile : INotifyPropertyChanged
     public string? Quota3p5hResetTime { get; set; }
     public double? Quota3pWeeklyFraction { get; set; }
     public string? Quota3pWeeklyResetTime { get; set; }
+
+    // Gemini 4 Argon Quotas (Independent pool on paid Pro plans)
+    public double? QuotaArgon5hFraction { get; set; }
+    public string? QuotaArgon5hResetTime { get; set; }
+    public double? QuotaArgonWeeklyFraction { get; set; }
+    public string? QuotaArgonWeeklyResetTime { get; set; }
 
     // Virtual Device Profile (sync with storage.json)
     public DeviceProfile? DeviceProfile { get; set; }
@@ -113,7 +120,7 @@ public class Profile : INotifyPropertyChanged
         }
     }
 
-    /// <summary>四桶中最小剩余比例；无任何配额数据返回 null。</summary>
+    /// <summary>各配额桶中最小剩余比例；无任何配额数据返回 null。</summary>
     double? MinRemainingFraction()
     {
         double? min = null;
@@ -125,6 +132,8 @@ public class Profile : INotifyPropertyChanged
         Consider(QuotaWeeklyFraction);
         Consider(Quota3p5hFraction);
         Consider(Quota3pWeeklyFraction);
+        Consider(QuotaArgon5hFraction);
+        Consider(QuotaArgonWeeklyFraction);
         return min;
     }
 
@@ -146,6 +155,8 @@ public class Profile : INotifyPropertyChanged
         Consider(QuotaWeeklyFraction, QuotaWeeklyResetTime);
         Consider(Quota3p5hFraction, Quota3p5hResetTime);
         Consider(Quota3pWeeklyFraction, Quota3pWeeklyResetTime);
+        Consider(QuotaArgon5hFraction, QuotaArgon5hResetTime);
+        Consider(QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime);
         return earliest;
     }
 
@@ -202,31 +213,58 @@ public class Profile : INotifyPropertyChanged
     public string PlanText => string.IsNullOrEmpty(Plan) ? "—" : Plan;
 
     [JsonIgnore]
+    public bool IsUltra => (SubscriptionTier?.Contains("Ultra", StringComparison.OrdinalIgnoreCase) ?? false)
+        || (Plan?.Contains("Ultra", StringComparison.OrdinalIgnoreCase) ?? false);
+
+    [JsonIgnore]
+    public bool IsProTier => IsUltra
+        || (SubscriptionTier?.Contains("Pro", StringComparison.OrdinalIgnoreCase) ?? false)
+        || (Plan?.Contains("Pro", StringComparison.OrdinalIgnoreCase) ?? false);
+
+    [JsonIgnore]
+    public bool IsPaidPro => !IsUltra && IsProTier && (IsPaidSubscription == true || HasArgonQuota);
+
+    [JsonIgnore]
+    public bool IsPromoPro => !IsUltra && IsProTier && !IsPaidPro;
+
+    [JsonIgnore]
     public string TierDisplay
     {
         get
         {
-            if (!string.IsNullOrEmpty(SubscriptionTier))
-            {
-                if (SubscriptionTier.Contains("Starter", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierStarterFree");
-                if (SubscriptionTier.Contains("Pro", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierPro");
-                if (SubscriptionTier.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierUltra");
+            if (IsUltra) return I18nService.T("Ag.TierUltra");
+            if (IsPaidPro) return I18nService.T("Ag.TierProPaid");
+            if (IsPromoPro) return I18nService.T("Ag.TierProPromo");
+            if (IsProTier) return I18nService.T("Ag.TierPro");
+            if (!string.IsNullOrEmpty(SubscriptionTier) && !SubscriptionTier.Contains("Starter", StringComparison.OrdinalIgnoreCase))
                 return SubscriptionTier;
-            }
-            if (!string.IsNullOrEmpty(Plan))
-            {
-                if (Plan.Contains("Starter", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierStarterFree");
-                if (Plan.Contains("Pro", StringComparison.OrdinalIgnoreCase)) return I18nService.T("Ag.TierPro");
-                return Plan;
-            }
             return I18nService.T("Ag.TierStarterFree");
         }
     }
 
     [JsonIgnore]
-    public bool IsProTier => (SubscriptionTier?.Contains("Pro", StringComparison.OrdinalIgnoreCase) ?? false)
-        || (SubscriptionTier?.Contains("Ultra", StringComparison.OrdinalIgnoreCase) ?? false)
-        || (Plan?.Contains("Pro", StringComparison.OrdinalIgnoreCase) ?? false);
+    public string TierTooltip
+    {
+        get
+        {
+            if (IsUltra) return I18nService.T("Ag.TierUltraTooltip");
+            if (IsPaidPro) return I18nService.T("Ag.TierProPaidTooltip");
+            if (IsPromoPro) return I18nService.T("Ag.TierProPromoTooltip");
+            if (IsProTier) return I18nService.T("Ag.TierProTooltip");
+            return I18nService.T("Ag.TierStarterTooltip");
+        }
+    }
+
+    [JsonIgnore]
+    public string ArgonColumnTooltip
+    {
+        get
+        {
+            if (HasArgonQuota) return I18nService.T("Ag.ArgonQuotaTooltip");
+            if (IsUltra) return I18nService.T("Ag.ArgonSharedWithGemini");
+            return I18nService.T("Ag.ArgonRequiresPaidPro");
+        }
+    }
 
     [JsonIgnore]
     public bool Has5hQuota => IsProTier && Quota5hFraction.HasValue;
@@ -346,6 +384,70 @@ public class Profile : INotifyPropertyChanged
                 if (diff.TotalDays >= 1) return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
                 if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
                 return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
+            }
+            return "";
+        }
+    }
+
+    [JsonIgnore]
+    public bool HasArgonQuota => QuotaArgon5hFraction.HasValue || QuotaArgonWeeklyFraction.HasValue;
+
+    [JsonIgnore]
+    public double QuotaArgon5hPercentValue
+    {
+        get => (IsProTier && QuotaArgon5hFraction.HasValue) ? Math.Round(QuotaArgon5hFraction.Value * 100.0, 1) : 0.0;
+        set { }
+    }
+
+    [JsonIgnore]
+    public string QuotaArgon5hPercentText => (IsProTier && QuotaArgon5hFraction.HasValue) ? $"{Math.Round(QuotaArgon5hFraction.Value * 100.0)}%" : "—";
+
+    [JsonIgnore]
+    public string QuotaArgon5hCountdown
+    {
+        get
+        {
+            if (!QuotaArgon5hFraction.HasValue) return I18nService.T("Ag.No5hLimit");
+            if (string.IsNullOrEmpty(QuotaArgon5hResetTime)) return I18nService.T("Ag.FullStandby");
+            if (ParseResetUtc(QuotaArgon5hResetTime) is { } dt)
+            {
+                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
+                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
+                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursMinFmt", (int)diff.TotalHours, diff.Minutes);
+                return I18nService.F("Ag.LeftMinutesFmt", diff.Minutes);
+            }
+            return "";
+        }
+    }
+
+    [JsonIgnore]
+    public double QuotaArgonWeeklyPercentValue
+    {
+        get => QuotaArgonWeeklyFraction.HasValue ? Math.Round(QuotaArgonWeeklyFraction.Value * 100.0, 1) : 0.0;
+        set { }
+    }
+
+    [JsonIgnore]
+    public string QuotaArgonWeeklyPercentText => QuotaArgonWeeklyFraction.HasValue ? $"{Math.Round(QuotaArgonWeeklyFraction.Value * 100.0)}%" : "—";
+
+    [JsonIgnore]
+    public string QuotaArgonWeeklyCountdown
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(QuotaArgonWeeklyResetTime) && ParseResetUtc(QuotaArgonWeeklyResetTime) is { } dt)
+            {
+                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
+                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");
+                if (diff.TotalDays >= 1) return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
+                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
+                return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
+            }
+            if (!QuotaArgonWeeklyFraction.HasValue && QuotaUpdatedAt.HasValue)
+            {
+                if (SubscriptionTier?.Contains("Ultra", StringComparison.OrdinalIgnoreCase) == true)
+                    return I18nService.T("Ag.ArgonSharedWithGemini");
+                return I18nService.T("Ag.ArgonNotAvailable");
             }
             return "";
         }

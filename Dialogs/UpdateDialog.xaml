@@ -45,10 +45,50 @@
                 </Grid>
             </Border>
 
-            <!-- Release Notes -->
-            <TextBlock Text="{DynamicResource UD.Changelog}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" Margin="0,0,0,6"/>
+            <!-- Release Notes Header with Language Switcher -->
+            <Grid Margin="0,0,0,6">
+                <TextBlock Text="{DynamicResource UD.Changelog}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+
+                <!-- Language Switcher Pill -->
+                <Border x:Name="LangToggleContainer" HorizontalAlignment="Right" Background="#F1F5F9" CornerRadius="6" Padding="2" BorderBrush="#E2E8F0" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="BtnLangZh" Content="{DynamicResource UD.LangZh}" Click="OnSelectZh"
+                                FontSize="11" Padding="8,2" BorderThickness="0" Background="Transparent" Foreground="{StaticResource TextDimBrush}" Cursor="Hand">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button x:Name="BtnLangEn" Content="{DynamicResource UD.LangEn}" Click="OnSelectEn"
+                                FontSize="11" Padding="8,2" BorderThickness="0" Background="Transparent" Foreground="{StaticResource TextDimBrush}" Cursor="Hand">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </Grid>
             <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,16">
-                <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
                     <TextBlock x:Name="ReleaseNotesText" Text="{DynamicResource UD.NotesPlaceholder}" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextBrush}" LineHeight="18"/>
                 </ScrollViewer>
             </Border>

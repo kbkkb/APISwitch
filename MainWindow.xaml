@@ -431,8 +431,26 @@
                                                             <TextBlock Text="{DynamicResource Ag.CurrentBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                         </Border>
                                                         <!-- Tier Badge -->
-                                                        <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding TierDisplay}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                                        <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                ToolTip="{Binding TierTooltip}">
+                                                            <TextBlock Text="{Binding TierDisplay}" FontSize="10" FontWeight="SemiBold">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsPaidPro}" Value="True">
+                                                                                <Setter Property="Foreground" Value="{DynamicResource TabAccentBrush}"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsPromoPro}" Value="True">
+                                                                                <Setter Property="Foreground" Value="#64748B"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsUltra}" Value="True">
+                                                                                <Setter Property="Foreground" Value="#D97706"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
                                                         </Border>
                                                         <!-- Activation Badge -->
                                                         <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center"
@@ -491,12 +509,14 @@
                                                 </StackPanel>
                                             </Grid>
 
-                                            <!-- Row 1: Dual Quota Metrics Panel (Gemini & Claude/GPT) -->
+                                            <!-- Row 1: Triple Quota Metrics Panel (Gemini, Gemini 4 Argon & Claude/GPT) -->
                                             <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,12,0,0">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="20"/>
+                                                        <ColumnDefinition Width="16"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="16"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
 
@@ -533,8 +553,41 @@
 
                                                     <Rectangle Grid.Column="1" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"/>
 
+                                                    <!-- Middle Column: Gemini 4 Argon -->
+                                                    <StackPanel Grid.Column="2" ToolTip="{Binding ArgonColumnTooltip}">
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                            <Border Background="#ECFEFF" CornerRadius="4" Padding="6,2">
+                                                                <TextBlock Text="{DynamicResource Ag.GeminiArgonModels}" FontSize="11" FontWeight="SemiBold" Foreground="#0891B2"/>
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <!-- Argon 5H -->
+                                                        <Grid Margin="0,0,0,3">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{Binding QuotaArgon5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding QuotaArgon5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#14B8A6" HorizontalAlignment="Right"/>
+                                                        </Grid>
+                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgon5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
+                                                                    Foreground="#14B8A6"/>
+
+                                                        <!-- Argon Weekly -->
+                                                        <Grid Margin="0,0,0,3">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
+                                                                <TextBlock Text="{Binding QuotaArgonWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                            </StackPanel>
+                                                            <TextBlock Text="{Binding QuotaArgonWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#0891B2" HorizontalAlignment="Right"/>
+                                                        </Grid>
+                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgonWeeklyPercentValue, Mode=OneWay}"
+                                                                    Foreground="#0891B2"/>
+                                                    </StackPanel>
+
+                                                    <Rectangle Grid.Column="3" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"/>
+
                                                     <!-- Right Column: Claude & GPT Models -->
-                                                    <StackPanel Grid.Column="2">
+                                                    <StackPanel Grid.Column="4">
                                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                             <Border Background="#F5F3FF" CornerRadius="4" Padding="6,2">
                                                                 <TextBlock Text="{DynamicResource Ag.ClaudeGptModels}" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>

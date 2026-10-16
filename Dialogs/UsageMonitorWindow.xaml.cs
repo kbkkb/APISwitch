@@ -25,6 +25,7 @@ public partial class UsageMonitorWindow : Window
     DateTime? _selectedDay;
     int _refreshGen;
     System.Windows.Threading.DispatcherTimer? _chartRedrawTimer;
+    string _chartMode = "bar"; // "bar" or "heatmap"
 
     public UsageMonitorWindow()
     {
@@ -48,6 +49,8 @@ public partial class UsageMonitorWindow : Window
         EndPicker.SetValue(today.AddMinutes(23 * 60 + 59), silent: true);
         _updatingRangeFields = false;
         Quick1DRadio.IsChecked = true;
+        _chartMode = "bar";
+        ChartModeBarRadio.IsChecked = true;
     }
 
     void ApplyQuickRange(int days)
@@ -58,6 +61,16 @@ public partial class UsageMonitorWindow : Window
         StartPicker.SetValue(today.AddDays(-(days - 1)), silent: true);
         EndPicker.SetValue(today.AddMinutes(23 * 60 + 59), silent: true);
         _updatingRangeFields = false;
+        if (days > 31)
+        {
+            _chartMode = "heatmap";
+            ChartModeHeatmapRadio.IsChecked = true;
+        }
+        else
+        {
+            _chartMode = "bar";
+            ChartModeBarRadio.IsChecked = true;
+        }
         RefreshData();
     }
 
@@ -76,10 +89,38 @@ public partial class UsageMonitorWindow : Window
         Quick1DRadio.IsChecked = false;
         Quick7DRadio.IsChecked = false;
         Quick30DRadio.IsChecked = false;
+        Quick180DRadio.IsChecked = false;
+        Quick365DRadio.IsChecked = false;
         _updatingRangeFields = false;
     }
 
-    void OnApplyRange(object sender, RoutedEventArgs e) => RefreshData();
+    void OnApplyRange(object sender, RoutedEventArgs e)
+    {
+        if (TryGetRange(out var from, out var to))
+        {
+            int span = (to.Date - from.Date).Days + 1;
+            if (span > 31)
+            {
+                _chartMode = "heatmap";
+                ChartModeHeatmapRadio.IsChecked = true;
+            }
+            else
+            {
+                _chartMode = "bar";
+                ChartModeBarRadio.IsChecked = true;
+            }
+        }
+        RefreshData();
+    }
+
+    void OnChartModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string mode })
+        {
+            _chartMode = mode;
+            DrawTrendChart();
+        }
+    }
 
     bool TryGetRange(out DateTime from, out DateTime to)
     {
@@ -138,11 +179,10 @@ public partial class UsageMonitorWindow : Window
         var hasData = s.Requests > 0 || s.TotalIn + s.TotalOut > 0;
         EmptyOverlay.Visibility = hasData ? Visibility.Collapsed : Visibility.Visible;
 
-        // 每日趋势：补齐区间内没有调用的日期（空柱），便于直观区分活跃/空闲日；
-        // 区间过长（>92 天）时不补齐，避免柱形过密不可读
+        // 每日趋势：补齐区间内没有调用的日期（空柱/空方格），确保方格图能完整排列对齐
         _daily = dailyRows;
         int spanDays = (to.Date - from.Date).Days + 1;
-        if (spanDays > 1 && spanDays <= 92)
+        if (spanDays > 1 && spanDays <= 400)
         {
             var byDay = _daily.ToDictionary(x => x.Day, StringComparer.Ordinal);
             var filled = new List<UsageStorage.DailyTotal>(spanDays);
@@ -326,8 +366,21 @@ public partial class UsageMonitorWindow : Window
         var canvas = TrendCanvas;
         if (canvas == null) return;
         canvas.Children.Clear();
+
+        bool isHeatmap = _chartMode == "heatmap";
+        if (BarLegendPanel != null) BarLegendPanel.Visibility = isHeatmap ? Visibility.Collapsed : Visibility.Visible;
+        if (HeatmapLegendPanel != null) HeatmapLegendPanel.Visibility = isHeatmap ? Visibility.Visible : Visibility.Collapsed;
+
         if (_daily.Count == 0) return;
 
+        if (isHeatmap)
+            DrawHeatmapChart(canvas);
+        else
+            DrawBarChart(canvas);
+    }
+
+    void DrawBarChart(Canvas canvas)
+    {
         double w = canvas.ActualWidth > 0 ? canvas.ActualWidth : 900;
         double h = canvas.ActualHeight > 0 ? canvas.ActualHeight : 128;
         const double topPad = 12, bottomPad = 20, sidePad = 6;
@@ -369,7 +422,7 @@ public partial class UsageMonitorWindow : Window
 
         int n = _daily.Count;
         double slot = (w - sidePad * 2) / n;
-        double barW = Math.Clamp(slot * 0.56, 5, 34);
+        double barW = Math.Clamp(slot * 0.56, 2, 34);
         var inFill = new SolidColorBrush(Color.FromRgb(0xC7, 0xD2, 0xFE));
         var outFill = new SolidColorBrush(Color.FromRgb(0x63, 0x66, 0xF1));
         // 选中日：柱形变色高亮（更深的填充 + 描边）
@@ -389,7 +442,7 @@ public partial class UsageMonitorWindow : Window
 
             var tip = $"{d.Day}\n{I18nService.F("Usage.InOut", FormatTokens(d.InTokens), FormatTokens(d.OutTokens))}";
 
-            // 选中日：柱形变色 + 描边高亮（不再用整列背景）
+            // 选中日：柱形变色 + 描边高亮
             if (inH > 0)
             {
                 var bar = new Border
@@ -488,6 +541,142 @@ public partial class UsageMonitorWindow : Window
         }
     }
 
+    void DrawHeatmapChart(Canvas canvas)
+    {
+        double w = canvas.ActualWidth > 0 ? canvas.ActualWidth : 900;
+        double h = canvas.ActualHeight > 0 ? canvas.ActualHeight : 128;
+        if (_daily.Count == 0) return;
+
+        if (!DateTime.TryParseExact(_daily[0].Day, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startDate))
+            return;
+
+        int spanDays = _daily.Count;
+        int startRow = ((int)startDate.DayOfWeek + 6) % 7; // Monday = 0 ... Sunday = 6
+        int totalCols = ((spanDays - 1 + startRow) / 7) + 1;
+
+        const double leftPad = 26; // 给周一/周三/周五标签留出空间
+        const double topPad = 18;  // 给顶部月份标签留出空间
+        double availW = Math.Max(200, w - leftPad - 16);
+
+        // 自适应列间距：针对 53 周（1年）约 13~14.5px；针对 26 周（半年）保持 14.5px
+        double colPitch = Math.Clamp(availW / Math.Max(totalCols, 1), 10.0, 14.5);
+        double cellSize = Math.Floor(colPitch - 2.5);
+        if (cellSize < 7.5) cellSize = 7.5;
+
+        // 绘制左侧星期标签（Mon, Wed, Fri）
+        int[] labelRows = { 0, 2, 4 };
+        string[] dowKeys = { "Usage.Dow1", "Usage.Dow3", "Usage.Dow5" };
+        for (int i = 0; i < labelRows.Length; i++)
+        {
+            int r = labelRows[i];
+            double y = topPad + r * colPitch + (cellSize - 10) / 2.0;
+            var lbl = new TextBlock
+            {
+                Text = I18nService.T(dowKeys[i]),
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8)),
+                Width = 20,
+                TextAlignment = TextAlignment.Right,
+            };
+            Canvas.SetLeft(lbl, 0);
+            Canvas.SetTop(lbl, y);
+            canvas.Children.Add(lbl);
+        }
+
+        long maxTotal = _daily.Max(d => d.InTokens + d.OutTokens);
+        if (maxTotal <= 0) maxTotal = 1;
+
+        var bgEmpty = new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9));
+        var borderEmpty = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0));
+        var tier1Fill = new SolidColorBrush(Color.FromRgb(0xC7, 0xD2, 0xFE));
+        var tier2Fill = new SolidColorBrush(Color.FromRgb(0x81, 0x8C, 0xF8));
+        var tier3Fill = new SolidColorBrush(Color.FromRgb(0x63, 0x66, 0xF1));
+        var tier4Fill = new SolidColorBrush(Color.FromRgb(0x43, 0x38, 0xCA));
+        var selBorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x1B, 0x4B));
+
+        int lastMonth = -1;
+        double lastMonthX = -100;
+
+        for (int i = 0; i < spanDays; i++)
+        {
+            var d = _daily[i];
+            int dayIndex = i + startRow;
+            int col = dayIndex / 7;
+            int row = dayIndex % 7;
+
+            double x = leftPad + col * colPitch;
+            double y = topPad + row * colPitch;
+
+            DateTime curDate = startDate.AddDays(i);
+
+            // 月份标签
+            if (curDate.Month != lastMonth)
+            {
+                if (x - lastMonthX >= 28)
+                {
+                    string monthText = curDate.ToString("MMM", CultureInfo.CurrentCulture);
+                    var monthLbl = new TextBlock
+                    {
+                        Text = monthText,
+                        FontSize = 9.5,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)),
+                    };
+                    Canvas.SetLeft(monthLbl, x);
+                    Canvas.SetTop(monthLbl, 0);
+                    canvas.Children.Add(monthLbl);
+                    lastMonthX = x;
+                }
+                lastMonth = curDate.Month;
+            }
+
+            long dayTotal = d.InTokens + d.OutTokens;
+            int tier = 0;
+            if (dayTotal > 0)
+            {
+                double ratio = Math.Log10(dayTotal + 1) / Math.Log10(maxTotal + 1);
+                if (ratio <= 0.25) tier = 1;
+                else if (ratio <= 0.50) tier = 2;
+                else if (ratio <= 0.75) tier = 3;
+                else tier = 4;
+            }
+
+            Brush fillBrush = tier switch
+            {
+                1 => tier1Fill,
+                2 => tier2Fill,
+                3 => tier3Fill,
+                4 => tier4Fill,
+                _ => bgEmpty,
+            };
+
+            bool selected = _selectedDay.HasValue && d.Day == _selectedDay.Value.ToString("yyyy-MM-dd");
+
+            var cell = new Border
+            {
+                Width = cellSize,
+                Height = cellSize,
+                Background = fillBrush,
+                CornerRadius = new CornerRadius(2),
+                BorderBrush = selected ? selBorderBrush : (tier == 0 ? borderEmpty : null),
+                BorderThickness = selected ? new Thickness(2) : (tier == 0 ? new Thickness(1) : default),
+                Cursor = Cursors.Hand,
+                Tag = d.Day,
+            };
+
+            var dowName = curDate.ToString("ddd", CultureInfo.CurrentCulture);
+            cell.ToolTip = $"{d.Day} ({dowName})\n" +
+                           $"{I18nService.F("Usage.ChartTooltipTotal", FormatTokens(dayTotal))}\n" +
+                           $"{I18nService.F("Usage.InOut", FormatTokens(d.InTokens), FormatTokens(d.OutTokens))}";
+
+            cell.MouseLeftButtonUp += OnDaySlotClick;
+
+            Canvas.SetLeft(cell, x);
+            Canvas.SetTop(cell, y);
+            canvas.Children.Add(cell);
+        }
+    }
+
     /// <summary>点击趋势图某天列：选中/取消选中；汇总卡片与下方明细随之切换为当天数据。</summary>
     void OnDaySlotClick(object sender, MouseButtonEventArgs e)
     {
@@ -543,8 +732,12 @@ public partial class UsageMonitorWindow : Window
     /// </summary>
     void ApplyPerformanceCards(UsageStorage.PerformanceStats perf)
     {
-        // 缓存命中率 = 命中 / (新增输入 + 命中 + 写入)
-        long cacheDenom = perf.CacheRead + perf.CacheWrite + _currentInputTotal;
+        // 缓存命中率 = 命中 / 总输入提示词
+        // 当总输入已包含缓存读取时（_currentInputTotal >= perf.CacheRead），分母为 _currentInputTotal + perf.CacheWrite；
+        // 否则（如 Claude CLI 仅记录未命中输入），分母为 _currentInputTotal + perf.CacheRead + perf.CacheWrite。
+        long cacheDenom = _currentInputTotal >= perf.CacheRead
+            ? _currentInputTotal + perf.CacheWrite
+            : _currentInputTotal + perf.CacheRead + perf.CacheWrite;
         CacheHitText.Text = cacheDenom > 0 && perf.CacheRead > 0
             ? (perf.CacheRead * 100.0 / cacheDenom).ToString("0.0", CultureInfo.CurrentCulture) + "%"
             : "—";
@@ -657,6 +850,10 @@ public partial class UsageMonitorWindow : Window
         UsageStorage.AgentClaudeDesktop => I18nService.T("Usage.AgentClaudeDesktop"),
         UsageStorage.AgentOpenCode => I18nService.T("Usage.AgentOpenCode"),
         UsageStorage.AgentPi => I18nService.T("Usage.AgentPi"),
+        UsageStorage.AgentStepCode => I18nService.T("Usage.AgentStepCode"),
+        UsageStorage.AgentZCode => I18nService.T("Usage.AgentZCode"),
+        UsageStorage.AgentDsh => I18nService.T("Usage.AgentDsh"),
+        UsageStorage.AgentGeminiCli => I18nService.T("Usage.AgentGeminiCli"),
         _ => agent,
     };
 
@@ -671,9 +868,28 @@ public partial class UsageMonitorWindow : Window
                                        new SolidColorBrush(Color.FromRgb(0xEE, 0xF2, 0xFF))),
         UsageStorage.AgentPi => (new SolidColorBrush(Color.FromRgb(0x7C, 0x3A, 0xED)),
                                  new SolidColorBrush(Color.FromRgb(0xED, 0xE9, 0xFE))),
+        // v0.3.2 新增各 agent 配色
+        UsageStorage.AgentStepCode => (new SolidColorBrush(Color.FromRgb(0x0E, 0x74, 0x90)),
+                                       new SolidColorBrush(Color.FromRgb(0xE0, 0xF2, 0xFE))),
+        UsageStorage.AgentZCode => (new SolidColorBrush(Color.FromRgb(0xC2, 0x41, 0x0C)),
+                                    new SolidColorBrush(Color.FromRgb(0xFF, 0xED, 0xD5))),
+        UsageStorage.AgentDsh => (new SolidColorBrush(Color.FromRgb(0x15, 0x81, 0x4C)),
+                                  new SolidColorBrush(Color.FromRgb(0xDC, 0xFC, 0xE7))),
+        UsageStorage.AgentGeminiCli => (new SolidColorBrush(Color.FromRgb(0x1A, 0x73, 0xE8)),
+                                        new SolidColorBrush(Color.FromRgb(0xE8, 0xF0, 0xFE))),
         _ => (new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69)),
               new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9))),
     };
+
+    internal static string FormatCacheHitRate(long inTokens, long cacheRead, long cacheWrite)
+    {
+        if (cacheRead <= 0) return "—";
+        long denom = inTokens >= cacheRead
+            ? inTokens + cacheWrite
+            : inTokens + cacheRead + cacheWrite;
+        if (denom <= 0) return "—";
+        return (cacheRead * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
+    }
 
     static string FormatTokens(long total)
     {
@@ -723,15 +939,7 @@ public partial class UsageMonitorWindow : Window
         public string ModelCountText => I18nService.F("Usage.ModelsFmt", Models.Count);
 
         /// <summary>该供应商整体的缓存命中率（由其下各模型汇总）；无缓存数据时为—。</summary>
-        public string CacheText
-        {
-            get
-            {
-                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
-                if (denom <= 0 || CacheReadTokens <= 0) return "—";
-                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
-            }
-        }
+        public string CacheText => FormatCacheHitRate(InTokens, CacheReadTokens, CacheWriteTokens);
 
         public event PropertyChangedEventHandler? PropertyChanged;
     }
@@ -753,16 +961,8 @@ public partial class UsageMonitorWindow : Window
         public string InOutText => I18nService.F("Usage.InOut", FormatTokens(InTokens), FormatTokens(OutTokens));
         public string TotalText => FormatTokens(Total);
 
-        /// <summary>该模型的缓存命中率 = 命中 / (新增输入 + 命中 + 写入)；无缓存数据时为—。</summary>
-        public string CacheText
-        {
-            get
-            {
-                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
-                if (denom <= 0 || CacheReadTokens <= 0) return "—";
-                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
-            }
-        }
+        /// <summary>该模型的缓存命中率；无缓存数据时为—。</summary>
+        public string CacheText => FormatCacheHitRate(InTokens, CacheReadTokens, CacheWriteTokens);
     }
 
     /// <summary>模型汇总分组：同一模型（归一化后）跨供应商合并的统计行。</summary>
@@ -804,15 +1004,7 @@ public partial class UsageMonitorWindow : Window
         public string ProviderCountText => I18nService.F("Usage.ProvidersFmt", Providers.Count);
 
         /// <summary>该模型跨供应商合并后的整体缓存命中率；无缓存数据时为—。</summary>
-        public string CacheText
-        {
-            get
-            {
-                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
-                if (denom <= 0 || CacheReadTokens <= 0) return "—";
-                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
-            }
-        }
+        public string CacheText => FormatCacheHitRate(InTokens, CacheReadTokens, CacheWriteTokens);
 
         public event PropertyChangedEventHandler? PropertyChanged;
     }
@@ -842,15 +1034,7 @@ public partial class UsageMonitorWindow : Window
         public string TotalText => FormatTokens(Total);
 
         /// <summary>该供应商在此模型上的缓存命中率；无缓存数据时为—。</summary>
-        public string CacheText
-        {
-            get
-            {
-                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
-                if (denom <= 0 || CacheReadTokens <= 0) return "—";
-                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
-            }
-        }
+        public string CacheText => FormatCacheHitRate(InTokens, CacheReadTokens, CacheWriteTokens);
     }
 
     public class AgentRowVM
@@ -894,15 +1078,7 @@ public partial class UsageMonitorWindow : Window
         public string TotalText => FormatTokens(Total);
 
         /// <summary>本次调用的缓存命中率；无缓存数据时为空（UI 显示 —）。</summary>
-        public string CacheText
-        {
-            get
-            {
-                long denom = InTokens + CacheReadTokens + CacheWriteTokens;
-                if (denom <= 0 || CacheReadTokens <= 0) return "—";
-                return (CacheReadTokens * 100.0 / denom).ToString("0.#", CultureInfo.CurrentCulture) + "%";
-            }
-        }
+        public string CacheText => FormatCacheHitRate(InTokens, CacheReadTokens, CacheWriteTokens);
 
         /// <summary>输出速度（token/s）；无耗时时为空。</summary>
         public string SpeedText

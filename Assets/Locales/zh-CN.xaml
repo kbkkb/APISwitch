@@ -231,9 +231,12 @@
     <sys:String x:Key="Ag.DeleteTip">删除本地存档</sys:String>
     <sys:String x:Key="Ag.CurrentBadge">● 当前激活</sys:String>
     <sys:String x:Key="Ag.GeminiModels">Gemini 模型</sys:String>
+    <sys:String x:Key="Ag.GeminiArgonModels">Gemini 4 Argon</sys:String>
     <sys:String x:Key="Ag.ClaudeGptModels">Claude ＆ GPT 模型</sys:String>
     <sys:String x:Key="Ag.FiveHourLabel">5H 动态限额</sys:String>
     <sys:String x:Key="Ag.WeeklyLabel">周基础限额</sys:String>
+    <sys:String x:Key="Ag.ArgonSharedWithGemini">与 Gemini 共享</sys:String>
+    <sys:String x:Key="Ag.ArgonNotAvailable">无独立额度</sys:String>
     <sys:String x:Key="Ag.EmptyTitle">还没有账号存档</sys:String>
     <sys:String x:Key="Ag.EmptyDesc">可直接从 Antigravity Tools 导入账号，或在网页端登录新 Google 账号</sys:String>
     <sys:String x:Key="Ag.EmptyImport">📥 从 Tools 导入</sys:String>
@@ -529,6 +532,12 @@
     <sys:String x:Key="UD.DownloadDone">下载完成！准备自动重启更新…</sys:String>
     <sys:String x:Key="UD.DownloadFailFmt">下载失败：{0}</sys:String>
     <sys:String x:Key="UD.OpenBrowserFail">无法打开浏览器: {0}</sys:String>
+    <sys:String x:Key="UD.NoNotesProvided">（作者未提供详细更新说明）</sys:String>
+    <sys:String x:Key="UD.AlreadyLatest">当前仓库尚未发布新版本，您当前运行的已是最新版本。</sys:String>
+    <sys:String x:Key="UD.NoUpdateTitle">暂无更新</sys:String>
+    <sys:String x:Key="UD.LangZh">中文</sys:String>
+    <sys:String x:Key="UD.LangEn">English</sys:String>
+    <sys:String x:Key="UD.SwitchLangTip">切换更新日志语言</sys:String>
 
     <!-- ==================== Antigravity Profile Card / Quota ==================== -->
     <sys:String x:Key="Ag.ActivatedLatencyFmt">● 已激活 ({0}ms)</sys:String>
@@ -542,7 +551,16 @@
     <sys:String x:Key="Ag.ActTipPending">尚未执行握手激活，可点击卡片右侧「激活」或顶部「批量激活」</sys:String>
     <sys:String x:Key="Ag.TierStarterFree">Starter 免费版</sys:String>
     <sys:String x:Key="Ag.TierPro">Google AI Pro</sys:String>
+    <sys:String x:Key="Ag.TierProPaid">Google AI Pro 订阅版</sys:String>
+    <sys:String x:Key="Ag.TierProPromo">Google AI Pro 体验版</sys:String>
     <sys:String x:Key="Ag.TierUltra">Google AI Ultra</sys:String>
+    <sys:String x:Key="Ag.TierStarterTooltip">Starter 基础免费额度</sys:String>
+    <sys:String x:Key="Ag.TierProPaidTooltip">官方付费订阅版：享有独立 Gemini 4 Argon 额度池及高阶模型全量权益</sys:String>
+    <sys:String x:Key="Ag.TierProPromoTooltip">体验/活动渠道权益：支持 Gemini 3.8 与 Claude 3.7，无独立 Argon 额度池</sys:String>
+    <sys:String x:Key="Ag.TierProTooltip">Google AI Pro 订阅档位</sys:String>
+    <sys:String x:Key="Ag.TierUltraTooltip">Google AI Ultra 尊享版：最高速率限制与模型全量权益</sys:String>
+    <sys:String x:Key="Ag.ArgonQuotaTooltip">Gemini 4 Argon 独立周限额度池（官方订阅版专属）</sys:String>
+    <sys:String x:Key="Ag.ArgonRequiresPaidPro">Gemini 4 Argon 独立额度仅支持 Google AI Pro 订阅版与 Ultra 用户</sys:String>
     <sys:String x:Key="Ag.No5hLimit">无5H限制</sys:String>
     <sys:String x:Key="Ag.NotActivatedShort">未激活</sys:String>
     <sys:String x:Key="Ag.FullStandby">满额待命</sys:String>
@@ -592,6 +610,8 @@
     <sys:String x:Key="Usage.Quick1D">近一天</sys:String>
     <sys:String x:Key="Usage.Quick1W">近一周</sys:String>
     <sys:String x:Key="Usage.Quick30D">近30天</sys:String>
+    <sys:String x:Key="Usage.Quick180D">半年</sys:String>
+    <sys:String x:Key="Usage.Quick1Y">一年</sys:String>
     <sys:String x:Key="Usage.Hour">时</sys:String>
     <sys:String x:Key="Usage.Minute">分</sys:String>
     <sys:String x:Key="Usage.Now">此刻</sys:String>
@@ -621,6 +641,10 @@
     <sys:String x:Key="Usage.AgentCodex">Codex</sys:String>
     <sys:String x:Key="Usage.AgentClaudeCli">Claude CLI</sys:String>
     <sys:String x:Key="Usage.AgentClaudeDesktop">Claude Desktop</sys:String>
+    <sys:String x:Key="Usage.AgentStepCode">StepCode</sys:String>
+    <sys:String x:Key="Usage.AgentZCode">zcode</sys:String>
+    <sys:String x:Key="Usage.AgentDsh">dsh</sys:String>
+    <sys:String x:Key="Usage.AgentGeminiCli">Gemini CLI</sys:String>
     <sys:String x:Key="Usage.AgentRequests">{0} 次请求</sys:String>
     <sys:String x:Key="Usage.ColTime">时间</sys:String>
     <sys:String x:Key="Usage.ColAgent">客户端</sys:String>
@@ -640,7 +664,7 @@
     <sys:String x:Key="Usage.BackfillConfirmMsg">将重新扫描全部本地会话日志并重建用量统计，用于补齐缓存命中、耗时与首字等指标。操作前会自动备份用量数据库（带时间戳），原事件表会被清空后重建。是否继续？</sys:String>
     <sys:String x:Key="Usage.BackfillDoneFmt">回填完成：共写入 {0} 条记录，其中 {1} 条含缓存数据、{2} 条含耗时数据。</sys:String>
     <sys:String x:Key="Usage.BackfillFailFmt">回填失败：{0}</sys:String>
-    <sys:String x:Key="Usage.Note">说明：通过扫描 Codex / Claude Code / OpenCode / Pi 本地会话记录统计用量（应用未运行期间产生的调用也会被纳入），数据保留 90 天。缓存命中率 = 命中 / (新增输入 + 命中 + 写入)；速度 = 输出 token / 整轮耗时；首字由各客户端的消息级时间戳推算（日志不记录流式首包，属近似值），无法推算时显示"—"。</sys:String>
+    <sys:String x:Key="Usage.Note">说明：通过扫描 Codex / Claude Code / OpenCode / Pi / Gemini CLI 等本地会话记录统计用量（应用未运行期间产生的调用也会被纳入），数据保留 1 年。缓存命中率 = 命中 / (新增输入 + 命中 + 写入)；速度 = 输出 token / 整轮耗时；首字由各客户端的消息级时间戳推算（日志不记录流式首包，属近似值），无法推算时显示"—"。</sys:String>
 
     <!-- 用量监控重构新增 -->
     <sys:String x:Key="Usage.TabProviders">供应商明细</sys:String>
@@ -652,6 +676,11 @@
     <sys:String x:Key="Usage.TrendTitle">每日用量趋势</sys:String>
     <sys:String x:Key="Usage.LegendIn">输入</sys:String>
     <sys:String x:Key="Usage.LegendOut">输出</sys:String>
+    <sys:String x:Key="Usage.ChartModeBar">柱状图</sys:String>
+    <sys:String x:Key="Usage.ChartModeHeatmap">方格图</sys:String>
+    <sys:String x:Key="Usage.HeatmapLess">少</sys:String>
+    <sys:String x:Key="Usage.HeatmapMore">多</sys:String>
+    <sys:String x:Key="Usage.ChartTooltipTotal">总用量：{0}</sys:String>
     <sys:String x:Key="Usage.NoData">该时间段暂无用量数据</sys:String>
     <sys:String x:Key="Usage.NoDataTip">让任意客户端（Codex / Claude Code / OpenCode / Pi）发起几次请求，或调整查询时间范围</sys:String>
     <sys:String x:Key="Usage.ExpandTip">展开查看该供应商下的模型明细</sys:String>

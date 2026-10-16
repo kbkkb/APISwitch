@@ -141,6 +141,7 @@ public static class AgToolsService
                     foreach (var group in groups.EnumerateArray())
                     {
                         var groupName = group.TryGetProperty("display_name", out var gn) ? gn.GetString() ?? "" : "";
+                        bool isArgonGroup = groupName.Contains("Argon", StringComparison.OrdinalIgnoreCase);
                         bool is3pGroup = groupName.Contains("Claude", StringComparison.OrdinalIgnoreCase) || groupName.Contains("GPT", StringComparison.OrdinalIgnoreCase);
 
                         if (!group.TryGetProperty("buckets", out var buckets)) continue;
@@ -153,8 +154,22 @@ public static class AgToolsService
 
                             bool is5h = bId.Contains("5h", StringComparison.OrdinalIgnoreCase) || win.Equals("5h", StringComparison.OrdinalIgnoreCase);
                             bool isWeekly = bId.Contains("weekly", StringComparison.OrdinalIgnoreCase) || win.Equals("weekly", StringComparison.OrdinalIgnoreCase);
+                            bool isArgon = isArgonGroup || bId.Contains("argon", StringComparison.OrdinalIgnoreCase);
 
-                            if (bId.StartsWith("3p", StringComparison.OrdinalIgnoreCase) || is3pGroup)
+                            if (isArgon)
+                            {
+                                if (is5h)
+                                {
+                                    profile.QuotaArgon5hFraction = frac;
+                                    profile.QuotaArgon5hResetTime = rTime;
+                                }
+                                else if (isWeekly)
+                                {
+                                    profile.QuotaArgonWeeklyFraction = frac;
+                                    profile.QuotaArgonWeeklyResetTime = rTime;
+                                }
+                            }
+                            else if (bId.StartsWith("3p", StringComparison.OrdinalIgnoreCase) || is3pGroup)
                             {
                                 if (is5h)
                                 {
@@ -210,6 +225,8 @@ public static class AgToolsService
                     profile.Quota5hResetTime = null;
                     profile.Quota3p5hFraction = null;
                     profile.Quota3p5hResetTime = null;
+                    profile.QuotaArgon5hFraction = null;
+                    profile.QuotaArgon5hResetTime = null;
                 }
             }
         }

@@ -77,7 +77,11 @@ public partial class MainWindow : Window
             UsageStorage.CleanupOldData();
             _ = System.Threading.Tasks.Task.Run(() => UsageScanner.ScanAll());
             LocalProxyServer.StateChanged += () => Dispatcher.Invoke(UpdateRouterUI);
-            I18nService.LanguageChanged += RebuildTrayMenu;
+            I18nService.LanguageChanged += () =>
+            {
+                RebuildTrayMenu();
+                Dispatcher.Invoke(() => _ = RefreshAntigravityAsync());
+            };
             RefreshAll();
             UpdateRouterUI();
             if (AppSettingsService.Current.AutoCheckUpdate)

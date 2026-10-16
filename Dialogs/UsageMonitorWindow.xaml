@@ -144,6 +144,8 @@
                                 <RadioButton x:Name="Quick1DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1D}" Checked="OnQuickRangeChecked" Tag="1"/>
                                 <RadioButton x:Name="Quick7DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1W}" Checked="OnQuickRangeChecked" Tag="7"/>
                                 <RadioButton x:Name="Quick30DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick30D}" Checked="OnQuickRangeChecked" Tag="30"/>
+                                <RadioButton x:Name="Quick180DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick180D}" Checked="OnQuickRangeChecked" Tag="180"/>
+                                <RadioButton x:Name="Quick365DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1Y}" Checked="OnQuickRangeChecked" Tag="365"/>
                             </StackPanel>
                         </Border>
 
@@ -237,13 +239,38 @@
                 <!-- 每日趋势图 -->
                 <Border Grid.Row="2" Margin="0,12,0,0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="14,10,14,8">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{DynamicResource Usage.TrendTitle}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                            <Ellipse Width="8" Height="8" Fill="#C7D2FE" Margin="16,0,5,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Usage.LegendIn}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                            <Ellipse Width="8" Height="8" Fill="#6366F1" Margin="12,0,5,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Usage.LegendOut}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <Grid>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Usage.TrendTitle}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                                <!-- 柱状图图例 -->
+                                <StackPanel x:Name="BarLegendPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Fill="#C7D2FE" Margin="16,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Usage.LegendIn}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <Ellipse Width="8" Height="8" Fill="#6366F1" Margin="12,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Usage.LegendOut}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- 热力图图例 -->
+                                <StackPanel x:Name="HeatmapLegendPanel" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                                    <TextBlock Text="{DynamicResource Usage.HeatmapLess}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="16,0,4,0" VerticalAlignment="Center"/>
+                                    <Border Width="10" Height="10" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="1.5" Margin="2,0"/>
+                                    <Border Width="10" Height="10" Background="#C7D2FE" CornerRadius="1.5" Margin="2,0"/>
+                                    <Border Width="10" Height="10" Background="#818CF8" CornerRadius="1.5" Margin="2,0"/>
+                                    <Border Width="10" Height="10" Background="#6366F1" CornerRadius="1.5" Margin="2,0"/>
+                                    <Border Width="10" Height="10" Background="#4338CA" CornerRadius="1.5" Margin="2,0"/>
+                                    <TextBlock Text="{DynamicResource Usage.HeatmapMore}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- 图表模式切换 (柱状图 / 方格图) -->
+                            <Border HorizontalAlignment="Right" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="2,1">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="ChartModeBarRadio" Style="{StaticResource SegRadio}" GroupName="ChartMode" Content="{DynamicResource Usage.ChartModeBar}" Checked="OnChartModeChanged" Tag="bar" Padding="8,2" FontSize="11" IsChecked="True"/>
+                                    <RadioButton x:Name="ChartModeHeatmapRadio" Style="{StaticResource SegRadio}" GroupName="ChartMode" Content="{DynamicResource Usage.ChartModeHeatmap}" Checked="OnChartModeChanged" Tag="heatmap" Padding="8,2" FontSize="11"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                         <Canvas x:Name="TrendCanvas" Height="128" Margin="0,6,0,0" ClipToBounds="True" SizeChanged="OnChartSizeChanged"/>
                     </StackPanel>
                 </Border>

@@ -106,7 +106,7 @@ public static class UsageScanner
         if (!Directory.Exists(root)) return 0;
 
         int added = 0;
-        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 90))
+        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
         {
             added += ScanCodexFile(file);
         }
@@ -122,6 +122,18 @@ public static class UsageScanner
     // 扫描本身是增量幂等的，用一把锁串行化即可，无副作用。
     static readonly object _scanLock = new();
 
+    /// <summary>
+    /// 适配器注册表：新增 CLI agent 只需实现 IUsageSource 并在此追加一行，
+    /// 不需要改 ScanAll 的调度逻辑。适配器实例无状态（水位在上下文里），可安全复用。
+    /// </summary>
+    static readonly IUsageSource[] _sources = new IUsageSource[]
+    {
+        new StepCodeUsageSource(),
+        new ZCodeUsageSource(),
+        new DshUsageSource(),
+        new GeminiCliUsageSource(),
+    };
+
     /// <summary>执行一次全量增量扫描。返回本次新增的记录条数。</summary>
     public static int ScanAll()
     {
@@ -132,6 +144,13 @@ public static class UsageScanner
             added += ScanClaude();
             added += ScanPi();
             added += ScanOpenCode();
+
+            // 适配器机制：上下文每次新建，保证拿到当期偏移字典。
+            // BackfillAll()/Reset() 会整体替换 _offsets，若在静态构造时捕获引用会变成 stale 字典。
+            var ctx = new UsageScanContext(_offsets, _scanLock);
+            foreach (var src in _sources)
+                added += src.Scan(ctx);
+
             PruneCodexTurns();
             SaveState();
             return added;
@@ -346,7 +365,7 @@ public static class UsageScanner
         if (!Directory.Exists(root)) return 0;
 
         int added = 0;
-        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 90))
+        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
         {
             added += ScanClaudeFile(file);
         }
@@ -445,7 +464,7 @@ public static class UsageScanner
         if (!Directory.Exists(root)) return 0;
 
         int added = 0;
-        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 90))
+        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
         {
             added += ScanPiFile(file);
         }

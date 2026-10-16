@@ -16,11 +16,32 @@ public class UpdateInfo
     public string LatestVersion { get; set; } = "";
     public string Title { get; set; } = "";
     public string ReleaseNotes { get; set; } = "";
+    public string ReleaseNotesZh { get; set; } = "";
+    public string ReleaseNotesEn { get; set; } = "";
     public DateTime? PublishedAt { get; set; }
     public string HtmlUrl { get; set; } = "";
     public string DownloadUrl { get; set; } = "";
     public string AssetName { get; set; } = "";
     public long AssetSize { get; set; }
+
+    public bool HasBilingualNotes => !string.IsNullOrWhiteSpace(ReleaseNotesZh) && !string.IsNullOrWhiteSpace(ReleaseNotesEn);
+
+    public string GetLocalizedReleaseNotes(string? lang = null)
+    {
+        lang ??= I18nService.ResolvedLanguage;
+        if (lang.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(ReleaseNotesZh)) return ReleaseNotesZh;
+            if (!string.IsNullOrWhiteSpace(ReleaseNotes)) return ReleaseNotes;
+            return I18nService.T("UD.NoNotesProvided");
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(ReleaseNotesEn)) return ReleaseNotesEn;
+            if (!string.IsNullOrWhiteSpace(ReleaseNotes)) return ReleaseNotes;
+            return I18nService.T("UD.NoNotesProvided");
+        }
+    }
 
     public string SizeFormatted
     {
@@ -68,13 +89,17 @@ public static class UpdateService
 
             if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
+                var zhNotes = ReleaseNotesHelper.GetLocalReleaseNotes(currentVerStr, "zh-CN");
+                var enNotes = ReleaseNotesHelper.GetLocalReleaseNotes(currentVerStr, "en-US");
                 return new UpdateInfo
                 {
                     HasUpdate = false,
                     CurrentVersion = currentVerStr,
                     LatestVersion = currentVerStr,
-                    Title = "暂无更新",
-                    ReleaseNotes = "当前仓库尚未发布新版本，您当前运行的已是最新版本。"
+                    Title = I18nService.T("UD.NoUpdateTitle"),
+                    ReleaseNotes = I18nService.T("UD.AlreadyLatest"),
+                    ReleaseNotesZh = string.IsNullOrWhiteSpace(zhNotes) ? I18nService.T("UD.AlreadyLatest") : zhNotes,
+                    ReleaseNotesEn = string.IsNullOrWhiteSpace(enNotes) ? I18nService.T("UD.AlreadyLatest") : enNotes
                 };
             }
 
@@ -136,13 +161,18 @@ public static class UpdateService
                 }
             }
 
+            var cleanVer = tagName.TrimStart('v', 'V').Trim();
+            var (notesZh, notesEn) = ReleaseNotesHelper.ParseBilingual(body, cleanVer);
+
             return new UpdateInfo
             {
                 HasUpdate = hasUpdate,
                 CurrentVersion = $"v{currentVer.Major}.{currentVer.Minor}.{currentVer.Build}",
                 LatestVersion = tagName.StartsWith('v') || tagName.StartsWith('V') ? tagName : $"v{tagName}",
                 Title = title,
-                ReleaseNotes = string.IsNullOrWhiteSpace(body) ? "（作者未提供详细更新说明）" : body,
+                ReleaseNotes = string.IsNullOrWhiteSpace(body) ? I18nService.T("UD.NoNotesProvided") : body,
+                ReleaseNotesZh = notesZh,
+                ReleaseNotesEn = notesEn,
                 PublishedAt = publishedAt,
                 HtmlUrl = htmlUrl,
                 DownloadUrl = downloadUrl,

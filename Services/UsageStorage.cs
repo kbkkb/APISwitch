@@ -19,6 +19,12 @@ public static class UsageStorage
     public const string AgentOpenCode = "opencode";
     public const string AgentPi = "pi";
 
+    // v0.3.2 新增：通过本地会话/存储文件统计的 CLI agent（不做供应商替换，仅统计）
+    public const string AgentStepCode = "stepcode";
+    public const string AgentZCode = "zcode";
+    public const string AgentDsh = "dsh";
+    public const string AgentGeminiCli = "gemini-cli";
+
     static void EnsureInit()
     {
         if (_initialized) return;
@@ -142,6 +148,60 @@ VALUES ($ts, $agent, $pid, $pname, $model, 1, $tin, $tout, $cr, $cw, $dur, $ttft
             cmd.Parameters.AddWithValue("$dur", Math.Max(0, durationMs));
             cmd.Parameters.AddWithValue("$ttft", Math.Max(0, ttftMs));
             cmd.ExecuteNonQuery();
+        }
+        catch { }
+    }
+
+    /// <summary>单条待入库用量记录。</summary>
+    public record UsageRecord(string Agent, string ProviderId, string ProviderName, string Model,
+        long InTokens, long OutTokens, DateTime Ts,
+        long CacheReadTokens = 0, long CacheWriteTokens = 0, long DurationMs = 0, long TtftMs = 0);
+
+    /// <summary>批量写入用量事件（使用单事务批处理，极大提升海量历史数据扫描性能）。</summary>
+    public static void RecordBatch(IEnumerable<UsageRecord> records)
+    {
+        try
+        {
+            EnsureInit();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"INSERT INTO usage_events
+(ts, agent, provider_id, provider_name, model, requests, in_tokens, out_tokens,
+ cache_read_tokens, cache_write_tokens, duration_ms, ttft_ms)
+VALUES ($ts, $agent, $pid, $pname, $model, 1, $tin, $tout, $cr, $cw, $dur, $ttft);";
+
+            var pTs = cmd.Parameters.Add("$ts", SqliteType.Integer);
+            var pAgent = cmd.Parameters.Add("$agent", SqliteType.Text);
+            var pPid = cmd.Parameters.Add("$pid", SqliteType.Text);
+            var pPname = cmd.Parameters.Add("$pname", SqliteType.Text);
+            var pModel = cmd.Parameters.Add("$model", SqliteType.Text);
+            var pTin = cmd.Parameters.Add("$tin", SqliteType.Integer);
+            var pTout = cmd.Parameters.Add("$tout", SqliteType.Integer);
+            var pCr = cmd.Parameters.Add("$cr", SqliteType.Integer);
+            var pCw = cmd.Parameters.Add("$cw", SqliteType.Integer);
+            var pDur = cmd.Parameters.Add("$dur", SqliteType.Integer);
+            var pTtft = cmd.Parameters.Add("$ttft", SqliteType.Integer);
+
+            foreach (var r in records)
+            {
+                var t = r.Ts.ToUniversalTime();
+                pTs.Value = new DateTimeOffset(t).ToUnixTimeSeconds();
+                pAgent.Value = r.Agent;
+                pPid.Value = r.ProviderId ?? "";
+                pPname.Value = r.ProviderName ?? "";
+                pModel.Value = r.Model ?? "";
+                pTin.Value = r.InTokens;
+                pTout.Value = r.OutTokens;
+                pCr.Value = Math.Max(0, r.CacheReadTokens);
+                pCw.Value = Math.Max(0, r.CacheWriteTokens);
+                pDur.Value = Math.Max(0, r.DurationMs);
+                pTtft.Value = Math.Max(0, r.TtftMs);
+                cmd.ExecuteNonQuery();
+            }
+            tx.Commit();
         }
         catch { }
     }
@@ -429,8 +489,8 @@ FROM usage_events WHERE ts >= $from AND ts <= $to GROUP BY 1 ORDER BY 1;";
         return list;
     }
 
-    /// <summary>启动时清理 90 天前的旧数据。</summary>
-    public static void CleanupOldData(int keepDays = 90)
+    /// <summary>启动时清理过期旧数据（默认保留 400 天，覆盖完整一年）。</summary>
+    public static void CleanupOldData(int keepDays = 400)
     {
         try
         {
