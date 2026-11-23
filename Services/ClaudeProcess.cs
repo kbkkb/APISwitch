@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32;
 
 namespace APISwitch.Services;
@@ -8,18 +10,103 @@ public static class ClaudeProcess
 {
     private const string ClaudeAppxId = "Claude_pzs8sxrjxfjjc!Claude";
 
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool QueryFullProcessImageName(IntPtr hProcess, int dwFlags, [Out] StringBuilder lpExeName, ref int lpdwSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(int processAccess, bool bInheritHandle, int processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
     /// <summary>
-    /// 判断进程是否属于 Claude 客户端
+    /// 安全高效获取进程可执行文件完整路径（免除 32/64 位及部分权限异常）
+    /// </summary>
+    public static string? GetProcessPath(Process p)
+    {
+        try
+        {
+            return p.MainModule?.FileName;
+        }
+        catch
+        {
+            try
+            {
+                const int PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+                var handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, p.Id);
+                if (handle != IntPtr.Zero)
+                {
+                    try
+                    {
+                        var sb = new StringBuilder(1024);
+                        int size = sb.Capacity;
+                        if (QueryFullProcessImageName(handle, 0, sb, ref size))
+                            return sb.ToString();
+                    }
+                    finally
+                    {
+                        CloseHandle(handle);
+                    }
+                }
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 判断给定路径是否属于 Claude 桌面客户端安装目录
+    /// </summary>
+    public static bool IsClaudeDesktopPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        var p = path.ToLowerInvariant();
+        if (p.Contains("windowsapps") && p.Contains("claude")) return true;
+        if (p.Contains("anthropicclaude")) return true;
+        if (p.Contains(@"programs\claude\claude.exe") || p.Contains(@"program files\claude\claude.exe")) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 判断进程是否属于 Claude 桌面客户端（严格排除 Claude Code CLI）
     /// </summary>
     public static bool IsClaudeProcess(Process p)
     {
         try
         {
             var name = p.ProcessName.ToLowerInvariant();
-            if (name == "claude")
+            if (name != "claude") return false;
+
+            var path = GetProcessPath(p);
+            if (!string.IsNullOrEmpty(path))
             {
-                return true;
+                if (IsClaudeDesktopPath(path)) return true;
+
+                // 排除明确属于 CLI 的路径特征
+                if (path.Contains(".local", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("claude-code", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains(@"npm\node_modules", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
             }
+
+            try
+            {
+                var desc = p.MainModule?.FileVersionInfo.FileDescription ?? "";
+                var prod = p.MainModule?.FileVersionInfo.ProductName ?? "";
+                if (desc.Equals("Claude Code", StringComparison.OrdinalIgnoreCase) || prod.Equals("Claude Code", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+                if (desc.IndexOf("Claude", StringComparison.OrdinalIgnoreCase) >= 0 || prod.IndexOf("Claude", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+            catch { }
+
+            return true;
         }
         catch { }
         return false;
@@ -123,20 +210,90 @@ public static class ClaudeProcess
     }
 
     /// <summary>
-    /// 彻底终止所有 Claude 客户端进程
+    /// 获取当前所有正在运行的 Claude 桌面客户端及其 MCP/派生子进程的 PID 列表
     /// </summary>
-    public static async Task<bool> StopClaudeAsync()
+    public static List<int> GetClaudeDesktopProcessIds()
     {
-        var procs = GetClaudeProcesses();
-        if (procs.Length == 0) return true;
+        var snapshot = ClaudeCliProcess.GetProcessSnapshot();
+        var rootPids = new HashSet<int>();
 
-        // 1. 先尝试通过 Process.Kill 终止
-        foreach (var p in procs)
+        foreach (var proc in snapshot)
         {
-            try { p.Kill(entireProcessTree: true); } catch { }
+            var name = proc.Name.ToLowerInvariant();
+            if (name == "claude.exe" || name == "claude")
+            {
+                if (IsClaudeDesktopPath(proc.ExePath))
+                {
+                    rootPids.Add(proc.Pid);
+                }
+                else if (!proc.ExePath.Contains(".local", StringComparison.OrdinalIgnoreCase) &&
+                         !proc.ExePath.Contains("claude-code", StringComparison.OrdinalIgnoreCase) &&
+                         !proc.CommandLine.Contains("claude-code", StringComparison.OrdinalIgnoreCase))
+                {
+                    rootPids.Add(proc.Pid);
+                }
+            }
         }
 
-        // 2. 强力调用 Windows taskkill 彻底杀死
+        if (rootPids.Count == 0) return new List<int>();
+
+        // 级联寻找所有由桌面客户端派生的子进程（包括 MCP 服务器、辅助子进程）
+        var allPids = new HashSet<int>(rootPids);
+        bool expanded;
+        do
+        {
+            expanded = false;
+            foreach (var proc in snapshot)
+            {
+                if (allPids.Contains(proc.ParentPid) && allPids.Add(proc.Pid))
+                {
+                    expanded = true;
+                }
+            }
+        } while (expanded);
+
+        return allPids.ToList();
+    }
+
+    /// <summary>
+    /// 彻底安全终止所有 Claude 桌面客户端及其 MCP/派生子进程
+    /// </summary>
+    /// <returns>(是否成功, 终止的进程数)</returns>
+    public static async Task<(bool Ok, int Count)> StopClaudeDesktopAsync()
+    {
+        var pids = GetClaudeDesktopProcessIds();
+        if (pids.Count == 0) return (true, 0);
+
+        int killed = 0;
+
+        // 1. 先通过 Process.Kill 终止
+        foreach (var pid in pids)
+        {
+            try
+            {
+                using var p = Process.GetProcessById(pid);
+                p.Kill(entireProcessTree: true);
+                killed++;
+            }
+            catch { }
+        }
+
+        // 2. 强力调用 Windows taskkill 针对 PID 逐个树杀
+        foreach (var pid in pids)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("taskkill", $"/F /T /PID {pid}")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                Process.Start(psi)?.WaitForExit(1000);
+            }
+            catch { }
+        }
+
+        // 3. 针对桌面主可执行名 claude.exe 再做一次系统级兜底广播
         try
         {
             var psi = new ProcessStartInfo("taskkill", "/F /T /IM claude.exe")
@@ -144,11 +301,11 @@ public static class ClaudeProcess
                 CreateNoWindow = true,
                 UseShellExecute = false
             };
-            Process.Start(psi)?.WaitForExit(1500);
+            Process.Start(psi)?.WaitForExit(1000);
         }
         catch { }
 
-        // 3. 等待进程完全退出（最多 3 秒）
+        // 4. 等待进程完全退出（最多 3 秒）
         var deadline = DateTime.UtcNow.AddSeconds(3);
         while (DateTime.UtcNow < deadline)
         {
@@ -156,13 +313,16 @@ public static class ClaudeProcess
             await Task.Delay(100);
         }
 
-        foreach (var p in procs)
-        {
-            try { p.Dispose(); } catch { }
-        }
-        await Task.Delay(500);
+        return (GetClaudeProcesses().Length == 0, killed > 0 ? killed : pids.Count);
+    }
 
-        return GetClaudeProcesses().Length == 0;
+    /// <summary>
+    /// 彻底终止所有 Claude 客户端进程（保持向后兼容）
+    /// </summary>
+    public static async Task<bool> StopClaudeAsync()
+    {
+        var res = await StopClaudeDesktopAsync();
+        return res.Ok;
     }
 
     /// <summary>

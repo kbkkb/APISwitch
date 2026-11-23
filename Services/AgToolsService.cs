@@ -68,7 +68,6 @@ public static class AgToolsService
                     profile.IsCurrent = true;
                 }
 
-                // Check if profile already exists in ProfileStore to preserve existing metadata
                 var existing = ProfileStore.Load().FirstOrDefault(p => p.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
                 if (existing != null)
                 {
@@ -76,6 +75,22 @@ public static class AgToolsService
                     if (existing.Values != null && existing.Values.Count > 0)
                     {
                         profile.Values = existing.Values;
+                    }
+                    if (existing.IsPaidSubscription.HasValue && !profile.IsPaidSubscription.HasValue)
+                    {
+                        profile.IsPaidSubscription = existing.IsPaidSubscription;
+                    }
+                    if (existing.IsActivated.HasValue)
+                    {
+                        profile.IsActivated = existing.IsActivated;
+                        profile.ActivatedAt = existing.ActivatedAt;
+                        profile.ActivationLatencyMs = existing.ActivationLatencyMs;
+                        profile.ActivationError = existing.ActivationError;
+                    }
+                    if (existing.QuotaExhausted)
+                    {
+                        profile.QuotaExhausted = existing.QuotaExhausted;
+                        profile.QuotaExhaustedResetAt = existing.QuotaExhaustedResetAt;
                     }
                 }
 
@@ -227,6 +242,10 @@ public static class AgToolsService
                     profile.Quota3p5hResetTime = null;
                     profile.QuotaArgon5hFraction = null;
                     profile.QuotaArgon5hResetTime = null;
+                }
+                else if (profile.QuotaArgonWeeklyFraction.HasValue || profile.QuotaArgon5hFraction.HasValue)
+                {
+                    profile.IsPaidSubscription = true;
                 }
             }
         }

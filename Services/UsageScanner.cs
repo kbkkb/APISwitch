@@ -2,39 +2,65 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace APISwitch.Services;
 
 /// <summary>
-/// 本地会话用量扫描器：读取各客户端写在磁盘上的会话记录（JSONL），
-/// 解析其中的 token 用量并入库。应用未运行时客户端产生的用量也能被统计到。
+/// 本地会话用量扫描器：读取各客户端写在磁盘上的会话记录（JSONL / JSON / ZST / SQLite / NDJSON），
+/// 解析其中的 token 用量并幂等入库。应用未运行时客户端产生的用量也能被统计到。
 ///
-/// 支持：
-/// - Codex：~/.codex/sessions/**/*.jsonl（token_usage_record 事件）
-/// - Claude Code：~/.claude/projects/**/*.jsonl（assistant 消息 message.usage）
-///
-/// 增量扫描：记录每个文件已处理到的字节偏移（scan_state.json），避免重复计数。
+/// 增量扫描：记录每个文件已处理到的字节偏移或水位（usage_scan_state.json），
+/// 配合 UsageStorage 的 source_id 幂等去重键，杜绝重复计数与漏采。
 /// </summary>
 public static class UsageScanner
 {
-    static readonly string StateFile = Path.Combine(AgPaths.AppData, "APISwitch", "usage_scan_state.json");
+    const int CurrentScannerVersion = 4;
 
-    // 每个文件已处理到的字节偏移
+    static string StateFile => Path.Combine(AgPaths.AppData, "APISwitch", "usage_scan_state.json");
+
+    // 每个文件已处理到的字节偏移或水位
     static Dictionary<string, long> _offsets = new(StringComparer.OrdinalIgnoreCase);
 
     // 每个文件扫描结束时正在使用的模型/供应商（增量扫描恢复用，避免丢失导致记录为空）
     static Dictionary<string, string> _fileModels = new(StringComparer.OrdinalIgnoreCase);
     static Dictionary<string, string> _fileProviders = new(StringComparer.OrdinalIgnoreCase);
 
-    static UsageScanner()
+    static int _scannerVersion;
+    static string? _loadedStatePath;
+
+    // Codex 轮次计时：turn_id -> (轮次开始时间, 首个 AgentMessage 时间)
+    static readonly Dictionary<string, (DateTime Start, DateTime FirstAgent)> _codexTurns = new(StringComparer.Ordinal);
+
+    // 扫描锁：避免主窗口与用量监控窗口并发执行时破坏字典与状态文件
+    static readonly object _scanLock = new();
+
+    static readonly IUsageSource[] _sources = new IUsageSource[]
     {
+        new StepCodeUsageSource(),
+        new ZCodeUsageSource(),
+        new DshUsageSource(),
+        new GeminiCliUsageSource(),
+        new AntigravityUsageSource(),
+    };
+
+    static void EnsureStateLoaded()
+    {
+        var path = StateFile;
+        if (_loadedStatePath == path) return;
         LoadState();
+        _loadedStatePath = path;
     }
 
     static void LoadState()
     {
+        _offsets = new(StringComparer.OrdinalIgnoreCase);
+        _fileModels = new(StringComparer.OrdinalIgnoreCase);
+        _fileProviders = new(StringComparer.OrdinalIgnoreCase);
+        _scannerVersion = 0;
+
         try
         {
             if (File.Exists(StateFile))
@@ -43,9 +69,11 @@ public static class UsageScanner
                 var obj = JsonNode.Parse(json)?.AsObject();
                 if (obj != null)
                 {
+                    if (obj["scanner_version"]?.GetValue<int>() is int ver)
+                        _scannerVersion = ver;
+
                     if (obj["offsets"] is JsonObject offs)
                     {
-                        // 新格式：{ offsets: {...}, models: {...}, providers: {...} }
                         foreach (var kv in offs)
                             if (kv.Value?.GetValue<long>() is long off)
                                 _offsets[kv.Key] = off;
@@ -64,7 +92,6 @@ public static class UsageScanner
                     }
                     else
                     {
-                        // 兼容旧格式：扁平 file -> offset
                         foreach (var kv in obj)
                             if (kv.Value?.GetValue<long>() is long off)
                                 _offsets[kv.Key] = off;
@@ -87,6 +114,7 @@ public static class UsageScanner
             foreach (var kv in _fileProviders) provs[kv.Key] = kv.Value;
             var obj = new JsonObject
             {
+                ["scanner_version"] = _scannerVersion,
                 ["offsets"] = offs,
                 ["models"] = mods,
                 ["providers"] = provs,
@@ -94,67 +122,45 @@ public static class UsageScanner
             var dir = Path.GetDirectoryName(StateFile);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(StateFile, obj.ToJsonString());
+            _loadedStatePath = StateFile;
         }
         catch { }
     }
-
-    // ---------- Codex ----------
-
-    static int ScanCodex()
-    {
-        var root = Path.Combine(ClaudeCli.HomeDir, ".codex", "sessions");
-        if (!Directory.Exists(root)) return 0;
-
-        int added = 0;
-        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
-        {
-            added += ScanCodexFile(file);
-        }
-        return added;
-    }
-
-    // Codex 轮次计时：turn_id -> (轮次开始时间, 首个 AgentMessage 时间)
-    static readonly Dictionary<string, (DateTime Start, DateTime FirstAgent)> _codexTurns = new(StringComparer.Ordinal);
-
-    // 上面这些静态 Dictionary 都不是线程安全的。ScanAll() 会被主窗口和用量监控窗口
-    // 各自 Task.Run 触发，两者完全可能并发跑；并发写 Dictionary 会破坏内部结构，
-    // 表现为丢条目、IndexOutOfRange，严重时桶链表成环导致遍历卡死。
-    // 扫描本身是增量幂等的，用一把锁串行化即可，无副作用。
-    static readonly object _scanLock = new();
-
-    /// <summary>
-    /// 适配器注册表：新增 CLI agent 只需实现 IUsageSource 并在此追加一行，
-    /// 不需要改 ScanAll 的调度逻辑。适配器实例无状态（水位在上下文里），可安全复用。
-    /// </summary>
-    static readonly IUsageSource[] _sources = new IUsageSource[]
-    {
-        new StepCodeUsageSource(),
-        new ZCodeUsageSource(),
-        new DshUsageSource(),
-        new GeminiCliUsageSource(),
-    };
 
     /// <summary>执行一次全量增量扫描。返回本次新增的记录条数。</summary>
     public static int ScanAll()
     {
         lock (_scanLock)
         {
-            int added = 0;
-            added += ScanCodex();
-            added += ScanClaude();
-            added += ScanPi();
-            added += ScanOpenCode();
+            EnsureStateLoaded();
 
-            // 适配器机制：上下文每次新建，保证拿到当期偏移字典。
-            // BackfillAll()/Reset() 会整体替换 _offsets，若在静态构造时捕获引用会变成 stale 字典。
-            var ctx = new UsageScanContext(_offsets, _scanLock);
-            foreach (var src in _sources)
-                added += src.Scan(ctx);
+            // 版本自愈：老版本数据库缺乏 source_id 去重且存在漏采/缓存口径偏差，
+            // 升级后首次扫描自动备份并重建，确保旧账目立刻精准校准。
+            if (_scannerVersion < CurrentScannerVersion)
+            {
+                return BackfillCore(backupIfExists: true).Written;
+            }
 
-            PruneCodexTurns();
-            SaveState();
-            return added;
+            return ScanIncrementalCore();
         }
+    }
+
+    static int ScanIncrementalCore()
+    {
+        int added = 0;
+        added += ScanCodex();
+        added += ScanClaude();
+        added += ScanClaudeDesktop();
+        added += ScanPi();
+        added += ScanOpenCode();
+
+        var ctx = new UsageScanContext(_offsets, _scanLock);
+        foreach (var src in _sources)
+            added += src.Scan(ctx);
+
+        PruneCodexTurns();
+        SaveState();
+        return added;
     }
 
     /// <summary>回填结果。</summary>
@@ -162,41 +168,74 @@ public static class UsageScanner
 
     /// <summary>
     /// 全量重建用量事件表：备份 → 清空 → 重扫全部会话日志。
-    ///
-    /// 为什么需要：缓存命中 / 整轮耗时 / 首字这三个指标是后加的，而扫描是增量式的
-    /// （按文件字节偏移推进，已消费的部分不会重读）。老用户的 usage.db 里这些字段
-    /// 会永远是 0——哪怕换成新版本也一样，因为根本没有新行产生。
-    /// 只有回填一次才能把历史数据补齐。
-    ///
-    /// 安全性：先备份 usage.db（带时间戳）再清空，出事可手动还原。
-    /// 重建内容完全来自各客户端本地会话日志（Codex / Claude Code / OpenCode / Pi），
-    /// 不依赖网关是否在运行，也不依赖应用此前是否启动过。
     /// </summary>
     public static BackfillResult BackfillAll()
     {
         lock (_scanLock)
         {
-            var backup = UsageStorage.BackupDatabase();
-            UsageStorage.ClearEvents();
-
-            // 偏移全部作废，让下面这次扫描从每个文件的第一行重新读
-            _offsets = new(StringComparer.OrdinalIgnoreCase);
-            _fileModels = new(StringComparer.OrdinalIgnoreCase);
-            _fileProviders = new(StringComparer.OrdinalIgnoreCase);
-            _codexTurns.Clear();
-
-            var written = ScanAll();
-            return new BackfillResult(written, backup);
+            EnsureStateLoaded();
+            return BackfillCore(backupIfExists: true);
         }
     }
 
-    /// <summary>
-    /// 清理不可能再被使用的 Codex 轮次计时条目。
-    /// 正常情况下条目在解析到 token_usage_record 时就移除，但轮次被用户中止、
-    /// 上游报错、或增量偏移恰好跳过时不会移除，字典会无限增长。
-    /// 正常轮次几秒内就出 token 记录，留 2 小时阈值足够保守，不会误删待处理轮次。
-    /// 另外加一道硬上限兜底，防止时间戳异常导致的大量残留。
-    /// </summary>
+    static BackfillResult BackfillCore(bool backupIfExists)
+    {
+        var backup = backupIfExists ? UsageStorage.BackupDatabase() : null;
+        UsageStorage.ClearEvents();
+
+        _offsets = new(StringComparer.OrdinalIgnoreCase);
+        _fileModels = new(StringComparer.OrdinalIgnoreCase);
+        _fileProviders = new(StringComparer.OrdinalIgnoreCase);
+        _codexTurns.Clear();
+        _scannerVersion = CurrentScannerVersion;
+
+        var written = ScanIncrementalCore();
+        return new BackfillResult(written, backup);
+    }
+
+    // ---------- Codex ----------
+
+    static int ScanCodex()
+    {
+        var sessionsRoot = Path.Combine(ClaudeCli.HomeDir, ".codex", "sessions");
+        var archivedRoot = Path.Combine(ClaudeCli.HomeDir, ".codex", "archived_sessions");
+
+        var jsonlFiles = new List<string>();
+        var zstFiles = new List<string>();
+
+        foreach (var root in new[] { sessionsRoot, archivedRoot })
+        {
+            if (!Directory.Exists(root)) continue;
+            CollectRecentFiles(root, "*.jsonl", 400, jsonlFiles);
+            CollectRecentFiles(root, "*.jsonl.zst", 400, zstFiles);
+        }
+
+        // 去重：若某会话同时存在未压缩 .jsonl 和 .jsonl.zst，优先扫描未压缩的 .jsonl
+        var jsonlSet = new HashSet<string>(jsonlFiles, StringComparer.OrdinalIgnoreCase);
+        var scannedThreads = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var coveredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        int added = 0;
+        foreach (var f in jsonlFiles)
+        {
+            coveredFiles.Add(f);
+            added += ScanCodexJsonlFile(f, scannedThreads);
+        }
+
+        foreach (var zf in zstFiles)
+        {
+            var plainPath = zf.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)
+                ? zf.Substring(0, zf.Length - 4)
+                : zf;
+            coveredFiles.Add(plainPath);
+            if (jsonlSet.Contains(plainPath)) continue;
+            added += ScanCodexZstFile(zf, scannedThreads);
+        }
+
+        added += ScanCodexSqliteFallback(coveredFiles, scannedThreads);
+        return added;
+    }
+
     static void PruneCodexTurns()
     {
         if (_codexTurns.Count == 0) return;
@@ -208,137 +247,232 @@ public static class UsageScanner
 
         if (_codexTurns.Count > 5000)
         {
-            // 兜底：按开始时间丢最旧的，直到回到上限
             foreach (var kv in _codexTurns.OrderBy(kv => kv.Value.Start).Take(_codexTurns.Count - 5000))
                 _codexTurns.Remove(kv.Key);
         }
     }
 
-    static int ScanCodexFile(string file)
+    static int ScanCodexJsonlFile(string file, HashSet<string> scannedThreads)
     {
         long start = _offsets.TryGetValue(file, out var off) ? off : 0;
         var info = new FileInfo(file);
-        if (info.Length <= start) return 0;
+        if (!info.Exists || info.Length <= start) return 0;
 
-        int added = 0;
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (start > 0) fs.Seek(start, SeekOrigin.Begin);
             using var reader = new StreamReader(fs);
 
-            // 顺序扫描：track 会话内当前模型（thread_settings_applied 可随时切换）。
-            // 增量扫描从上次偏移处继续时，恢复上次结束时的模型/供应商，避免 model_change 在偏移之前导致记录为空
-            string currentModel = _fileModels.TryGetValue(file, out var m0) ? m0 : "";
-            string currentProvider = _fileProviders.TryGetValue(file, out var p0) ? p0 : "";
-
-            string? line;
-            while ((line = reader.ReadLine()) != null)
+            var result = ReadCodexStream(reader, file, scannedThreads);
+            if (result.Count == 0 || UsageStorage.RecordBatch(result))
             {
-                if (string.IsNullOrWhiteSpace(line)) continue;
+                _offsets[file] = fs.Position;
+                return result.Count;
+            }
+        }
+        catch { }
+        return 0;
+    }
 
-                // 会话设置变更：更新当前模型/供应商
-                if (line.Contains("thread_settings_applied", StringComparison.Ordinal))
-                {
-                    try
-                    {
-                        var sNode = JsonNode.Parse(line);
-                        var settings = sNode?["payload"]?["thread_settings"];
-                        if (settings?["model"]?.GetValue<string>() is { } m && !string.IsNullOrEmpty(m))
-                            currentModel = m;
-                        if (settings?["model_provider_id"]?.GetValue<string>() is { } p && !string.IsNullOrEmpty(p))
-                            currentProvider = p;
-                    }
-                    catch { }
-                    continue;
-                }
+    static int ScanCodexZstFile(string file, HashSet<string> scannedThreads)
+    {
+        var wmKey = "zst:" + file;
+        var info = new FileInfo(file);
+        if (!info.Exists) return 0;
+        if (_offsets.TryGetValue(wmKey, out var prevLen) && prevLen == info.Length) return 0;
 
-                // 轮次开始：记录 turn 起点时间，用于后续算耗时/首字
-                if (line.Contains("\"task_started\"", StringComparison.Ordinal))
+        try
+        {
+            using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var zst = new ZstdSharp.DecompressionStream(fs);
+            using var reader = new StreamReader(zst);
+
+            // 归档压缩文件从头解析：重置该文件的上下文与 token_count 基准
+            _fileModels.Remove(file);
+            _fileProviders.Remove(file);
+            _offsets.Remove("codex_tc_tot:" + file);
+
+            var result = ReadCodexStream(reader, file, scannedThreads);
+            if (result.Count == 0 || UsageStorage.RecordBatch(result))
+            {
+                _offsets[wmKey] = info.Length;
+                return result.Count;
+            }
+        }
+        catch { }
+        return 0;
+    }
+
+    static List<UsageStorage.UsageRecord> ReadCodexStream(StreamReader reader, string file, HashSet<string> scannedThreads)
+    {
+        string currentModel = _fileModels.TryGetValue(file, out var m0) ? m0 : "";
+        string currentProvider = _fileProviders.TryGetValue(file, out var p0) ? p0 : "";
+        string sessionId = Path.GetFileNameWithoutExtension(file);
+        bool seenTur = _offsets.TryGetValue("codex_tur:" + file, out var turFlag) && turFlag == 1;
+        long prevTcTotal = _offsets.TryGetValue("codex_tc_tot:" + file, out var tcTot) ? tcTot : 0;
+
+        var turRecords = new List<UsageStorage.UsageRecord>();
+        var tcRecords = new List<UsageStorage.UsageRecord>();
+
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            if (line.Contains("\"session_meta\"", StringComparison.Ordinal))
+            {
+                try
                 {
-                    try
+                    var node = JsonNode.Parse(line);
+                    if (node?["type"]?.GetValue<string>() == "session_meta")
                     {
-                        var tn = JsonNode.Parse(line);
-                        var turnId = tn?["payload"]?["turn_id"]?.GetValue<string>();
-                        if (!string.IsNullOrEmpty(turnId) &&
-                            DateTime.TryParse(tn?["timestamp"]?.GetValue<string>(), CultureInfo.InvariantCulture,
-                                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var tstart))
+                        var payload = node["payload"];
+                        var sid = payload?["id"]?.GetValue<string>() ?? payload?["session_id"]?.GetValue<string>();
+                        if (!string.IsNullOrEmpty(sid))
                         {
-                            _codexTurns[turnId] = (tstart.ToLocalTime(), DateTime.MinValue);
+                            sessionId = sid;
+                            scannedThreads.Add(sid);
                         }
+                        if (payload?["model_provider"]?.GetValue<string>() is { Length: > 0 } mp)
+                            currentProvider = mp;
+                        if (payload?["model"]?.GetValue<string>() is { Length: > 0 } mm)
+                            currentModel = mm;
+                        continue;
                     }
-                    catch { }
+                }
+                catch { }
+            }
+
+            if (line.Contains("\"turn_context\"", StringComparison.Ordinal))
+            {
+                try
+                {
+                    var node = JsonNode.Parse(line);
+                    if (node?["type"]?.GetValue<string>() == "turn_context")
+                    {
+                        var payload = node["payload"];
+                        if (payload?["model"]?.GetValue<string>() is { Length: > 0 } tm)
+                            currentModel = tm;
+                        if (payload?["model_provider"]?.GetValue<string>() is { Length: > 0 } tp)
+                            currentProvider = tp;
+                        continue;
+                    }
+                }
+                catch { }
+            }
+
+            if (line.Contains("thread_settings_applied", StringComparison.Ordinal))
+            {
+                try
+                {
+                    var sNode = JsonNode.Parse(line);
+                    var settings = sNode?["payload"]?["thread_settings"];
+                    if (settings?["model"]?.GetValue<string>() is { Length: > 0 } m)
+                        currentModel = m;
+                    if (settings?["model_provider_id"]?.GetValue<string>() is { Length: > 0 } p)
+                        currentProvider = p;
                     continue;
                 }
+                catch { }
+            }
 
-                // 首个 AgentMessage 完成：作为首字的近似点（Codex 不落流式增量）
-                if (line.Contains("\"item_completed\"", StringComparison.Ordinal))
+            if (line.Contains("\"task_started\"", StringComparison.Ordinal))
+            {
+                try
                 {
-                    try
+                    var tn = JsonNode.Parse(line);
+                    var turnId = tn?["payload"]?["turn_id"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(turnId) &&
+                        DateTime.TryParse(tn?["timestamp"]?.GetValue<string>(), CultureInfo.InvariantCulture,
+                            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var tstart))
                     {
-                        var in_ = JsonNode.Parse(line);
-                        if (in_?["payload"]?["item"]?["type"]?.GetValue<string>() == "AgentMessage")
+                        _codexTurns[turnId] = (tstart.ToLocalTime(), DateTime.MinValue);
+                    }
+                }
+                catch { }
+                continue;
+            }
+
+            if (line.Contains("\"item_completed\"", StringComparison.Ordinal))
+            {
+                try
+                {
+                    var in_ = JsonNode.Parse(line);
+                    if (in_?["payload"]?["item"]?["type"]?.GetValue<string>() == "AgentMessage")
+                    {
+                        var turnId = in_?["payload"]?["turn_id"]?.GetValue<string>();
+                        if (!string.IsNullOrEmpty(turnId) &&
+                            DateTime.TryParse(in_?["timestamp"]?.GetValue<string>(), CultureInfo.InvariantCulture,
+                                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var tAgent))
                         {
-                            var turnId = in_?["payload"]?["turn_id"]?.GetValue<string>();
-                            if (!string.IsNullOrEmpty(turnId) &&
-                                DateTime.TryParse(in_?["timestamp"]?.GetValue<string>(), CultureInfo.InvariantCulture,
-                                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var tAgent))
+                            var local = tAgent.ToLocalTime();
+                            if (_codexTurns.TryGetValue(turnId, out var cur))
                             {
-                                var local = tAgent.ToLocalTime();
-                                if (_codexTurns.TryGetValue(turnId, out var cur))
-                                {
-                                    if (cur.FirstAgent == DateTime.MinValue)
-                                        _codexTurns[turnId] = (cur.Start, local);
-                                }
-                                else
-                                {
-                                    // 没看到 task_started（可能被增量偏移跳过）：以本条为轮次起点
-                                    _codexTurns[turnId] = (local, local);
-                                }
+                                if (cur.FirstAgent == DateTime.MinValue)
+                                    _codexTurns[turnId] = (cur.Start, local);
+                            }
+                            else
+                            {
+                                _codexTurns[turnId] = (local, local);
                             }
                         }
                     }
-                    catch { }
-                    continue;
                 }
-
-                added += ParseCodexLine(line, currentModel, currentProvider);
+                catch { }
+                continue;
             }
 
-            _offsets[file] = fs.Position;
-            _fileModels[file] = currentModel;
-            _fileProviders[file] = currentProvider;
+            if (line.Contains("\"token_usage_record\"", StringComparison.Ordinal))
+            {
+                var rec = ParseCodexUsageRecord(line, file, currentModel, currentProvider);
+                if (rec != null)
+                {
+                    turRecords.Add(rec);
+                    seenTur = true;
+                }
+                continue;
+            }
+
+            if (!seenTur && line.Contains("\"token_count\"", StringComparison.Ordinal))
+            {
+                var tcRec = ParseCodexTokenCount(line, sessionId, currentModel, currentProvider, ref prevTcTotal);
+                if (tcRec != null)
+                    tcRecords.Add(tcRec);
+            }
         }
-        catch { }
-        return added;
+
+        _fileModels[file] = currentModel;
+        _fileProviders[file] = currentProvider;
+        if (seenTur) _offsets["codex_tur:" + file] = 1;
+        if (prevTcTotal > 0) _offsets["codex_tc_tot:" + file] = prevTcTotal;
+
+        return seenTur ? turRecords : tcRecords;
     }
 
-    static int ParseCodexLine(string line, string currentModel, string currentProvider)
+    static UsageStorage.UsageRecord? ParseCodexUsageRecord(string line, string file, string currentModel, string currentProvider)
     {
         try
         {
             var node = JsonNode.Parse(line);
-            if (node?["type"]?.GetValue<string>() != "token_usage_record") return 0;
+            if (node?["type"]?.GetValue<string>() != "token_usage_record") return null;
 
-            // Codex 的 usage 在 payload 内
             var payload = node["payload"];
             var usage = payload?["usage"];
-            if (usage == null) return 0;
+            if (usage == null) return null;
 
             long inTok = usage["input_tokens"]?.GetValue<long>() ?? 0;
             long outTok = usage["output_tokens"]?.GetValue<long>() ?? 0;
             long cacheRead = usage["cached_input_tokens"]?.GetValue<long>() ?? 0;
             long cacheWrite = usage["cache_write_input_tokens"]?.GetValue<long>() ?? 0;
-            if (inTok == 0 && outTok == 0) return 0;
+            if (inTok < cacheRead + cacheWrite) inTok += cacheRead + cacheWrite;
+            if (inTok == 0 && outTok == 0) return null;
 
-            // 时间戳：行级 timestamp（ISO8601 Z）
             DateTime ts = DateTime.Now;
             if (DateTime.TryParse(node?["timestamp"]?.GetValue<string>(),
                     CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
                 ts = dt.ToLocalTime();
 
-            // 耗时 = 轮次内最后一条记录时间 - 轮次开始；首字 = 首个 AgentMessage - 轮次开始。
-            // 两者都由消息级时间戳推算，Codex 不落流式增量，属近似值。
             long durationMs = 0;
             long ttftMs = 0;
             var turnId = payload?["turn_id"]?.GetValue<string>();
@@ -351,24 +485,144 @@ public static class UsageScanner
                 _codexTurns.Remove(turnId);
             }
 
-            UsageStorage.RecordUsage(UsageStorage.AgentCodex, currentProvider, "Codex", currentModel,
-                inTok, outTok, ts, cacheRead, cacheWrite, durationMs, ttftMs);
-            return 1;
+            string respId = payload?["response_id"]?.GetValue<string>() ?? "";
+            long ordinal = node?["ordinal"]?.GetValue<long>() ?? 0;
+            string sid = !string.IsNullOrEmpty(respId)
+                ? "codex:" + respId
+                : (ordinal > 0 ? $"codex:ord:{Path.GetFileName(file)}:{ordinal}" : "");
+
+            return new UsageStorage.UsageRecord(
+                UsageStorage.AgentCodex, currentProvider, "Codex", currentModel,
+                inTok, outTok, ts,
+                CacheReadTokens: cacheRead,
+                CacheWriteTokens: cacheWrite,
+                DurationMs: durationMs,
+                TtftMs: ttftMs,
+                SourceId: sid);
         }
-        catch { return 0; }
+        catch { return null; }
     }
+
+    static UsageStorage.UsageRecord? ParseCodexTokenCount(string line, string sessionId,
+        string currentModel, string currentProvider, ref long prevTotalTokens)
+    {
+        try
+        {
+            var node = JsonNode.Parse(line);
+            if (node?["type"]?.GetValue<string>() != "event_msg") return null;
+            var payload = node["payload"];
+            if (payload?["type"]?.GetValue<string>() != "token_count") return null;
+
+            var info = payload["info"];
+            if (info == null) return null;
+
+            long totalTokens = info["total_token_usage"]?["total_tokens"]?.GetValue<long>() ?? 0;
+            if (totalTokens <= prevTotalTokens) return null;
+            prevTotalTokens = totalTokens;
+
+            var last = info["last_token_usage"] ?? info["total_token_usage"];
+            if (last == null) return null;
+
+            long inTok = last["input_tokens"]?.GetValue<long>() ?? 0;
+            long outTok = last["output_tokens"]?.GetValue<long>() ?? 0;
+            long cacheRead = last["cached_input_tokens"]?.GetValue<long>() ?? 0;
+            long cacheWrite = last["cache_write_input_tokens"]?.GetValue<long>() ?? 0;
+            if (inTok < cacheRead + cacheWrite) inTok += cacheRead + cacheWrite;
+            if (inTok == 0 && outTok == 0) return null;
+
+            DateTime ts = DateTime.Now;
+            if (DateTime.TryParse(node?["timestamp"]?.GetValue<string>(),
+                    CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
+                ts = dt.ToLocalTime();
+
+            long ordinal = node?["ordinal"]?.GetValue<long>() ?? totalTokens;
+            string sid = $"codex:tc:{sessionId}:{ordinal}";
+
+            return new UsageStorage.UsageRecord(
+                UsageStorage.AgentCodex, currentProvider, "Codex", currentModel,
+                inTok, outTok, ts,
+                CacheReadTokens: cacheRead,
+                CacheWriteTokens: cacheWrite,
+                SourceId: sid);
+        }
+        catch { return null; }
+    }
+
+    static int ScanCodexSqliteFallback(HashSet<string> coveredFiles, HashSet<string> scannedThreads)
+    {
+        var dbPath = Path.Combine(ClaudeCli.HomeDir, ".codex", "state_5.sqlite");
+        if (!File.Exists(dbPath)) return 0;
+
+        var batch = new List<UsageStorage.UsageRecord>();
+        try
+        {
+            using var conn = new Microsoft.Data.Sqlite.SqliteConnection(
+                $"Data Source={dbPath};Mode=ReadOnly;Cache=Private");
+            conn.Open();
+
+            using var probe = conn.CreateCommand();
+            probe.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='threads';";
+            if (Convert.ToInt64(probe.ExecuteScalar()) == 0) return 0;
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT id, rollout_path, model_provider, model, tokens_used, updated_at FROM threads WHERE tokens_used > 0;";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var id = r.IsDBNull(0) ? "" : r.GetString(0);
+                if (string.IsNullOrEmpty(id) || scannedThreads.Contains(id)) continue;
+
+                var rawPath = r.IsDBNull(1) ? "" : r.GetString(1);
+                var normPath = rawPath.StartsWith(@"\\?\", StringComparison.Ordinal) ? rawPath.Substring(4) : rawPath;
+                if (!string.IsNullOrEmpty(normPath) &&
+                    (coveredFiles.Contains(normPath) || File.Exists(normPath) || File.Exists(normPath + ".zst")))
+                {
+                    continue;
+                }
+
+                string wmKey = "codex:thread:" + id;
+                long tokensUsed = r.GetInt64(4);
+                if (_offsets.TryGetValue(wmKey, out var prevTok) && prevTok == tokensUsed) continue;
+
+                var provider = r.IsDBNull(2) ? "" : r.GetString(2);
+                var model = r.IsDBNull(3) ? "" : r.GetString(3);
+                long updatedAt = r.IsDBNull(5) ? 0 : r.GetInt64(5);
+                var ts = updatedAt > 0
+                    ? DateTimeOffset.FromUnixTimeSeconds(updatedAt).LocalDateTime
+                    : DateTime.Now;
+
+                long inTok = tokensUsed * 95 / 100;
+                long outTok = tokensUsed - inTok;
+                batch.Add(new UsageStorage.UsageRecord(
+                    UsageStorage.AgentCodex, provider, "Codex", model,
+                    inTok, outTok, ts, SourceId: wmKey));
+            }
+
+            if (batch.Count > 0 && UsageStorage.RecordBatch(batch))
+            {
+                foreach (var rec in batch)
+                    _offsets[rec.SourceId] = rec.InTokens + rec.OutTokens;
+                return batch.Count;
+            }
+        }
+        catch { }
+        return 0;
+    }
+
     // ---------- Claude Code ----------
 
     static int ScanClaude()
     {
         var root = Path.Combine(ClaudeCli.HomeDir, ".claude", "projects");
-        if (!Directory.Exists(root)) return 0;
-
         int added = 0;
-        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
+
+        if (Directory.Exists(root))
         {
-            added += ScanClaudeFile(file);
+            foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
+                added += ScanClaudeFile(file);
         }
+
+        added += ScanClaudeStatsCache();
         return added;
     }
 
@@ -376,37 +630,52 @@ public static class UsageScanner
     {
         long start = _offsets.TryGetValue(file, out var off) ? off : 0;
         var info = new FileInfo(file);
-        if (info.Length <= start) return 0;
+        if (!info.Exists || info.Length <= start) return 0;
 
-        int added = 0;
+        var deduped = new Dictionary<string, UsageStorage.UsageRecord>(StringComparer.Ordinal);
+        var fallback = new List<UsageStorage.UsageRecord>();
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (start > 0) fs.Seek(start, SeekOrigin.Begin);
             using var reader = new StreamReader(fs);
 
-            // 计时起点是"本文件内上一条 user 消息"。每个文件都要重置，
-            // 否则上一个会话残留的时间戳会污染本文件第一条 assistant 消息，
-            // 算出一个跨会话的荒谬耗时（可能几小时甚至几天）。
-            _claudeLastUserTs = DateTime.MinValue;
-
+            DateTime lastUserTs = DateTime.MinValue;
             string? line;
             while ((line = reader.ReadLine()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                added += ParseClaudeLine(line);
+                var rec = ParseClaudeLine(line, ref lastUserTs);
+                if (rec == null) continue;
+
+                if (!string.IsNullOrEmpty(rec.SourceId))
+                {
+                    if (deduped.TryGetValue(rec.SourceId, out var prev))
+                        deduped[rec.SourceId] = MergeUsageRecord(prev, rec);
+                    else
+                        deduped[rec.SourceId] = rec;
+                }
+                else
+                {
+                    fallback.Add(rec);
+                }
             }
 
-            _offsets[file] = fs.Position;
+            var batch = new List<UsageStorage.UsageRecord>(deduped.Count + fallback.Count);
+            batch.AddRange(deduped.Values);
+            batch.AddRange(fallback);
+
+            if (batch.Count == 0 || UsageStorage.RecordBatch(batch))
+            {
+                _offsets[file] = fs.Position;
+                return batch.Count;
+            }
         }
         catch { }
-        return added;
+        return 0;
     }
 
-    // 每个 Claude 会话文件内，上一条 user 消息的时间戳（用于推算响应耗时）
-    static DateTime _claudeLastUserTs = DateTime.MinValue;
-
-    static int ParseClaudeLine(string line)
+    static UsageStorage.UsageRecord? ParseClaudeLine(string line, ref DateTime lastUserTs)
     {
         try
         {
@@ -414,46 +683,294 @@ public static class UsageScanner
             var type = node?["type"]?.GetValue<string>();
             if (type == "user")
             {
-                // 记录用户消息时间，作为下一条 assistant 消息的计时起点
                 if (DateTime.TryParse(node?["timestamp"]?.GetValue<string>(),
                         CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var ut))
-                    _claudeLastUserTs = ut.ToLocalTime();
-                return 0;
+                    lastUserTs = ut.ToLocalTime();
+                return null;
             }
-            if (type != "assistant") return 0;
+            if (type != "assistant") return null;
 
-            var usage = node?["message"]?["usage"];
-            if (usage == null) return 0;
+            var msg = node?["message"];
+            var usage = msg?["usage"];
+            if (usage == null) return null;
 
-            long inTok = usage["input_tokens"]?.GetValue<long>() ?? 0;
+            string model = msg?["model"]?.GetValue<string>() ?? "";
+            if (string.Equals(model, "<synthetic>", StringComparison.OrdinalIgnoreCase)) return null;
+
+            long rawIn = usage["input_tokens"]?.GetValue<long>() ?? 0;
             long outTok = usage["output_tokens"]?.GetValue<long>() ?? 0;
             long cacheRead = usage["cache_read_input_tokens"]?.GetValue<long>() ?? 0;
             long cacheWrite = usage["cache_creation_input_tokens"]?.GetValue<long>() ?? 0;
-            if (inTok == 0 && outTok == 0) return 0;
 
-            string model = node?["message"]?["model"]?.GetValue<string>() ?? "";
+            var inferenceGeo = usage["inference_geo"]?.GetValue<string>();
+            bool isUncachedOnly = !string.IsNullOrEmpty(inferenceGeo) || rawIn < (cacheRead + cacheWrite);
+            long totalIn = isUncachedOnly ? (rawIn + cacheRead + cacheWrite) : rawIn;
+
+            if (totalIn == 0 && outTok == 0) return null;
 
             DateTime ts = DateTime.Now;
             if (DateTime.TryParse(node?["timestamp"]?.GetValue<string>(),
                     CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
                 ts = dt.ToLocalTime();
 
-            // 响应耗时 = assistant 消息时间 - 上一条 user 消息时间。
-            // 注意：Claude 日志不记录流式首包，所以这是"整轮响应耗时"，
-            // 作为首字的保守上界参考，UI 中会标注为估算值。
             long durationMs = 0;
             long ttftMs = 0;
-            if (_claudeLastUserTs != DateTime.MinValue && ts > _claudeLastUserTs)
+            if (lastUserTs != DateTime.MinValue && ts > lastUserTs)
             {
-                durationMs = (long)(ts - _claudeLastUserTs).TotalMilliseconds;
+                durationMs = (long)(ts - lastUserTs).TotalMilliseconds;
                 ttftMs = durationMs;
             }
 
-            UsageStorage.RecordUsage(UsageStorage.AgentClaudeCli, "", "Claude Code", model,
-                inTok, outTok, ts, cacheRead, cacheWrite, durationMs, ttftMs);
-            return 1;
+            string msgId = msg?["id"]?.GetValue<string>()
+                ?? node?["requestId"]?.GetValue<string>()
+                ?? node?["uuid"]?.GetValue<string>()
+                ?? "";
+            string sid = !string.IsNullOrEmpty(msgId) ? "claude:" + msgId : "";
+
+            return new UsageStorage.UsageRecord(
+                UsageStorage.AgentClaudeCli, "", "Claude Code", model,
+                totalIn, outTok, ts,
+                CacheReadTokens: cacheRead,
+                CacheWriteTokens: cacheWrite,
+                DurationMs: durationMs,
+                TtftMs: ttftMs,
+                SourceId: sid);
         }
-        catch { return 0; }
+        catch { return null; }
+    }
+
+    static int ScanClaudeStatsCache()
+    {
+        var scPath = Path.Combine(ClaudeCli.HomeDir, ".claude", "stats-cache.json");
+        if (!File.Exists(scPath)) return 0;
+
+        long mtimeTicks = File.GetLastWriteTimeUtc(scPath).Ticks;
+        const string wmKey = "claude:stats-cache:mtime";
+        if (_offsets.TryGetValue(wmKey, out var prevTicks) && prevTicks == mtimeTicks) return 0;
+
+        try
+        {
+            var text = File.ReadAllText(scPath);
+            var root = JsonNode.Parse(text)?.AsObject();
+            if (root == null) return 0;
+
+            var modelUsage = root["modelUsage"] as JsonObject;
+            var dailyArr = root["dailyModelTokens"] as JsonArray;
+            if (dailyArr == null || dailyArr.Count == 0)
+            {
+                _offsets[wmKey] = mtimeTicks;
+                return 0;
+            }
+
+            // 仅对已被 Claude 30天清理策略删除、没有任何逐条 JSONL 记录的日期进行兜底补齐
+            var existingLogDates = UsageStorage.GetAgentLogDates(UsageStorage.AgentClaudeCli);
+            var batch = new List<UsageStorage.UsageRecord>();
+
+            foreach (var dayNode in dailyArr)
+            {
+                var dateStr = dayNode?["date"]?.GetValue<string>();
+                if (string.IsNullOrEmpty(dateStr) || existingLogDates.Contains(dateStr)) continue;
+                if (!DateTime.TryParseExact(dateStr, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+                    continue;
+
+                var ts = new DateTime(parsedDate.Year, parsedDate.Month, parsedDate.Day, 12, 0, 0, DateTimeKind.Local);
+                if (dayNode?["tokensByModel"] is not JsonObject tokensByModel) continue;
+
+                foreach (var kv in tokensByModel)
+                {
+                    var model = kv.Key;
+                    long dailyVal = kv.Value?.GetValue<long>() ?? 0;
+                    if (dailyVal <= 0) continue;
+
+                    long totalIn, outTok, cr = 0, cw = 0;
+                    var mu = modelUsage?[model] as JsonObject;
+                    long muIn = mu?["inputTokens"]?.GetValue<long>() ?? 0;
+                    long muOut = mu?["outputTokens"]?.GetValue<long>() ?? 0;
+                    long muCr = mu?["cacheReadInputTokens"]?.GetValue<long>() ?? 0;
+                    long muCw = mu?["cacheCreationInputTokens"]?.GetValue<long>() ?? 0;
+                    long denom = muIn + muOut;
+
+                    if (denom > 0)
+                    {
+                        long uncachedIn = (long)Math.Round(dailyVal * ((double)muIn / denom));
+                        outTok = Math.Max(0, dailyVal - uncachedIn);
+                        cr = (long)Math.Round(dailyVal * ((double)muCr / denom));
+                        cw = (long)Math.Round(dailyVal * ((double)muCw / denom));
+                        totalIn = (muIn < muCr + muCw) ? (uncachedIn + cr + cw) : uncachedIn;
+                    }
+                    else
+                    {
+                        totalIn = dailyVal * 95 / 100;
+                        outTok = dailyVal - totalIn;
+                    }
+
+                    batch.Add(new UsageStorage.UsageRecord(
+                        UsageStorage.AgentClaudeCli, "", "Claude Code", model,
+                        totalIn, outTok, ts,
+                        CacheReadTokens: cr,
+                        CacheWriteTokens: cw,
+                        SourceId: $"claude:stats-cache:{dateStr}:{model}"));
+                }
+            }
+
+            if (batch.Count == 0 || UsageStorage.RecordBatch(batch))
+            {
+                _offsets[wmKey] = mtimeTicks;
+                return batch.Count;
+            }
+        }
+        catch { }
+        return 0;
+    }
+
+    // ---------- Claude Desktop ----------
+
+    static IEnumerable<string> GetClaudeDesktopRoots()
+    {
+        var localOverride = Environment.GetEnvironmentVariable("APISWITCH_LOCALAPPDATA");
+        if (!string.IsNullOrWhiteSpace(localOverride))
+        {
+            yield return Path.Combine(localOverride, "Claude-3p");
+            yield break;
+        }
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("APISWITCH_HOME")))
+            yield break;
+
+        var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var appData = AgPaths.AppData;
+        yield return Path.Combine(localApp, "Claude-3p");
+        yield return Path.Combine(appData, "Claude");
+    }
+
+    static int ScanClaudeDesktop()
+    {
+        var roots = GetClaudeDesktopRoots().Where(Directory.Exists).ToList();
+        if (roots.Count == 0) return 0;
+
+        // 收集已存在于 ~/.claude/projects 中的 cliSessionId，避免与 CLI 日志重复统计
+        var existingCliSessions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var claudeProjRoot = Path.Combine(ClaudeCli.HomeDir, ".claude", "projects");
+        if (Directory.Exists(claudeProjRoot))
+        {
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(claudeProjRoot, "*.jsonl", SearchOption.AllDirectories))
+                    existingCliSessions.Add(Path.GetFileNameWithoutExtension(f));
+            }
+            catch { }
+        }
+
+        // 建立桌面 local_*.json 的 sessionId -> cliSessionId 映射
+        var localToCli = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in roots)
+        {
+            var ccDir = Path.Combine(root, "claude-code-sessions");
+            if (!Directory.Exists(ccDir)) continue;
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(ccDir, "local_*.json", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        var node = JsonNode.Parse(File.ReadAllText(f));
+                        var sid = node?["sessionId"]?.GetValue<string>();
+                        var cid = node?["cliSessionId"]?.GetValue<string>();
+                        if (!string.IsNullOrEmpty(sid) && !string.IsNullOrEmpty(cid))
+                            localToCli[sid] = cid;
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        int added = 0;
+        foreach (var root in roots)
+        {
+            var lamDir = Path.Combine(root, "local-agent-mode-sessions");
+            if (!Directory.Exists(lamDir)) continue;
+
+            try
+            {
+                foreach (var ledger in Directory.EnumerateFiles(lamDir, "*.ndjson", SearchOption.AllDirectories))
+                {
+                    if (!ledger.Contains("usage-ledger", StringComparison.OrdinalIgnoreCase)) continue;
+                    added += ScanClaudeDesktopLedgerFile(ledger, localToCli, existingCliSessions);
+                }
+            }
+            catch { }
+        }
+        return added;
+    }
+
+    static int ScanClaudeDesktopLedgerFile(string file, Dictionary<string, string> localToCli, HashSet<string> existingCliSessions)
+    {
+        var wmKey = "desktop:" + file;
+        long start = _offsets.TryGetValue(wmKey, out var off) ? off : 0;
+        var info = new FileInfo(file);
+        if (!info.Exists || info.Length <= start) return 0;
+
+        var batch = new List<UsageStorage.UsageRecord>();
+        try
+        {
+            using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (start > 0) fs.Seek(start, SeekOrigin.Begin);
+            using var reader = new StreamReader(fs);
+
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                try
+                {
+                    var node = JsonNode.Parse(line);
+                    if (node == null) continue;
+
+                    var sid = node["sessionId"]?.GetValue<string>() ?? "";
+                    if (!string.IsNullOrEmpty(sid) &&
+                        localToCli.TryGetValue(sid, out var cliId) &&
+                        existingCliSessions.Contains(cliId))
+                    {
+                        continue;
+                    }
+
+                    long tsMs = node["ts"]?.GetValue<long>() ?? 0;
+                    var ts = tsMs > 0
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(tsMs).LocalDateTime
+                        : File.GetLastWriteTime(file);
+
+                    if (node["models"] is not JsonObject modelsObj) continue;
+                    foreach (var kv in modelsObj)
+                    {
+                        if (kv.Value is not JsonObject mu) continue;
+                        long inTok = mu["inputTokens"]?.GetValue<long>() ?? 0;
+                        long outTok = mu["outputTokens"]?.GetValue<long>() ?? 0;
+                        long cr = mu["cacheReadTokens"]?.GetValue<long>() ?? 0;
+                        long cw = mu["cacheWriteTokens"]?.GetValue<long>() ?? 0;
+                        if (inTok < cr + cw) inTok += cr + cw;
+                        if (inTok == 0 && outTok == 0) continue;
+
+                        string cleanModel = ClaudeCli.Strip1m(kv.Key);
+                        string sourceId = $"claude-desktop:{sid}:{tsMs}:{cleanModel}";
+                        batch.Add(new UsageStorage.UsageRecord(
+                            UsageStorage.AgentClaudeDesktop, "", "Claude Desktop", cleanModel,
+                            inTok, outTok, ts,
+                            CacheReadTokens: cr,
+                            CacheWriteTokens: cw,
+                            SourceId: sourceId));
+                    }
+                }
+                catch { }
+            }
+
+            if (batch.Count == 0 || UsageStorage.RecordBatch(batch))
+            {
+                _offsets[wmKey] = fs.Position;
+                return batch.Count;
+            }
+        }
+        catch { }
+        return 0;
     }
 
     // ---------- Pi ----------
@@ -465,9 +982,7 @@ public static class UsageScanner
 
         int added = 0;
         foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
-        {
             added += ScanPiFile(file);
-        }
         return added;
     }
 
@@ -475,26 +990,24 @@ public static class UsageScanner
     {
         long start = _offsets.TryGetValue(file, out var off) ? off : 0;
         var info = new FileInfo(file);
-        if (info.Length <= start) return 0;
+        if (!info.Exists || info.Length <= start) return 0;
 
-        int added = 0;
+        var batch = new List<UsageStorage.UsageRecord>();
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (start > 0) fs.Seek(start, SeekOrigin.Begin);
             using var reader = new StreamReader(fs);
 
-            // 增量扫描从上次偏移处继续时，恢复上次结束时的模型/供应商（model_change 可能已在偏移之前）
             string currentModel = _fileModels.TryGetValue(file, out var m0) ? m0 : "";
             string currentProvider = _fileProviders.TryGetValue(file, out var p0) ? p0 : "";
-            _piLastUserTs = DateTime.MinValue;
+            DateTime lastUserTs = DateTime.MinValue;
 
             string? line;
             while ((line = reader.ReadLine()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                // user 消息：记录时间作为下一条 assistant 的计时起点
                 if (line.Contains("\"role\":\"user\"", StringComparison.Ordinal) ||
                     line.Contains("\"role\": \"user\"", StringComparison.Ordinal))
                 {
@@ -503,80 +1016,92 @@ public static class UsageScanner
                         var un = JsonNode.Parse(line);
                         if (DateTime.TryParse(un?["timestamp"]?.GetValue<string>(), CultureInfo.InvariantCulture,
                                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var ut))
-                            _piLastUserTs = ut.ToLocalTime();
+                            lastUserTs = ut.ToLocalTime();
                     }
                     catch { }
                     continue;
                 }
 
-                // model_change 事件：更新当前模型/供应商
                 if (line.Contains("\"model_change\"", StringComparison.Ordinal))
                 {
                     try
                     {
                         var mc = JsonNode.Parse(line);
-                        if (mc?["modelId"]?.GetValue<string>() is { } m && !string.IsNullOrEmpty(m)) currentModel = m;
-                        if (mc?["provider"]?.GetValue<string>() is { } p && !string.IsNullOrEmpty(p)) currentProvider = p;
+                        if (mc?["modelId"]?.GetValue<string>() is { Length: > 0 } m) currentModel = m;
+                        if (mc?["provider"]?.GetValue<string>() is { Length: > 0 } p) currentProvider = p;
                     }
                     catch { }
                     continue;
                 }
 
-                added += ParsePiLine(line, currentModel, currentProvider);
+                var rec = ParsePiLine(line, currentModel, currentProvider, lastUserTs);
+                if (rec != null) batch.Add(rec);
             }
 
-            _offsets[file] = fs.Position;
-            _fileModels[file] = currentModel;
-            _fileProviders[file] = currentProvider;
+            if (batch.Count == 0 || UsageStorage.RecordBatch(batch))
+            {
+                _offsets[file] = fs.Position;
+                _fileModels[file] = currentModel;
+                _fileProviders[file] = currentProvider;
+                return batch.Count;
+            }
         }
         catch { }
-        return added;
+        return 0;
     }
 
-    // 每个 Pi 会话文件内，上一条 user 消息的时间戳（用于推算响应耗时）
-    static DateTime _piLastUserTs = DateTime.MinValue;
-
-    static int ParsePiLine(string line, string currentModel, string currentProvider)
+    static UsageStorage.UsageRecord? ParsePiLine(string line, string currentModel, string currentProvider, DateTime lastUserTs)
     {
         try
         {
             var node = JsonNode.Parse(line);
-            if (node?["type"]?.GetValue<string>() != "message") return 0;
-            if (node["message"]?["role"]?.GetValue<string>() != "assistant") return 0;
+            if (node?["type"]?.GetValue<string>() != "message") return null;
+            var msg = node["message"];
+            if (msg?["role"]?.GetValue<string>() != "assistant") return null;
 
-            var usage = node?["message"]?["usage"];
-            if (usage == null) return 0;
+            var usage = msg?["usage"];
+            if (usage == null) return null;
 
-            // Pi: usage { input, output, reasoning, totalTokens, cost, cacheRead, cacheWrite }
             long inTok = usage["input"]?.GetValue<long>() ?? 0;
             long outTok = usage["output"]?.GetValue<long>() ?? 0;
             long cacheRead = usage["cacheRead"]?.GetValue<long>() ?? 0;
             long cacheWrite = usage["cacheWrite"]?.GetValue<long>() ?? 0;
-            if (inTok == 0 && outTok == 0) return 0;
+            long totalTokens = usage["totalTokens"]?.GetValue<long>() ?? 0;
+
+            // Pi 的 input 仅记录未命中缓存的输入；真实总输入对齐 totalTokens - outTok 或 in + cacheRead + cacheWrite
+            long totalInTok = totalTokens > 0
+                ? Math.Max(inTok, totalTokens - outTok)
+                : inTok + cacheRead + cacheWrite;
+
+            if (totalInTok == 0 && outTok == 0) return null;
 
             DateTime ts = DateTime.Now;
             if (DateTime.TryParse(node?["timestamp"]?.GetValue<string>(), CultureInfo.InvariantCulture,
                     DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
                 ts = dt.ToLocalTime();
 
-            // 每条 assistant 消息自带 provider/model 字段（实测存在率 100%），优先使用；
-            // 缺失时兜底用会话内 model_change 跟踪值
-            var msg = node?["message"];
             string model = msg?["model"]?.GetValue<string>() ?? "";
             if (string.IsNullOrEmpty(model)) model = currentModel;
             string provider = msg?["provider"]?.GetValue<string>() ?? "";
             if (string.IsNullOrEmpty(provider)) provider = currentProvider;
 
-            // 响应耗时：assistant 消息时间 - 上一条 user 消息时间（近似首字）
             long piDuration = 0;
-            if (_piLastUserTs != DateTime.MinValue && ts > _piLastUserTs)
-                piDuration = (long)(ts - _piLastUserTs).TotalMilliseconds;
+            if (lastUserTs != DateTime.MinValue && ts > lastUserTs)
+                piDuration = (long)(ts - lastUserTs).TotalMilliseconds;
 
-            UsageStorage.RecordUsage(UsageStorage.AgentPi, provider, "Pi", model,
-                inTok, outTok, ts, cacheRead, cacheWrite, piDuration, piDuration);
-            return 1;
+            string msgId = node?["id"]?.GetValue<string>() ?? "";
+            string sid = !string.IsNullOrEmpty(msgId) ? "pi:" + msgId : "";
+
+            return new UsageStorage.UsageRecord(
+                UsageStorage.AgentPi, provider, "Pi", model,
+                totalInTok, outTok, ts,
+                CacheReadTokens: cacheRead,
+                CacheWriteTokens: cacheWrite,
+                DurationMs: piDuration,
+                TtftMs: piDuration,
+                SourceId: sid);
         }
-        catch { return 0; }
+        catch { return null; }
     }
 
     // ---------- OpenCode ----------
@@ -586,89 +1111,149 @@ public static class UsageScanner
         var dbPath = Path.Combine(ClaudeCli.HomeDir, ".local", "share", "opencode", "opencode.db");
         if (!File.Exists(dbPath)) return 0;
 
-        // 增量水位：记录已处理到的 message.id 时间戳（毫秒）
-        var stateKey = "opencode.db";
+        const string stateKey = "opencode.db";
         long fromMs = _offsets.TryGetValue(stateKey, out var w) ? w : 0;
+        int totalAdded = 0;
 
-        int added = 0;
-        long maxMs = fromMs;
         try
         {
             using var conn = new Microsoft.Data.Sqlite.SqliteConnection(
                 $"Data Source={dbPath};Mode=ReadOnly;Cache=Private");
             conn.Open();
-            var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT data, time_created FROM message WHERE time_created > $from ORDER BY time_created ASC LIMIT 5000;";
-            cmd.Parameters.AddWithValue("$from", fromMs);
-            using var r = cmd.ExecuteReader();
-            while (r.Read())
+
+            // 循环分页拉取全部历史与新增消息，避免单次 LIMIT 5000 截断遗漏
+            while (true)
             {
-                var data = r.GetString(0);
-                var ms = r.GetInt64(1);
-                if (ms > maxMs) maxMs = ms;
-                if (ParseOpenCodeData(data, ms)) added++;
+                var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, data, time_created FROM message WHERE time_created > $from ORDER BY time_created ASC LIMIT 5000;";
+                cmd.Parameters.AddWithValue("$from", fromMs);
+
+                var batch = new List<UsageStorage.UsageRecord>();
+                long maxMs = fromMs;
+                int rowCount = 0;
+
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        rowCount++;
+                        var id = r.IsDBNull(0) ? "" : r.GetString(0);
+                        var data = r.GetString(1);
+                        var ms = r.GetInt64(2);
+                        if (ms > maxMs) maxMs = ms;
+                        var rec = ParseOpenCodeData(id, data, ms);
+                        if (rec != null) batch.Add(rec);
+                    }
+                }
+
+                if (batch.Count > 0)
+                {
+                    if (!UsageStorage.RecordBatch(batch)) break;
+                    totalAdded += batch.Count;
+                }
+
+                if (maxMs > fromMs)
+                {
+                    fromMs = maxMs;
+                    _offsets[stateKey] = maxMs;
+                }
+
+                if (rowCount < 5000 || maxMs <= 0) break;
             }
-            if (maxMs > fromMs) _offsets[stateKey] = maxMs;
         }
         catch { }
-        return added;
+        return totalAdded;
     }
 
-    static bool ParseOpenCodeData(string data, long ms)
+    static UsageStorage.UsageRecord? ParseOpenCodeData(string msgId, string data, long ms)
     {
         try
         {
             var node = JsonNode.Parse(data);
-            if (node?["role"]?.GetValue<string>() != "assistant") return false;
+            if (node?["role"]?.GetValue<string>() != "assistant") return null;
 
             var tokens = node["tokens"];
-            if (tokens == null) return false;
+            if (tokens == null) return null;
 
-            long inTok = tokens["input"]?.GetValue<long>() ?? 0;
-            long outTok = tokens["output"]?.GetValue<long>() ?? 0;
+            long rawIn = tokens["input"]?.GetValue<long>() ?? 0;
+            long rawOut = tokens["output"]?.GetValue<long>() ?? 0;
+            long reasoning = tokens["reasoning"]?.GetValue<long>() ?? 0;
             long cacheRead = tokens["cache"]?["read"]?.GetValue<long>() ?? 0;
             long cacheWrite = tokens["cache"]?["write"]?.GetValue<long>() ?? 0;
-            if (inTok == 0 && outTok == 0) return false;
+            long total = tokens["total"]?.GetValue<long>() ?? 0;
+
+            // OpenCode 的 tokens.input 仅为未命中缓存部分，cache.read/write 与 reasoning 均独立计入 total
+            long totalIn = rawIn + cacheRead + cacheWrite;
+            long totalOut = (total > 0 && total == rawIn + cacheRead + cacheWrite + rawOut)
+                ? rawOut
+                : (rawOut + reasoning);
+
+            if (totalIn == 0 && totalOut == 0) return null;
 
             string model = node["modelID"]?.GetValue<string>() ?? "";
             string provider = node["providerID"]?.GetValue<string>() ?? "";
-
             var ts = DateTimeOffset.FromUnixTimeMilliseconds(ms).LocalDateTime;
 
-            // OpenCode 记录了 time.created / time.completed（毫秒时间戳），
-            // 这是唯一能算出"精确整轮耗时"的客户端（无需近似）。
             long ocDuration = 0;
             var created = node["time"]?["created"]?.GetValue<long>() ?? 0;
             var completed = node["time"]?["completed"]?.GetValue<long>() ?? 0;
             if (created > 0 && completed > created) ocDuration = completed - created;
 
-            UsageStorage.RecordUsage(UsageStorage.AgentOpenCode, provider, "OpenCode", model,
-                inTok, outTok, ts, cacheRead, cacheWrite, ocDuration, ocDuration);
-            return true;
+            string sid = !string.IsNullOrEmpty(msgId) ? "opencode:" + msgId : "";
+
+            return new UsageStorage.UsageRecord(
+                UsageStorage.AgentOpenCode, provider, "OpenCode", model,
+                totalIn, totalOut, ts,
+                CacheReadTokens: cacheRead,
+                CacheWriteTokens: cacheWrite,
+                DurationMs: ocDuration,
+                TtftMs: ocDuration,
+                SourceId: sid);
         }
-        catch { return false; }
+        catch { return null; }
     }
 
     // ---------- 公共 ----------
 
-    /// <summary>枚举最近 N 天修改过的 JSONL 文件（按修改时间倒序）。</summary>
-    static IEnumerable<string> EnumerateRecentJsonl(string root, int maxAgeDays)
+    static UsageStorage.UsageRecord MergeUsageRecord(UsageStorage.UsageRecord a, UsageStorage.UsageRecord b) => a with
+    {
+        InTokens = Math.Max(a.InTokens, b.InTokens),
+        OutTokens = Math.Max(a.OutTokens, b.OutTokens),
+        CacheReadTokens = Math.Max(a.CacheReadTokens, b.CacheReadTokens),
+        CacheWriteTokens = Math.Max(a.CacheWriteTokens, b.CacheWriteTokens),
+        DurationMs = Math.Max(a.DurationMs, b.DurationMs),
+        TtftMs = a.TtftMs > 0 && b.TtftMs > 0 ? Math.Min(a.TtftMs, b.TtftMs) : Math.Max(a.TtftMs, b.TtftMs),
+        Model = !string.IsNullOrEmpty(b.Model) ? b.Model : a.Model,
+        Ts = b.Ts > a.Ts ? b.Ts : a.Ts,
+    };
+
+    static void CollectRecentFiles(string root, string pattern, int maxAgeDays, List<string> target)
     {
         var cutoff = DateTime.Now.AddDays(-maxAgeDays);
-        var list = new List<string>();
         try
         {
-            foreach (var f in Directory.EnumerateFiles(root, "*.jsonl", SearchOption.AllDirectories))
+            foreach (var f in Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories))
             {
                 try
                 {
-                    if (File.GetLastWriteTime(f) >= cutoff) list.Add(f);
+                    if (File.GetLastWriteTime(f) >= cutoff) target.Add(f);
                 }
                 catch { }
             }
         }
         catch { }
-        list.Sort((a, b) => File.GetLastWriteTime(b).CompareTo(File.GetLastWriteTime(a)));
+    }
+
+    /// <summary>枚举最近 N 天修改过的 JSONL 文件（按修改时间倒序）。</summary>
+    static IEnumerable<string> EnumerateRecentJsonl(string root, int maxAgeDays)
+    {
+        var list = new List<string>();
+        CollectRecentFiles(root, "*.jsonl", maxAgeDays, list);
+        list.Sort((a, b) =>
+        {
+            try { return File.GetLastWriteTime(b).CompareTo(File.GetLastWriteTime(a)); }
+            catch { return 0; }
+        });
         return list;
     }
 
@@ -681,6 +1266,7 @@ public static class UsageScanner
             _fileModels = new(StringComparer.OrdinalIgnoreCase);
             _fileProviders = new(StringComparer.OrdinalIgnoreCase);
             _codexTurns.Clear();
+            _scannerVersion = CurrentScannerVersion;
             SaveState();
         }
     }

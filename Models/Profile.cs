@@ -47,6 +47,9 @@ public class Profile : INotifyPropertyChanged
     // Quota Updated Time
     public DateTime? QuotaUpdatedAt { get; set; }
 
+    // Per-model detailed quotas (populated by fetchAvailableModels)
+    public List<AgModelQuotaInfo>? ModelQuotas { get; set; }
+
     // Activation Status (Mode A: Google Cloud Code official handshake)
     public bool? IsActivated { get; set; }
     public DateTime? ActivatedAt { get; set; }
@@ -228,6 +231,11 @@ public class Profile : INotifyPropertyChanged
     public bool IsPromoPro => !IsUltra && IsProTier && !IsPaidPro;
 
     [JsonIgnore]
+    public bool IsPlus => !IsUltra && !IsProTier
+        && ((SubscriptionTier?.Contains("Plus", StringComparison.OrdinalIgnoreCase) ?? false)
+            || (Plan?.Contains("Plus", StringComparison.OrdinalIgnoreCase) ?? false));
+
+    [JsonIgnore]
     public string TierDisplay
     {
         get
@@ -236,6 +244,7 @@ public class Profile : INotifyPropertyChanged
             if (IsPaidPro) return I18nService.T("Ag.TierProPaid");
             if (IsPromoPro) return I18nService.T("Ag.TierProPromo");
             if (IsProTier) return I18nService.T("Ag.TierPro");
+            if (IsPlus) return I18nService.T("Ag.TierPlus");
             if (!string.IsNullOrEmpty(SubscriptionTier) && !SubscriptionTier.Contains("Starter", StringComparison.OrdinalIgnoreCase))
                 return SubscriptionTier;
             return I18nService.T("Ag.TierStarterFree");
@@ -251,6 +260,7 @@ public class Profile : INotifyPropertyChanged
             if (IsPaidPro) return I18nService.T("Ag.TierProPaidTooltip");
             if (IsPromoPro) return I18nService.T("Ag.TierProPromoTooltip");
             if (IsProTier) return I18nService.T("Ag.TierProTooltip");
+            if (IsPlus) return I18nService.T("Ag.TierPlusTooltip");
             return I18nService.T("Ag.TierStarterTooltip");
         }
     }
@@ -474,4 +484,19 @@ public class DeviceProfile
     public string? MacMachineId { get; set; }
     public string? DevDeviceId { get; set; }
     public string? SqmId { get; set; }
+}
+
+/// <summary>Antigravity 单模型实时配额与能力快照（源自 fetchAvailableModels）。</summary>
+public class AgModelQuotaInfo
+{
+    public string ModelId { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public double? RemainingFraction { get; set; }
+    public string? ResetTime { get; set; }
+    public bool Recommended { get; set; }
+    public bool Disabled { get; set; }
+    public bool SupportsThinking { get; set; }
+    public bool SupportsImages { get; set; }
+    public int MaxTokens { get; set; }
+    public int MaxOutputTokens { get; set; }
 }

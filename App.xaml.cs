@@ -140,6 +140,18 @@ public partial class App : System.Windows.Application
             {
                 LocalProxyServer.Initialize();
                 var win = new MainWindow();
+                if (e.Args.Length >= 3)
+                {
+                    var tag = e.Args[2];
+                    foreach (System.Windows.Controls.TabItem item in win.Tabs.Items)
+                    {
+                        if (string.Equals(item.Tag?.ToString(), tag, StringComparison.OrdinalIgnoreCase))
+                        {
+                            win.Tabs.SelectedItem = item;
+                            break;
+                        }
+                    }
+                }
                 win.Show();
                 win.UpdateLayout();
                 var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
@@ -165,6 +177,8 @@ public partial class App : System.Windows.Application
         {
             var outputPath = e.Args[1];
             int days = e.Args.Length >= 3 && int.TryParse(e.Args[2], out var d) ? d : 180;
+            string tab = e.Args.Length >= 4 ? e.Args[3].ToLowerInvariant() : "providers";
+            string agent = e.Args.Length >= 5 ? e.Args[4] : "";
             try
             {
                 var win = new Dialogs.UsageMonitorWindow();
@@ -175,7 +189,13 @@ public partial class App : System.Windows.Application
                 else if (days == 30) win.Quick30DRadio.IsChecked = true;
                 else if (days == 7) win.Quick7DRadio.IsChecked = true;
                 else if (days == 1) win.Quick1DRadio.IsChecked = true;
-                await Task.Delay(1500);
+                if (tab == "agents") win.TabAgentsRadio.IsChecked = true;
+                else if (tab == "models") win.TabModelsRadio.IsChecked = true;
+                else if (tab == "calls") win.TabCallsRadio.IsChecked = true;
+                if (!string.IsNullOrWhiteSpace(agent)) win.SelectAgentFilter(agent);
+                await Task.Delay(300);
+                await win.InitialScanTask;
+                await Task.Delay(400);
                 win.UpdateLayout();
                 var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
                     (int)Math.Max(win.ActualWidth, 100), (int)Math.Max(win.ActualHeight, 100), 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
@@ -487,14 +507,46 @@ public partial class App : System.Windows.Application
             sb.AppendLine("ui_tabs_render_err=" + ex);
         }
 
-        // 用量监控窗口：缓存/速度/首字三张卡片与调用明细的新列是独立的一套 XAML，
-        // 上面的主窗口遍历覆盖不到。这里单独实例化并切到调用明细面板，
-        // 确保 XAML 能完整解析、StaticResource（IconRocket 等）与命名元素都就位。
+        // 用量监控窗口：覆盖 5 个视图页签、筛选条、图表模式切换与 Antigravity 专属额度视角
         try
         {
             var umw = new Dialogs.UsageMonitorWindow { Visibility = Visibility.Hidden };
             umw.UpdateLayout();
+            umw.TabAgentsRadio.IsChecked = true;
+            umw.UpdateLayout();
+            umw.TabModelsRadio.IsChecked = true;
+            umw.UpdateLayout();
             umw.TabCallsRadio.IsChecked = true;
+            umw.UpdateLayout();
+            umw.ChartModeHeatmapRadio.IsChecked = true;
+            umw.UpdateLayout();
+            umw.SearchBox.Text = "claude";
+            umw.UpdateLayout();
+            umw.SearchBox.Text = "";
+            // 极端悬殊日用量回归探测（避免高/低谷差距 > 1000 万倍时 Math.Clamp min>max 崩溃）
+            umw.TestRenderExtremeTrend(new List<Services.UsageStorage.DailyTotal>
+            {
+                new("2026-11-14", 500_000_000, 1_000_000, 200),
+                new("2026-11-15", 0, 15, 1),
+                new("2026-11-16", 10, 5, 1),
+            });
+            umw.ChartModeBarRadio.IsChecked = true;
+            umw.TestRenderExtremeTrend(new List<Services.UsageStorage.DailyTotal>
+            {
+                new("2026-11-14", 500_000_000, 1_000_000, 200),
+                new("2026-11-15", 0, 15, 1),
+                new("2026-11-16", 10, 5, 1),
+            });
+            umw.TabProvidersRadio.IsChecked = true;
+            var pills = umw.ClientFilterList.Items.OfType<Dialogs.UsageMonitorWindow.ClientFilterItemVM>().ToList();
+            if (pills.Count != 11 || !pills[0].IsSelected || pills.Count(p => p.IsSelected) != 1)
+                throw new Exception($"ClientFilterList initial state mismatch: count={pills.Count}, first={pills.FirstOrDefault()?.IsSelected}");
+            umw.SelectAgentFilter(Services.UsageStorage.AgentCodex);
+            if (!pills.Any(p => p.Agent == Services.UsageStorage.AgentCodex && p.IsSelected) || pills[0].IsSelected)
+                throw new Exception("ClientFilterList failed to select single agent");
+            umw.SelectAgentFilter(null);
+            if (!pills[0].IsSelected || pills.Count(p => p.IsSelected) != 1)
+                throw new Exception("ClientFilterList failed to restore All");
             umw.UpdateLayout();
             umw.Close();
             sb.AppendLine("ui_usage_monitor_render=ok");
@@ -839,6 +891,444 @@ public partial class App : System.Windows.Application
             catch (Exception ex)
             {
                 sb.AppendLine("bilingual_probe_err=" + ex.Message);
+            }
+            // Anti-flapping and quota merging regression probe
+            try
+            {
+                var pPaid = new Models.Profile
+                {
+                    Email = "test-paid@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    Plan = "Google AI Pro",
+                    IsPaidSubscription = true,
+                    QuotaWeeklyFraction = 0.8,
+                    QuotaArgonWeeklyFraction = 0.45
+                };
+
+                // 1) 2-group JSON (Gemini + 3P, no Argon) should NOT demote IsPaidSubscription or wipe Argon quota
+                var json2Group = "{\"groups\":[{\"displayName\":\"Gemini Models\",\"buckets\":[{\"bucketId\":\"gemini-weekly\",\"window\":\"weekly\",\"remainingFraction\":0.75}]},{\"displayName\":\"Claude and GPT models\",\"buckets\":[{\"bucketId\":\"3p-weekly\",\"window\":\"weekly\",\"remainingFraction\":0.99}]}]}";
+                AgQuotaService.ParseQuotaSummary(pPaid, json2Group);
+
+                var demotePrevented = pPaid.IsPaidSubscription == true &&
+                                      pPaid.QuotaArgonWeeklyFraction == 0.45 &&
+                                      pPaid.QuotaWeeklyFraction == 0.75 &&
+                                      pPaid.IsPaidPro && !pPaid.IsPromoPro;
+
+                // 2) 3-group JSON (includes Argon) should update Argon and maintain Paid Pro
+                var json3Group = "{\"groups\":[{\"displayName\":\"Gemini 4 Argon\",\"buckets\":[{\"bucketId\":\"gemini-argon-wtu-weekly\",\"window\":\"weekly\",\"remainingFraction\":0.40}]},{\"displayName\":\"Gemini Models\",\"buckets\":[{\"bucketId\":\"gemini-weekly\",\"window\":\"weekly\",\"remainingFraction\":0.70}]}]}";
+                AgQuotaService.ParseQuotaSummary(pPaid, json3Group);
+
+                var argonUpdated = pPaid.IsPaidSubscription == true &&
+                                   pPaid.QuotaArgonWeeklyFraction == 0.40 &&
+                                   pPaid.QuotaWeeklyFraction == 0.70 &&
+                                   pPaid.IsPaidPro;
+
+                // 3) Promo Pro profile without Argon should remain IsPromoPro
+                var pPromo = new Models.Profile
+                {
+                    Email = "test-promo@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    Plan = "Google AI Pro",
+                    IsPaidSubscription = false
+                };
+                AgQuotaService.ParseQuotaSummary(pPromo, json2Group);
+                var promoOk = pPromo.IsPromoPro && !pPromo.IsPaidPro;
+
+                // 4) Starter 纯免费账号：仅有常规 Gemini 周配额，无任何 3P、5H、Argon
+                // 即使 loadCodeAssist 曾被 paidTier 赋为 Google AI Pro，在此必须精准校准为 Starter 免费版，杜绝被误标为 Pro 体验版
+                var pStarter = new Models.Profile
+                {
+                    Email = "test-starter@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    Plan = "Google AI Pro"
+                };
+                var jsonStarter = "{\"groups\":[{\"displayName\":\"Gemini Models\",\"buckets\":[{\"bucketId\":\"gemini-weekly\",\"window\":\"weekly\",\"remainingFraction\":0.60}]}]}";
+                AgQuotaService.ParseQuotaSummary(pStarter, jsonStarter);
+                var starterOk = !pStarter.IsProTier &&
+                                !pStarter.IsPromoPro &&
+                                !pStarter.IsPaidPro &&
+                                pStarter.SubscriptionTier == "Starter" &&
+                                pStarter.TierDisplay == I18nService.T("Ag.TierStarterFree");
+
+                // 5) Google AI Plus 账号：loadCodeAssist 返回 g1-plus-tier / "Antigravity Starter Quota"，
+                // 且 retrieveUserQuotaSummary 同时返回 gemini-weekly + 3p-weekly（无 5h / 无 Argon），曾误升 Pro 或归为 Starter，并残留 Argon 0%
+                var pPlus3p = new Models.Profile
+                {
+                    Email = "test-plus-3p@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    Plan = "Google AI Pro",
+                    QuotaArgonWeeklyFraction = 0.0,
+                    Quota5hFraction = 1.0
+                };
+                AgQuotaService.ParseTier(pPlus3p, "{\"paidTier\":{\"id\":\"g1-plus-tier\",\"name\":\"Antigravity Starter Quota\",\"description\":\"Antigravity Starter Quota\"}}");
+                var jsonStarterWith3p = "{\"groups\":[{\"displayName\":\"Gemini Models\",\"buckets\":[{\"bucketId\":\"gemini-weekly\",\"window\":\"weekly\",\"remainingFraction\":1.0}]},{\"displayName\":\"Claude and GPT models\",\"buckets\":[{\"bucketId\":\"3p-weekly\",\"window\":\"weekly\",\"remainingFraction\":0.95}]}]}";
+                AgQuotaService.ParseQuotaSummary(pPlus3p, jsonStarterWith3p, out var starterHasArgon);
+                AgQuotaService.ReconcileQuotaWithModels(pPlus3p, new List<Models.AgModelQuotaInfo>
+                {
+                    new() { ModelId = "gemini-4-argon-disabled", Disabled = true }
+                }, quotaGot: true, hasArgonGroupFound: starterHasArgon);
+                var plus3pOk = pPlus3p.SubscriptionTier == "Google AI Plus" &&
+                               pPlus3p.IsPlus &&
+                               !pPlus3p.IsProTier &&
+                               !pPlus3p.IsPaidPro &&
+                               pPlus3p.TierDisplay == I18nService.T("Ag.TierPlus") &&
+                               !pPlus3p.QuotaArgonWeeklyFraction.HasValue &&
+                               !pPlus3p.Quota5hFraction.HasValue &&
+                               Math.Abs((pPlus3p.Quota3pWeeklyFraction ?? 0) - 0.95) < 1e-6;
+
+                // 6) 同 ResetTime 窗口下，fetchAvailableModels 返回更低的实时剩余百分比时应主动校准汇总桶
+                var pRec = new Models.Profile
+                {
+                    Email = "test-reconcile@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    QuotaArgonWeeklyFraction = 0.99,
+                    QuotaArgonWeeklyResetTime = "2026-11-30T01:40:12Z",
+                    Quota3pWeeklyFraction = 0.93,
+                    Quota3pWeeklyResetTime = "2026-11-25T01:34:28Z"
+                };
+                AgQuotaService.ReconcileQuotaWithModels(pRec, new List<Models.AgModelQuotaInfo>
+                {
+                    new() { ModelId = "gemini-4-argon-medium", RemainingFraction = 0.918, ResetTime = "2026-11-30T01:40:12Z" },
+                    new() { ModelId = "claude-opus-5-5-medium", RemainingFraction = 1.0, ResetTime = "2026-11-23T10:54:20Z" }
+                }, quotaGot: true, hasArgonGroupFound: true);
+                var reconcileOk = Math.Abs((pRec.QuotaArgonWeeklyFraction ?? 0) - 0.918) < 1e-6 &&
+                                  Math.Abs((pRec.Quota3pWeeklyFraction ?? 0) - 0.93) < 1e-6;
+
+                sb.AppendLine($"ag_tier_flapping_probe=ok;demotePrevented={demotePrevented};argonUpdated={argonUpdated};promoOk={promoOk};starterOk={starterOk};plus3pOk={plus3pOk};reconcileOk={reconcileOk}");
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("ag_tier_flapping_probe_err=" + ex.Message);
+            }
+
+            // Claude 安全关闭与精准进程识别探测
+            try
+            {
+                var desktopMsixOk = ClaudeProcess.IsClaudeDesktopPath(@"C:\Program Files\WindowsApps\Claude_2.42304.2.0_x64__pzs8sxrjxfjjc\Claude.exe");
+                var desktopWin32Ok = ClaudeProcess.IsClaudeDesktopPath(@"C:\Users\test\AppData\Local\AnthropicClaude\Claude.exe");
+                var cliNotDesktop = !ClaudeProcess.IsClaudeDesktopPath(@"C:\Users\test\.local\bin\claude.exe");
+
+                var cliExeOk = ClaudeCliProcess.IsClaudeCliRootProcess(new ClaudeCliProcess.ProcessItem
+                {
+                    Name = "claude.exe",
+                    ExePath = @"C:\Users\test\.local\bin\claude.exe",
+                    CommandLine = "claude"
+                });
+                var desktopNotCli = !ClaudeCliProcess.IsClaudeCliRootProcess(new ClaudeCliProcess.ProcessItem
+                {
+                    Name = "claude.exe",
+                    ExePath = @"C:\Program Files\WindowsApps\Claude_2.42304.2.0_x64__pzs8sxrjxfjjc\Claude.exe",
+                    CommandLine = "claude.exe"
+                });
+                var cliNodeOk = ClaudeCliProcess.IsClaudeCliRootProcess(new ClaudeCliProcess.ProcessItem
+                {
+                    Name = "node.exe",
+                    ExePath = @"C:\Program Files\nodejs\node.exe",
+                    CommandLine = "node C:\\Users\\test\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.js"
+                });
+                var regularNodeNotCli = !ClaudeCliProcess.IsClaudeCliRootProcess(new ClaudeCliProcess.ProcessItem
+                {
+                    Name = "node.exe",
+                    ExePath = @"C:\Program Files\nodejs\node.exe",
+                    CommandLine = "node server.js"
+                });
+
+                var i18nCliBtn = I18nService.T("Claude.StopProcessBtn");
+                var i18nDesktopBtn = I18nService.T("Desktop.StopProcessBtn");
+                var i18nOk = !string.IsNullOrWhiteSpace(i18nCliBtn) && !string.IsNullOrWhiteSpace(i18nDesktopBtn);
+
+                var snapshot = ClaudeCliProcess.GetProcessSnapshot();
+                var snapshotOk = snapshot != null;
+
+                sb.AppendLine($"claude_safe_stop_probe=ok;desktopPathOk={desktopMsixOk && desktopWin32Ok && cliNotDesktop};cliMatchOk={cliExeOk && desktopNotCli};cliNodeOk={cliNodeOk && regularNodeNotCli};i18nOk={i18nOk};snapshotOk={snapshotOk}");
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("claude_safe_stop_probe_err=" + ex.Message);
+            }
+
+            // 用量统计精准校准与去重探针（完全在沙盒 APISWITCH_HOME + APISWITCH_APPDATA 内运行，零污染真实库）
+            var prevAppData = Environment.GetEnvironmentVariable("APISWITCH_APPDATA");
+            try
+            {
+                var usageAppData = Path.Combine(sandbox, "appdata");
+                Directory.CreateDirectory(usageAppData);
+                Environment.SetEnvironmentVariable("APISWITCH_APPDATA", usageAppData);
+                UsageScanner.Reset();
+
+                // 1) source_id 幂等合并：代理先记 + 扫描后补，合并为 1 条并保留高优字段
+                var now = DateTime.Now;
+                UsageStorage.RecordUsage(UsageStorage.AgentCodex, "relay-1", "MyRelay", "gpt-test",
+                    100, 20, now, cacheReadTokens: 0, cacheWriteTokens: 0, durationMs: 2000, ttftMs: 350, sourceId: "codex:resp_merge_1");
+                UsageStorage.RecordUsage(UsageStorage.AgentCodex, "custom", "Codex", "",
+                    120, 30, now, cacheReadTokens: 80, cacheWriteTokens: 0, durationMs: 2100, ttftMs: 1800, sourceId: "codex:resp_merge_1");
+
+                // 2) Claude Code 多内容块 + 跨文件去重 + 缓存计入 + stats-cache 补历史 + 忽略 synthetic
+                var claudeProj = Path.Combine(home, ".claude", "projects", "proj-a");
+                Directory.CreateDirectory(claudeProj);
+                var tsStr = now.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                var claudeLines = string.Join("\n", new[]
+                {
+                    "{\"type\":\"assistant\",\"timestamp\":\"" + tsStr + "\",\"message\":{\"id\":\"msg_blk_1\",\"model\":\"claude-opus-5\",\"usage\":{\"input_tokens\":26,\"cache_read_input_tokens\":98000,\"cache_creation_input_tokens\":2000,\"output_tokens\":100,\"inference_geo\":\"global\"}}}",
+                    "{\"type\":\"assistant\",\"timestamp\":\"" + tsStr + "\",\"message\":{\"id\":\"msg_blk_1\",\"model\":\"claude-opus-5\",\"usage\":{\"input_tokens\":26,\"cache_read_input_tokens\":98000,\"cache_creation_input_tokens\":2000,\"output_tokens\":500,\"inference_geo\":\"global\"}}}",
+                    "{\"type\":\"assistant\",\"timestamp\":\"" + tsStr + "\",\"message\":{\"id\":\"msg_blk_1\",\"model\":\"claude-opus-5\",\"usage\":{\"input_tokens\":26,\"cache_read_input_tokens\":98000,\"cache_creation_input_tokens\":2000,\"output_tokens\":500,\"inference_geo\":\"global\"}}}",
+                    "{\"type\":\"assistant\",\"timestamp\":\"" + tsStr + "\",\"message\":{\"id\":\"msg_syn\",\"model\":\"<synthetic>\",\"usage\":{\"input_tokens\":10,\"output_tokens\":10}}}"
+                });
+                File.WriteAllText(Path.Combine(claudeProj, "sess1.jsonl"), claudeLines);
+                File.WriteAllText(Path.Combine(claudeProj, "sess2.jsonl"), claudeLines);
+
+                var todayStr = now.ToString("yyyy-MM-dd");
+                File.WriteAllText(Path.Combine(home, ".claude", "stats-cache.json"),
+                    "{\"version\":4,\"dailyModelTokens\":[" +
+                    "{\"date\":\"" + todayStr + "\",\"tokensByModel\":{\"claude-opus-5\":999999}}," +
+                    "{\"date\":\"2026-06-15\",\"tokensByModel\":{\"claude-opus-4-7\":1000}}" +
+                    "],\"modelUsage\":{\"claude-opus-4-7\":{\"inputTokens\":100,\"outputTokens\":900,\"cacheReadInputTokens\":9000,\"cacheCreationInputTokens\":1000}}}");
+
+                // 3) Pi 缓存总输入对齐 totalTokens - outTok
+                var piDir = Path.Combine(home, ".pi", "agent", "sessions", "p1");
+                Directory.CreateDirectory(piDir);
+                File.WriteAllText(Path.Combine(piDir, "s1.jsonl"),
+                    "{\"type\":\"message\",\"id\":\"pi_1\",\"timestamp\":\"" + tsStr + "\",\"message\":{\"role\":\"assistant\",\"model\":\"kimi-k3\",\"provider\":\"StepFun\",\"usage\":{\"input\":1000,\"output\":200,\"reasoning\":50,\"cacheRead\":4000,\"cacheWrite\":500,\"totalTokens\":5700}}}");
+
+                // 4) OpenCode 缓存 + 推理输出 + 历史建库
+                var ocDir = Path.Combine(home, ".local", "share", "opencode");
+                Directory.CreateDirectory(ocDir);
+                var ocDbPath = Path.Combine(ocDir, "opencode.db");
+                using (var ocConn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={ocDbPath}"))
+                {
+                    ocConn.Open();
+                    using var c = ocConn.CreateCommand();
+                    c.CommandText = "CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);" +
+                        "INSERT INTO message VALUES ('oc_1', 'ses1', " + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + ", " +
+                        "'{\"role\":\"assistant\",\"modelID\":\"ds-v4\",\"providerID\":\"opencode\",\"tokens\":{\"total\":10140,\"input\":800,\"output\":100,\"reasoning\":40,\"cache\":{\"read\":9000,\"write\":200}}}');";
+                    c.ExecuteNonQuery();
+                }
+
+                // 5) Codex archived .jsonl.zst 解压 + session_meta / turn_context 解析
+                var codexArch = Path.Combine(home, ".codex", "archived_sessions");
+                Directory.CreateDirectory(codexArch);
+                var codexJsonl = string.Join("\n", new[]
+                {
+                    "{\"timestamp\":\"" + tsStr + "\",\"type\":\"session_meta\",\"payload\":{\"id\":\"thr_1\",\"model_provider\":\"myprov\"}}",
+                    "{\"timestamp\":\"" + tsStr + "\",\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-6-test\"}}",
+                    "{\"timestamp\":\"" + tsStr + "\",\"type\":\"token_usage_record\",\"payload\":{\"response_id\":\"resp_zst_1\",\"usage\":{\"input_tokens\":5000,\"cached_input_tokens\":4000,\"cache_write_input_tokens\":0,\"output_tokens\":150}}}"
+                });
+                using (var fsZ = File.Create(Path.Combine(codexArch, "rollout-arch.jsonl.zst")))
+                using (var csZ = new ZstdSharp.CompressionStream(fsZ))
+                using (var swZ = new StreamWriter(csZ))
+                {
+                    swZ.Write(codexJsonl);
+                }
+
+                // 6) Gemini CLI .jsonl 同 ID 去重
+                var gemDir = Path.Combine(home, ".gemini", "tmp", "p1", "chats");
+                Directory.CreateDirectory(gemDir);
+                var gemLines = string.Join("\n", new[]
+                {
+                    "{\"id\":\"gem_1\",\"timestamp\":\"" + tsStr + "\",\"type\":\"gemini\",\"model\":\"gemini-3-flash\",\"tokens\":{\"input\":12000,\"output\":80,\"cached\":8000,\"thoughts\":20,\"total\":12100}}",
+                    "{\"id\":\"gem_1\",\"timestamp\":\"" + tsStr + "\",\"type\":\"gemini\",\"model\":\"gemini-3-flash\",\"tokens\":{\"input\":12000,\"output\":80,\"cached\":8000,\"thoughts\":20,\"total\":12100}}"
+                });
+                File.WriteAllText(Path.Combine(gemDir, "session-2026-11-16T10-00-gem1.jsonl"), gemLines);
+
+                // 7) DSH 新版 session.v4.jsonl.zstd（含 assistant/message + assistant/attempt）与 session_projcache/sessions/*.json
+                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                var dshSessDir = Path.Combine(home, ".dsh", "sessions", "--proj--", "session-dsh-v4");
+                Directory.CreateDirectory(dshSessDir);
+                var dshProjSessionsDir = Path.Combine(home, ".dsh", "storages", "session_projcache", "sessions");
+                Directory.CreateDirectory(dshProjSessionsDir);
+                var dshLines = string.Join("\n", new[]
+                {
+                    "{\"type\":\"session\",\"version\":4,\"id\":\"session-dsh-v4\",\"createdAt\":" + (nowMs - 5000) + "}",
+                    "{\"type\":\"step/start\",\"seq\":1,\"time\":" + (nowMs - 4000) + ",\"data\":{\"turn\":1,\"step\":1}}",
+                    "{\"type\":\"assistant/message\",\"seq\":2,\"time\":" + (nowMs - 1000) + ",\"data\":{\"turn\":1,\"step\":1,\"usage\":{\"inputTokens\":1000,\"outputTokens\":200,\"cacheReadTokens\":3000},\"stream\":[{\"type\":\"chunk\",\"time\":" + (nowMs - 3000) + ",\"chunk\":{\"type\":\"block-start\",\"index\":0}},{\"type\":\"chunk\",\"time\":" + (nowMs - 1000) + ",\"chunk\":{\"type\":\"finish\",\"replayState\":{\"response\":{\"provider\":\"tianyou\",\"model\":\"deepseek-v4.1-flash\"}}}}]}}",
+                    "{\"type\":\"assistant/attempt\",\"seq\":3,\"time\":" + (nowMs - 500) + ",\"data\":{\"turn\":1,\"step\":2,\"stream\":[{\"type\":\"chunk\",\"time\":" + (nowMs - 500) + ",\"chunk\":{\"type\":\"usage\",\"usage\":{\"inputTokens\":500,\"outputTokens\":50}}}]}}"
+                });
+                using (var fsD = File.Create(Path.Combine(dshSessDir, "session.v4.jsonl.zstd")))
+                using (var csD = new ZstdSharp.CompressionStream(fsD))
+                using (var swD = new StreamWriter(csD))
+                {
+                    swD.Write(dshLines);
+                }
+                // 同会话即使同时存在 session_projcache/sessions/*.json 也不得重复计数
+                File.WriteAllText(Path.Combine(dshProjSessionsDir, "session-dsh-v4.json"),
+                    "{\"version\":7,\"record\":{\"rows\":{\"modelSelection\":{\"val\":{\"lastUsed\":{\"provider\":\"tianyou\",\"model\":\"deepseek-v4.1-flash\"}}},\"sessionListMetadata\":{\"val\":{\"lastPromptAt\":" + nowMs + "}},\"tokenUsage\":{\"val\":{\"totals\":{\"uncachedInputTokens\":1500,\"outputTokens\":250,\"cacheReadTokens\":3000,\"cacheWriteTokens\":0},\"last\":{\"turn\":1,\"step\":2}}}}}}");
+                // 仅存在于 session_projcache/sessions/*.json 的会话应由兜底通道补采
+                File.WriteAllText(Path.Combine(dshProjSessionsDir, "session-dsh-fallback.json"),
+                    "{\"version\":7,\"record\":{\"rows\":{\"modelSelection\":{\"val\":{\"lastUsed\":{\"provider\":\"liwan\",\"model\":\"glm-test\"}}},\"sessionListMetadata\":{\"val\":{\"lastPromptAt\":" + nowMs + "}},\"tokenUsage\":{\"val\":{\"totals\":{\"uncachedInputTokens\":400,\"outputTokens\":60,\"cacheReadTokens\":600,\"cacheWriteTokens\":0},\"last\":{\"turn\":2,\"step\":1}}}}}}");
+
+                // 8) Antigravity brain/transcript.jsonl + transcript_full.jsonl 去重 + 台账模型映射/时间线夹逼补齐 + quota_snapshots 区间查询
+                var agLogsDir = Path.Combine(home, ".gemini", "antigravity", "brain", "conv-ag-1", ".system_generated", "logs");
+                Directory.CreateDirectory(agLogsDir);
+                var tsAg0 = now.AddMinutes(-8).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+                var tsAgMid = now.AddMinutes(-5).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+                var tsAgMidDone = now.AddMinutes(-4).AddSeconds(-48).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+                var tsAg1 = now.AddMinutes(-2).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+                var tsAg1Next = now.AddMinutes(-1).AddSeconds(-52).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ");
+                var agLines = string.Join("\n", new[]
+                {
+                    "{\"step_index\":1,\"type\":\"USER_INPUT\",\"status\":\"DONE\",\"created_at\":\"" + tsAg0 + "\"}",
+                    "{\"step_index\":2,\"type\":\"PLANNER_RESPONSE\",\"status\":\"DONE\",\"created_at\":\"" + tsAg0 + "\",\"input_tokens\":2000,\"cache_read_tokens\":8000,\"output_tokens\":300}",
+                    "{\"step_index\":3,\"type\":\"CHECKPOINT\",\"status\":\"DONE\",\"created_at\":\"" + tsAgMid + "\",\"input_tokens\":100,\"cache_read_tokens\":400,\"output_tokens\":50}",
+                    "{\"step_index\":4,\"type\":\"PLANNER_RESPONSE\",\"status\":\"DONE\",\"created_at\":\"" + tsAg1 + "\",\"input_tokens\":500,\"cache_read_tokens\":1000,\"output_tokens\":120}",
+                    "{\"step_index\":5,\"type\":\"GENERIC\",\"status\":\"DONE\",\"created_at\":\"" + tsAg1Next + "\"}"
+                }) + "\n";
+                File.WriteAllText(Path.Combine(agLogsDir, "transcript.jsonl"), agLines);
+                File.WriteAllText(Path.Combine(agLogsDir, "transcript_full.jsonl"), agLines);
+                UsageStorage.RecordQuotaSnapshot("ag@test.com", "gemini-5h", 0.72, now.AddHours(4));
+                UsageStorage.RecordQuotaSnapshot("ag@test.com", "gemini-weekly", 0.91, now.AddDays(5));
+
+                // 先跑一次 ScanAll()（此时无 pricing_ledger_v1.json，Antigravity 记录暂为空模型），
+                // 随后写入 pricing_ledger_v1.json（有意只含 step2 与 step4，漏掉 step3）并跑第二次 ScanAll() 验证：
+                // 1) 已有记录仅原地补齐模型（总请求数/Token 不重复累加）；
+                // 2) 前后同模型时间线夹逼把漏记的 step3 也正确补齐为 gemini-4-hydrogen。
+                UsageScanner.ScanAll();
+                var ledgerJson = "{" +
+                    "\"version\":\"1.0.0\"," +
+                    "\"calls\":{" +
+                    "\"c1\":{\"callId\":\"c1\",\"cascadeId\":\"conv-ag-1\",\"model\":\"Gemini 4 Hydrogen (XHigh)\",\"modelKey\":null,\"inputTokens\":2000,\"cacheReadTokens\":8000,\"outputTokens\":300,\"timestamp\":" + (nowMs - 480000) + "}," +
+                    "\"c2\":{\"callId\":\"c2\",\"cascadeId\":\"conv-ag-1\",\"model\":\"Gemini 4 Hydrogen (Medium)\",\"modelKey\":null,\"inputTokens\":500,\"cacheReadTokens\":1000,\"outputTokens\":120,\"timestamp\":" + (nowMs - 120000) + "}" +
+                    "}}";
+                File.WriteAllText(Path.Combine(home, ".gemini", "antigravity", "pricing_ledger_v1.json"), ledgerJson);
+                UsageScanner.ScanAll();
+                // 8b) Antigravity conversations/<cid>.db（f21 显示名 / f20.model_enum / 跳过超大 f3）异步补齐验证
+                var agDbConvLogs = Path.Combine(home, ".gemini", "antigravity", "brain", "conv-ag-db", ".system_generated", "logs");
+                Directory.CreateDirectory(agDbConvLogs);
+                File.WriteAllText(Path.Combine(agDbConvLogs, "transcript.jsonl"), string.Join("\n", new[]
+                {
+                    "{\"step_index\":2,\"type\":\"PLANNER_RESPONSE\",\"status\":\"DONE\",\"created_at\":\"" + tsAg0 + "\",\"input_tokens\":600,\"cache_read_tokens\":1400,\"output_tokens\":80}",
+                    "{\"step_index\":4,\"type\":\"PLANNER_RESPONSE\",\"status\":\"DONE\",\"created_at\":\"" + tsAg1 + "\",\"input_tokens\":700,\"cache_read_tokens\":2300,\"output_tokens\":90}"
+                }) + "\n");
+                // 先扫一次（此时 conv-ag-db.db 尚未落盘，两条暂时为空模型）
+                UsageScanner.ScanAll();
+
+                byte[] PbFieldVarint(int fn, ulong v)
+                {
+                    using var ms = new MemoryStream();
+                    void WriteVar(ulong x) { while (x >= 0x80) { ms.WriteByte((byte)((x & 0x7F) | 0x80)); x >>= 7; } ms.WriteByte((byte)x); }
+                    WriteVar((ulong)((fn << 3) | 0));
+                    WriteVar(v);
+                    return ms.ToArray();
+                }
+                byte[] PbFieldBytes(int fn, byte[] payload)
+                {
+                    using var ms = new MemoryStream();
+                    void WriteVar(ulong x) { while (x >= 0x80) { ms.WriteByte((byte)((x & 0x7F) | 0x80)); x >>= 7; } ms.WriteByte((byte)x); }
+                    WriteVar((ulong)((fn << 3) | 2));
+                    WriteVar((ulong)payload.Length);
+                    ms.Write(payload, 0, payload.Length);
+                    return ms.ToArray();
+                }
+                byte[] PbConcat(params byte[][] parts)
+                {
+                    using var ms = new MemoryStream();
+                    foreach (var p in parts) ms.Write(p, 0, p.Length);
+                    return ms.ToArray();
+                }
+
+                var agConvsDir = Path.Combine(home, ".gemini", "antigravity", "conversations");
+                Directory.CreateDirectory(agConvsDir);
+                var agDbPath = Path.Combine(agConvsDir, "conv-ag-db.db");
+                using (var agConn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={agDbPath};Pooling=False"))
+                {
+                    agConn.Open();
+                    using var c = agConn.CreateCommand();
+                    c.CommandText = @"
+PRAGMA journal_mode=WAL;
+CREATE TABLE steps (idx integer PRIMARY KEY, step_type integer NOT NULL DEFAULT 0, metadata blob);
+CREATE TABLE gen_metadata (idx integer PRIMARY KEY, data blob, size integer NOT NULL DEFAULT 0);";
+                    c.ExecuteNonQuery();
+
+                    void InsertStep(long sIdx, long gIdx)
+                    {
+                        var meta = PbFieldBytes(20, PbConcat(PbFieldVarint(2, (ulong)sIdx), PbFieldVarint(3, (ulong)gIdx)));
+                        using var ic = agConn.CreateCommand();
+                        ic.CommandText = "INSERT INTO steps(idx, step_type, metadata) VALUES ($i, 15, $m);";
+                        ic.Parameters.AddWithValue("$i", sIdx);
+                        ic.Parameters.AddWithValue("$m", meta);
+                        ic.ExecuteNonQuery();
+                    }
+                    void InsertGen(long gIdx, string? enumId, string? f21, string? f19, int bigPayloadBytes)
+                    {
+                        var f1Parts = new List<byte[]>();
+                        if (!string.IsNullOrEmpty(f19)) f1Parts.Add(PbFieldBytes(19, System.Text.Encoding.UTF8.GetBytes(f19)));
+                        if (!string.IsNullOrEmpty(enumId))
+                            f1Parts.Add(PbFieldBytes(20, PbConcat(
+                                PbFieldBytes(1, "model_enum"u8.ToArray()),
+                                PbFieldBytes(2, System.Text.Encoding.UTF8.GetBytes(enumId)))));
+                        if (!string.IsNullOrEmpty(f21)) f1Parts.Add(PbFieldBytes(21, System.Text.Encoding.UTF8.GetBytes(f21)));
+                        var topParts = new List<byte[]>();
+                        if (bigPayloadBytes > 0) topParts.Add(PbFieldBytes(3, new byte[bigPayloadBytes]));
+                        topParts.Add(PbFieldBytes(1, PbConcat(f1Parts.ToArray())));
+                        var data = PbConcat(topParts.ToArray());
+                        using var ig = agConn.CreateCommand();
+                        ig.CommandText = "INSERT INTO gen_metadata(idx, data, size) VALUES ($i, $d, $sz);";
+                        ig.Parameters.AddWithValue("$i", gIdx);
+                        ig.Parameters.AddWithValue("$d", data);
+                        ig.Parameters.AddWithValue("$sz", data.Length);
+                        ig.ExecuteNonQuery();
+                    }
+                    InsertStep(2, 101);
+                    InsertStep(4, 102);
+                    // 101 有超大 f3 且 f19 为混淆 worker 串，必须优先按 f21 解析出 gemini-4-argon
+                    InsertGen(101, "MODEL_PLACEHOLDER_M668", "Orchestrator (Argon)", "gemini-flash-worker-agy", 8192);
+                    // 102 无 f21 也无 f19，仅靠 model_enum 解析出 gemini-3.8-flash
+                    InsertGen(102, "MODEL_PLACEHOLDER_M318", null, null, 0);
+                }
+
+                // 重新写入刚才预埋的代理+扫描混合记录，同时驱动 conv-ag-db.db 事后延迟补齐
+                UsageStorage.RecordUsage(UsageStorage.AgentCodex, "relay-1", "MyRelay", "gpt-test",
+                    100, 20, now, cacheReadTokens: 0, cacheWriteTokens: 0, durationMs: 2000, ttftMs: 350, sourceId: "codex:resp_merge_1");
+                UsageStorage.RecordUsage(UsageStorage.AgentCodex, "custom", "Codex", "",
+                    120, 30, now, cacheReadTokens: 80, cacheWriteTokens: 0, durationMs: 2100, ttftMs: 1800, sourceId: "codex:resp_merge_1");
+                UsageScanner.ScanAll();
+
+                var allFrom = 0L;
+                var allTo = DateTimeOffset.UtcNow.AddDays(1).ToUnixTimeSeconds();
+                var byAgent = UsageStorage.GetAgentTotals(allFrom, allTo).ToDictionary(x => x.Agent, x => x);
+
+                bool codexOk = byAgent.TryGetValue(UsageStorage.AgentCodex, out var agCodex)
+                    && agCodex.Requests == 2 && agCodex.InTokens == 5120 && agCodex.OutTokens == 180;
+                bool claudeOk = byAgent.TryGetValue(UsageStorage.AgentClaudeCli, out var agClaude)
+                    && agClaude.Requests == 2 && agClaude.InTokens == (100026 + 10100) && agClaude.OutTokens == (500 + 900);
+                bool piOk = byAgent.TryGetValue(UsageStorage.AgentPi, out var agPi)
+                    && agPi.Requests == 1 && agPi.InTokens == 5500 && agPi.OutTokens == 200;
+                bool ocOk = byAgent.TryGetValue(UsageStorage.AgentOpenCode, out var agOc)
+                    && agOc.Requests == 1 && agOc.InTokens == 10000 && agOc.OutTokens == 140;
+                bool gemOk = byAgent.TryGetValue(UsageStorage.AgentGeminiCli, out var agGem)
+                    && agGem.Requests == 1 && agGem.InTokens == 12000 && agGem.OutTokens == 100;
+                bool dshOk = byAgent.TryGetValue(UsageStorage.AgentDsh, out var agDsh)
+                    && agDsh.Requests == 3 && agDsh.InTokens == (4000 + 500 + 1000) && agDsh.OutTokens == 310;
+                var qSnaps = UsageStorage.GetQuotaSnapshotsRange(allFrom, allTo);
+                var agRecentList = UsageStorage.GetRecentEvents(allFrom, allTo, 50)
+                    .Where(e => e.Agent == UsageStorage.AgentAntigravity)
+                    .ToList();
+                var agLedgerList = agRecentList.Where(e => e.Model == "gemini-4-hydrogen").ToList();
+                var agStep4 = agLedgerList.FirstOrDefault(e => e.OutTokens == 120);
+                var agStep2 = agLedgerList.FirstOrDefault(e => e.OutTokens == 300);
+                bool agOk = byAgent.TryGetValue(UsageStorage.AgentAntigravity, out var agAg)
+                    && agAg.Requests == 5 && agAg.InTokens == 17000 && agAg.OutTokens == 640
+                    && agLedgerList.Count == 3
+                    && agStep2 != null && agStep2.TtftMs > 0
+                    && agStep4 != null && agStep4.DurationMs == 8000
+                    && qSnaps.Count(q => q.AccountEmail == "ag@test.com") == 2;
+                bool agDbOk = agRecentList.Count == 5
+                    && agRecentList.Any(e => e.Model == "gemini-4-argon" && e.InTokens == 2000 && e.OutTokens == 80)
+                    && agRecentList.Any(e => e.Model == "gemini-3.8-flash" && e.InTokens == 3000 && e.OutTokens == 90);
+
+                var evMerge = UsageStorage.GetRecentEvents(allFrom, allTo, 50)
+                    .FirstOrDefault(e => e.Agent == UsageStorage.AgentCodex && e.Model == "gpt-test");
+                bool mergeOk = evMerge != null && evMerge.ProviderId == "relay-1" && evMerge.TtftMs == 350;
+
+                sb.AppendLine($"usage_accuracy_probe=ok;codexOk={codexOk};claudeOk={claudeOk};piOk={piOk};ocOk={ocOk};gemOk={gemOk};dshOk={dshOk};agOk={agOk};agDbOk={agDbOk};mergeOk={mergeOk}");
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("usage_accuracy_probe_err=" + ex.Message);
+            }
+            finally
+            {
+                UsageScanner.Reset();
+                Environment.SetEnvironmentVariable("APISWITCH_APPDATA", prevAppData);
             }
         }
         catch (Exception ex)

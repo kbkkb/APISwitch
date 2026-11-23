@@ -40,6 +40,7 @@ public sealed class StepCodeUsageSource : UsageSourceBase
         if (info.Length <= start) return 0;
 
         int added = 0;
+        var batch = new List<UsageStorage.UsageRecord>();
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -51,10 +52,15 @@ public sealed class StepCodeUsageSource : UsageSourceBase
             while ((line = reader.ReadLine()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                added += ParseLine(line, ref currentModel);
+                var rec = ParseLine(line, ref currentModel);
+                if (rec != null) batch.Add(rec);
             }
 
-            SetFileOffset(file, fs.Position);
+            if (batch.Count == 0 || RecordBatch(batch))
+            {
+                SetFileOffset(file, fs.Position);
+                added = batch.Count;
+            }
         }
         catch
         {
@@ -63,8 +69,7 @@ public sealed class StepCodeUsageSource : UsageSourceBase
         return added;
     }
 
-    // 注意：不能是 static——内部要调用实例方法 Record() 入库
-    int ParseLine(string line, ref string? currentModel)
+    UsageStorage.UsageRecord? ParseLine(string line, ref string? currentModel)
     {
         try
         {
@@ -76,16 +81,16 @@ public sealed class StepCodeUsageSource : UsageSourceBase
             {
                 var m = node?["modelId"]?.GetValue<string>();
                 if (!string.IsNullOrEmpty(m)) currentModel = m;
-                return 0;
+                return null;
             }
 
-            if (type != "message") return 0;
+            if (type != "message") return null;
 
             var msg = node?["message"];
-            if (msg?["role"]?.GetValue<string>() != "assistant") return 0;
+            if (msg?["role"]?.GetValue<string>() != "assistant") return null;
 
             var usage = msg["usage"];
-            if (usage == null) return 0;
+            if (usage == null) return null;
 
             long inTok = usage["input"]?.GetValue<long>() ?? 0;
             long outTok = usage["output"]?.GetValue<long>() ?? 0;
@@ -100,7 +105,7 @@ public sealed class StepCodeUsageSource : UsageSourceBase
                 ? Math.Max(inTok, totalTokens - outTok)
                 : inTok + cacheRead + cacheWrite;
 
-            if (totalInTok == 0 && outTok == 0) return 0;
+            if (totalInTok == 0 && outTok == 0) return null;
 
             // 模型优先取消息自带的 modelId，缺失时用会话内跟踪值
             string model = msg["modelId"]?.GetValue<string>() ?? "";
@@ -112,11 +117,17 @@ public sealed class StepCodeUsageSource : UsageSourceBase
                     DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
                 ts = dt.ToLocalTime();
 
-            Record(model, totalInTok, outTok, ts, cacheRead, cacheWrite,
-                providerName: "StepCode");
-            return 1;
+            string msgId = node?["id"]?.GetValue<string>() ?? msg["id"]?.GetValue<string>() ?? "";
+            string sid = !string.IsNullOrEmpty(msgId) ? "stepcode:" + msgId : "";
+
+            return new UsageStorage.UsageRecord(
+                AgentId, "", "StepCode", model,
+                totalInTok, outTok, ts,
+                CacheReadTokens: cacheRead,
+                CacheWriteTokens: cacheWrite,
+                SourceId: sid);
         }
-        catch { return 0; }
+        catch { return null; }
     }
 
     /// <summary>枚举最近 N 天内修改过的 jsonl 文件（按修改时间倒序）。</summary>

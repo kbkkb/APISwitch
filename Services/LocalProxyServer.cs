@@ -49,9 +49,6 @@ public static class LocalProxyServer
 
     public static event Action? StateChanged;
 
-    // 当前 Claude 路由的 agent 类型（供用量监控归属）
-    static string _claudeAgent = UsageStorage.AgentClaudeDesktop;
-
     public static void Initialize()
     {
         try
@@ -452,7 +449,7 @@ public static class LocalProxyServer
                     return;
                 }
                 var subpath = path.Length > 11 ? path.Substring(11) : "/";
-                await HandleClaudeForwardAsync(ctx, provider, subpath, reqBody);
+                await HandleClaudeForwardAsync(ctx, provider, subpath, reqBody, UsageStorage.AgentClaudeCli);
                 return;
             }
 
@@ -471,7 +468,7 @@ public static class LocalProxyServer
                     return;
                 }
                 var subpath = path.Length > 15 ? path.Substring(15) : "/";
-                await HandleClaudeForwardAsync(ctx, provider, subpath, reqBody);
+                await HandleClaudeForwardAsync(ctx, provider, subpath, reqBody, UsageStorage.AgentClaudeDesktop);
                 return;
             }
 
@@ -1114,11 +1111,14 @@ public static class LocalProxyServer
 
         // 用量监控：落库本次请求的 token 消耗与性能指标（Codex 经网关的请求）
         usageSw.Stop();
+        if (usagePromptTokens < usageCacheReadTokens + usageCacheWriteTokens)
+            usagePromptTokens += usageCacheReadTokens + usageCacheWriteTokens;
         if (usagePromptTokens > 0 || usageCompletionTokens > 0)
         {
             UsageStorage.RecordUsage(UsageStorage.AgentCodex, provider.Id ?? "", provider.Name ?? "",
                 model ?? "", usagePromptTokens, usageCompletionTokens, null,
-                usageCacheReadTokens, usageCacheWriteTokens, usageSw.ElapsedMilliseconds, usageTtftMs);
+                usageCacheReadTokens, usageCacheWriteTokens, usageSw.ElapsedMilliseconds, usageTtftMs,
+                sourceId: "codex:" + respId);
         }
 
         // Finish tool-call items and include them in the final Responses output.
@@ -1302,8 +1302,19 @@ public static class LocalProxyServer
             ctx.Response.ContentType = upstreamResp.Content.Headers.ContentType.ToString();
         }
 
+        string reqModel = provider.Model ?? "";
+        if (!string.IsNullOrEmpty(reqBody))
+        {
+            try
+            {
+                if (JsonNode.Parse(reqBody)?["model"]?.GetValue<string>() is { Length: > 0 } rm)
+                    reqModel = rm;
+            }
+            catch { }
+        }
+
         await using var outStream = ctx.Response.OutputStream;
-        await TeeCopyWithUsageAsync(upstreamResp, outStream, UsageStorage.AgentCodex, provider.Id ?? "", provider.Name ?? "");
+        await TeeCopyWithUsageAsync(upstreamResp, outStream, UsageStorage.AgentCodex, provider.Id ?? "", provider.Name ?? "", reqModel);
         await outStream.FlushAsync();
     }
 
@@ -1353,8 +1364,9 @@ public static class LocalProxyServer
         return ClaudeCli.Strip1m(originalModel);
     }
 
-    private static async Task HandleClaudeForwardAsync(HttpListenerContext ctx, ClaudeProvider provider, string subpath, string? reqBody)
+    private static async Task HandleClaudeForwardAsync(HttpListenerContext ctx, ClaudeProvider provider, string subpath, string? reqBody, string agent)
     {
+        string requestModel = provider.Model ?? "";
         // 1. Rewrite model in JSON request body if mapping exists
         if (!string.IsNullOrEmpty(reqBody))
         {
@@ -1375,6 +1387,7 @@ public static class LocalProxyServer
                         }
                         effectiveModel = rewritten;
                     }
+                    if (!string.IsNullOrEmpty(effectiveModel)) requestModel = effectiveModel;
 
                     // 原生 Anthropic 协议：注入 thinking.budget_tokens（用户已显式携带则不覆盖）；
                     // chat/responses 转译路径在各自 Handler 内注入，不在此处理。
@@ -1399,14 +1412,14 @@ public static class LocalProxyServer
         if (string.Equals(provider.WireApi, "chat", StringComparison.OrdinalIgnoreCase) &&
             (subpath.EndsWith("/messages", StringComparison.OrdinalIgnoreCase) || subpath.EndsWith("/messages/", StringComparison.OrdinalIgnoreCase)))
         {
-            await HandleClaudeMessagesToChatAsync(ctx, provider, reqBody);
+            await HandleClaudeMessagesToChatAsync(ctx, provider, reqBody, agent);
             return;
         }
 
         if (string.Equals(provider.WireApi, "responses", StringComparison.OrdinalIgnoreCase) &&
             (subpath.EndsWith("/messages", StringComparison.OrdinalIgnoreCase) || subpath.EndsWith("/messages/", StringComparison.OrdinalIgnoreCase)))
         {
-            await HandleClaudeMessagesToResponsesAsync(ctx, provider, reqBody);
+            await HandleClaudeMessagesToResponsesAsync(ctx, provider, reqBody, agent);
             return;
         }
 
@@ -1525,7 +1538,7 @@ public static class LocalProxyServer
         }
 
         await using var outStream = ctx.Response.OutputStream;
-        await TeeCopyWithUsageAsync(upstreamResp, outStream, _claudeAgent, provider.Id ?? "", provider.Name ?? "");
+        await TeeCopyWithUsageAsync(upstreamResp, outStream, agent, provider.Id ?? "", provider.Name ?? "", requestModel);
         await outStream.FlushAsync();
     }
 
@@ -1562,21 +1575,45 @@ public static class LocalProxyServer
     }
 
     /// <summary>
-    /// 透传上游响应流，同时扫描 SSE data 行中的 usage 字段用于用量监控。
-    /// 非 SSE 响应（纯 JSON/二进制）不受影响，原样拷贝。
-    /// 同时采集性能指标：整轮耗时（Stopwatch）、首字耗时（首个内容 chunk）、缓存 token。
+    /// 透传上游响应流，同时扫描 SSE / 非流式 JSON 响应中的 usage 字段用于用量监控。
+    /// 支持 OpenAI Chat Completions、OpenAI Responses (response.completed) 与 Anthropic Messages 三种协议。
     /// </summary>
     private static async Task TeeCopyWithUsageAsync(HttpResponseMessage upstreamResp, System.IO.Stream outStream,
         string agent, string providerId, string providerName, string model = "")
     {
         long inTokens = 0, outTokens = 0;
         long cacheReadTokens = 0, cacheWriteTokens = 0;
+        bool hasInferenceGeo = false;
+        string responseId = "";
         var contentType = upstreamResp.Content.Headers.ContentType?.MediaType ?? "";
 
         if (!contentType.Contains("event-stream", StringComparison.OrdinalIgnoreCase))
         {
-            // 非流式：直接拷贝（无法逐 chunk 拿 usage）
-            await upstreamResp.Content.CopyToAsync(outStream);
+            if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase) && upstreamResp.IsSuccessStatusCode)
+            {
+                var swJson = System.Diagnostics.Stopwatch.StartNew();
+                var bytes = await upstreamResp.Content.ReadAsByteArrayAsync();
+                await outStream.WriteAsync(bytes);
+                swJson.Stop();
+                try
+                {
+                    if (JsonNode.Parse(bytes) is JsonObject jsonObj)
+                    {
+                        if (jsonObj["id"]?.GetValue<string>() is { Length: > 0 } rid) responseId = rid;
+                        if (jsonObj["model"]?.GetValue<string>() is { Length: > 0 } rm) model = rm;
+                        var uNode = jsonObj["usage"] as JsonObject ?? jsonObj["response"]?["usage"] as JsonObject;
+                        ExtractUsageFromNode(uNode, ref inTokens, ref outTokens, ref cacheReadTokens, ref cacheWriteTokens, ref hasInferenceGeo);
+                        RecordProxyUsage(agent, providerId, providerName, model, responseId,
+                            inTokens, outTokens, cacheReadTokens, cacheWriteTokens, hasInferenceGeo,
+                            swJson.ElapsedMilliseconds, swJson.ElapsedMilliseconds);
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                await upstreamResp.Content.CopyToAsync(outStream);
+            }
             return;
         }
 
@@ -1600,33 +1637,34 @@ public static class LocalProxyServer
             {
                 if (JsonNode.Parse(dataStr) is JsonObject obj)
                 {
-                    // 首字打点：首个真正带内容的 chunk。
-                    // OpenAI 风格看 choices[0].delta.content；Anthropic 风格看 type=content_block_delta。
-                    // 不把 message_start / response.created 这类空壳事件算进去。
                     if (ttftMs == 0 && HasStreamContent(obj)) ttftMs = sw.ElapsedMilliseconds;
 
-                    // Anthropic: message_delta.usage；OpenAI: usage
-                    if (obj["usage"] is JsonObject u)
+                    if (string.IsNullOrEmpty(responseId))
                     {
-                        if (u["input_tokens"]?.GetValue<long>() is long it) inTokens = it;
-                        else if (u["prompt_tokens"]?.GetValue<long>() is long pt) inTokens = pt;
-                        if (u["output_tokens"]?.GetValue<long>() is long ot) outTokens = ot;
-                        else if (u["completion_tokens"]?.GetValue<long>() is long ct) outTokens = ct;
+                        responseId = obj["message"]?["id"]?.GetValue<string>()
+                            ?? obj["response"]?["id"]?.GetValue<string>()
+                            ?? obj["id"]?.GetValue<string>()
+                            ?? "";
+                    }
+                    if (string.IsNullOrEmpty(model))
+                    {
+                        var rm = obj["message"]?["model"]?.GetValue<string>()
+                            ?? obj["response"]?["model"]?.GetValue<string>()
+                            ?? obj["model"]?.GetValue<string>();
+                        if (!string.IsNullOrEmpty(rm)) model = rm;
+                    }
 
-                        // 缓存 token：OpenAI 兼容格式在 prompt_tokens_details.cached_tokens，
-                        // Anthropic 原生格式给顶层 cache_read_input_tokens / cache_creation_input_tokens。
-                        if (u["prompt_tokens_details"]?["cached_tokens"]?.GetValue<long>() is long ptd) cacheReadTokens = ptd;
-                        if (u["cache_read_input_tokens"]?.GetValue<long>() is long ar) cacheReadTokens = ar;
-                        if (u["cache_creation_input_tokens"]?.GetValue<long>() is long ac) cacheWriteTokens = ac;
-                    }
-                    else if (obj["message"]?["usage"] is JsonObject mu)
-                    {
-                        if (mu["input_tokens"]?.GetValue<long>() is long it2) inTokens = it2;
-                        if (mu["output_tokens"]?.GetValue<long>() is long ot2) outTokens = ot2;
-                        if (mu["prompt_tokens_details"]?["cached_tokens"]?.GetValue<long>() is long ptd2) cacheReadTokens = ptd2;
-                        if (mu["cache_read_input_tokens"]?.GetValue<long>() is long ar2) cacheReadTokens = ar2;
-                        if (mu["cache_creation_input_tokens"]?.GetValue<long>() is long ac2) cacheWriteTokens = ac2;
-                    }
+                    // 1) OpenAI Chat / Anthropic message_delta: obj.usage
+                    if (obj["usage"] is JsonObject u)
+                        ExtractUsageFromNode(u, ref inTokens, ref outTokens, ref cacheReadTokens, ref cacheWriteTokens, ref hasInferenceGeo);
+
+                    // 2) Anthropic message_start: obj.message.usage
+                    if (obj["message"]?["usage"] is JsonObject mu)
+                        ExtractUsageFromNode(mu, ref inTokens, ref outTokens, ref cacheReadTokens, ref cacheWriteTokens, ref hasInferenceGeo);
+
+                    // 3) OpenAI Responses (response.completed / response.done): obj.response.usage
+                    if (obj["response"]?["usage"] is JsonObject ru)
+                        ExtractUsageFromNode(ru, ref inTokens, ref outTokens, ref cacheReadTokens, ref cacheWriteTokens, ref hasInferenceGeo);
                 }
             }
             catch { }
@@ -1634,21 +1672,55 @@ public static class LocalProxyServer
 
         sw.Stop();
 
-        if (inTokens > 0 || outTokens > 0)
-        {
-            UsageStorage.RecordUsage(agent, providerId, providerName, model, inTokens, outTokens, null,
-                cacheReadTokens, cacheWriteTokens, sw.ElapsedMilliseconds, ttftMs);
-        }
+        RecordProxyUsage(agent, providerId, providerName, model, responseId,
+            inTokens, outTokens, cacheReadTokens, cacheWriteTokens, hasInferenceGeo,
+            sw.ElapsedMilliseconds, ttftMs);
+    }
+
+    static void ExtractUsageFromNode(JsonObject? u, ref long inTokens, ref long outTokens,
+        ref long cacheReadTokens, ref long cacheWriteTokens, ref bool hasInferenceGeo)
+    {
+        if (u == null) return;
+        if (u["input_tokens"]?.GetValue<long>() is long it && it > inTokens) inTokens = it;
+        else if (u["prompt_tokens"]?.GetValue<long>() is long pt && pt > inTokens) inTokens = pt;
+
+        if (u["output_tokens"]?.GetValue<long>() is long ot && ot > outTokens) outTokens = ot;
+        else if (u["completion_tokens"]?.GetValue<long>() is long ct && ct > outTokens) outTokens = ct;
+
+        if (u["prompt_tokens_details"]?["cached_tokens"]?.GetValue<long>() is long ptd && ptd > cacheReadTokens)
+            cacheReadTokens = ptd;
+        if (u["input_tokens_details"]?["cached_tokens"]?.GetValue<long>() is long itd && itd > cacheReadTokens)
+            cacheReadTokens = itd;
+        if (u["cache_read_input_tokens"]?.GetValue<long>() is long ar && ar > cacheReadTokens)
+            cacheReadTokens = ar;
+        if (u["cache_creation_input_tokens"]?.GetValue<long>() is long ac && ac > cacheWriteTokens)
+            cacheWriteTokens = ac;
+        if (!string.IsNullOrEmpty(u["inference_geo"]?.GetValue<string>()))
+            hasInferenceGeo = true;
+    }
+
+    static void RecordProxyUsage(string agent, string providerId, string providerName, string model, string responseId,
+        long inTokens, long outTokens, long cacheReadTokens, long cacheWriteTokens, bool hasInferenceGeo,
+        long durationMs, long ttftMs)
+    {
+        bool addCache = hasInferenceGeo || (inTokens < cacheReadTokens + cacheWriteTokens);
+        long totalIn = addCache ? (inTokens + cacheReadTokens + cacheWriteTokens) : inTokens;
+        if (totalIn <= 0 && outTokens <= 0) return;
+
+        string prefix = agent == UsageStorage.AgentCodex ? "codex:" : "claude:";
+        string sid = !string.IsNullOrEmpty(responseId) ? prefix + responseId : "";
+
+        UsageStorage.RecordUsage(agent, providerId, providerName, model, totalIn, outTokens, null,
+            cacheReadTokens, cacheWriteTokens, durationMs, ttftMs, sid);
     }
 
     /// <summary>
     /// 判断一个 SSE chunk 是否携带实际生成内容（用于首字耗时打点）。
-    /// 只识别 OpenAI Chat Completions 与 Anthropic Messages 两种主流格式；
-    /// 无法识别时返回 false，首字显示为"—"，不影响 token 统计。
+    /// 支持 OpenAI Chat Completions、OpenAI Responses 与 Anthropic Messages 三种主流格式。
     /// </summary>
     static bool HasStreamContent(JsonObject obj)
     {
-        // OpenAI: choices[0].delta.content / reasoning_content
+        // OpenAI Chat: choices[0].delta.content / reasoning_content
         if (obj["choices"]?[0]?["delta"] is JsonObject d)
         {
             if (d["content"]?.GetValue<string>() is { Length: > 0 }) return true;
@@ -1656,9 +1728,18 @@ public static class LocalProxyServer
             if (d["reasoning"]?.GetValue<string>() is { Length: > 0 }) return true;
         }
 
-        // Anthropic: type=content_block_delta 且 delta.text 非空
-        if (obj["type"]?.GetValue<string>() == "content_block_delta" &&
-            obj["delta"]?["text"]?.GetValue<string>() is { Length: > 0 }) return true;
+        // OpenAI Responses: response.output_text.delta / response.reasoning_summary_text.delta
+        var evtType = obj["type"]?.GetValue<string>();
+        if ((evtType == "response.output_text.delta" || evtType == "response.reasoning_text.delta" ||
+             evtType == "response.reasoning_summary_text.delta") &&
+            obj["delta"]?.GetValue<string>() is { Length: > 0 })
+            return true;
+
+        // Anthropic: type=content_block_delta 且 delta.text / thinking 非空
+        if (evtType == "content_block_delta" &&
+            (obj["delta"]?["text"]?.GetValue<string>() is { Length: > 0 } ||
+             obj["delta"]?["thinking"]?.GetValue<string>() is { Length: > 0 }))
+            return true;
 
         return false;
     }
@@ -1677,7 +1758,7 @@ public static class LocalProxyServer
         await WriteJsonAsync(ctx, statusCode, errObj);
     }
 
-    private static async Task HandleClaudeMessagesToChatAsync(HttpListenerContext ctx, ClaudeProvider provider, string? reqBody)
+    private static async Task HandleClaudeMessagesToChatAsync(HttpListenerContext ctx, ClaudeProvider provider, string? reqBody, string agent)
     {
         if (string.IsNullOrEmpty(reqBody))
         {
@@ -1806,12 +1887,17 @@ public static class LocalProxyServer
         }
 
         // Build Chat payload
+        var stream = reqObj["stream"]?.GetValue<bool>() ?? false;
         var chatPayload = new JsonObject
         {
             ["model"] = model,
             ["messages"] = messages,
-            ["stream"] = reqObj["stream"]?.GetValue<bool>() ?? false
+            ["stream"] = stream
         };
+        if (stream)
+        {
+            chatPayload["stream_options"] = new JsonObject { ["include_usage"] = true };
+        }
 
         // 思考强度注入（用户请求已显式携带则不覆盖）——按映射后的模型取档位
         var chatEffort = ThinkingEffort.ToOpenAiReasoningEffort(
@@ -1883,7 +1969,11 @@ public static class LocalProxyServer
             return;
         }
 
-        var stream = (bool)(chatPayload["stream"] ?? false);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long ttftMs = 0;
+        long realIn = 0, realOut = 0, realCr = 0, realCw = 0;
+        bool hasGeo = false;
+
         if (stream)
         {
             ctx.Response.StatusCode = 200;
@@ -1910,7 +2000,7 @@ public static class LocalProxyServer
                     ["content"] = new JsonArray(),
                     ["stop_reason"] = null,
                     ["stop_sequence"] = null,
-                    ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+                    ["usage"] = new JsonObject { ["input_tokens"] = 0, ["output_tokens"] = 0 }
                 }
             }.ToJsonString();
             await WriteRawSseAsync(outStream, "message_start", msgStartJson);
@@ -1928,23 +2018,28 @@ public static class LocalProxyServer
             while ((line = await reader.ReadLineAsync()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                if (!line.StartsWith("data: ")) continue;
+                if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
 
-                var dataStr = line.Substring(6).Trim();
+                var dataStr = line.Substring(5).Trim();
                 if (dataStr == "[DONE]") break;
 
                 try
                 {
                     var chunkNode = JsonNode.Parse(dataStr);
+                    if (chunkNode?["usage"] is JsonObject usageObj)
+                        ExtractUsageFromNode(usageObj, ref realIn, ref realOut, ref realCr, ref realCw, ref hasGeo);
+
                     var deltaNode = chunkNode?["choices"]?[0]?["delta"];
                     var textChunk = deltaNode?["content"]?.GetValue<string>();
                     if (string.IsNullOrEmpty(textChunk))
                     {
-                        textChunk = deltaNode?["reasoning_content"]?.GetValue<string>();
+                        textChunk = deltaNode?["reasoning_content"]?.GetValue<string>()
+                            ?? deltaNode?["reasoning"]?.GetValue<string>();
                     }
 
                     if (!string.IsNullOrEmpty(textChunk))
                     {
+                        if (ttftMs == 0) ttftMs = sw.ElapsedMilliseconds;
                         var deltaJson = new JsonObject
                         {
                             ["type"] = "content_block_delta",
@@ -1961,6 +2056,10 @@ public static class LocalProxyServer
                 catch { }
             }
 
+            sw.Stop();
+            RecordProxyUsage(agent, provider.Id ?? "", provider.Name ?? "", model, msgId,
+                realIn, realOut, realCr, realCw, hasGeo, sw.ElapsedMilliseconds, ttftMs);
+
             // 3. content_block_stop
             var blockStopJson = new JsonObject
             {
@@ -1969,12 +2068,19 @@ public static class LocalProxyServer
             }.ToJsonString();
             await WriteRawSseAsync(outStream, "content_block_stop", blockStopJson);
 
-            // 4. message_delta
+            // 4. message_delta（向客户端写回真实 usage，避免落盘产生 1/10 假数据）
+            var deltaUsage = new JsonObject
+            {
+                ["input_tokens"] = realIn,
+                ["output_tokens"] = realOut,
+                ["cache_read_input_tokens"] = realCr,
+                ["cache_creation_input_tokens"] = realCw,
+            };
             var msgDeltaJson = new JsonObject
             {
                 ["type"] = "message_delta",
                 ["delta"] = new JsonObject { ["stop_reason"] = "end_turn", ["stop_sequence"] = null },
-                ["usage"] = new JsonObject { ["output_tokens"] = 10 }
+                ["usage"] = deltaUsage
             }.ToJsonString();
             await WriteRawSseAsync(outStream, "message_delta", msgDeltaJson);
 
@@ -1986,7 +2092,15 @@ public static class LocalProxyServer
         else
         {
             var respStr = await upstreamResp.Content.ReadAsStringAsync();
+            sw.Stop();
             var respNode = JsonNode.Parse(respStr);
+            if (respNode?["usage"] is JsonObject usageObj)
+                ExtractUsageFromNode(usageObj, ref realIn, ref realOut, ref realCr, ref realCw, ref hasGeo);
+
+            var msgId = "msg_" + Guid.NewGuid().ToString("N");
+            RecordProxyUsage(agent, provider.Id ?? "", provider.Name ?? "", model, msgId,
+                realIn, realOut, realCr, realCw, hasGeo, sw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
+
             var message = respNode?["choices"]?[0]?["message"] as JsonObject;
             var content = message?["content"]?.GetValue<string>() ?? "";
             var anthropicContent = new JsonArray();
@@ -2018,20 +2132,26 @@ public static class LocalProxyServer
 
             var anthropicResp = new JsonObject
             {
-                ["id"] = "msg_" + Guid.NewGuid().ToString("N"),
+                ["id"] = msgId,
                 ["type"] = "message",
                 ["role"] = "assistant",
                 ["model"] = model,
                 ["content"] = anthropicContent,
                 ["stop_reason"] = hasToolUse ? "tool_use" : "end_turn",
                 ["stop_sequence"] = null,
-                ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+                ["usage"] = new JsonObject
+                {
+                    ["input_tokens"] = realIn,
+                    ["output_tokens"] = realOut,
+                    ["cache_read_input_tokens"] = realCr,
+                    ["cache_creation_input_tokens"] = realCw,
+                }
             };
             await WriteJsonAsync(ctx, 200, anthropicResp);
         }
     }
 
-    private static async Task HandleClaudeMessagesToResponsesAsync(HttpListenerContext ctx, ClaudeProvider provider, string? reqBody)
+    private static async Task HandleClaudeMessagesToResponsesAsync(HttpListenerContext ctx, ClaudeProvider provider, string? reqBody, string agent)
     {
         if (string.IsNullOrEmpty(reqBody))
         {
@@ -2179,6 +2299,11 @@ public static class LocalProxyServer
             return;
         }
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long ttftMs = 0;
+        long realIn = 0, realOut = 0, realCr = 0, realCw = 0;
+        bool hasGeo = false;
+
         if (stream)
         {
             ctx.Response.StatusCode = 200;
@@ -2205,7 +2330,7 @@ public static class LocalProxyServer
                     ["content"] = new JsonArray(),
                     ["stop_reason"] = null,
                     ["stop_sequence"] = null,
-                    ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+                    ["usage"] = new JsonObject { ["input_tokens"] = 0, ["output_tokens"] = 0 }
                 }
             }.ToJsonString();
             await WriteRawSseAsync(outStream, "message_start", msgStartJson);
@@ -2223,27 +2348,33 @@ public static class LocalProxyServer
             while ((line = await reader.ReadLineAsync()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
-                if (!line.StartsWith("data: ")) continue;
+                if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
 
-                var dataStr = line.Substring(6).Trim();
+                var dataStr = line.Substring(5).Trim();
                 if (dataStr == "[DONE]") break;
 
                 try
                 {
                     var chunkNode = JsonNode.Parse(dataStr);
+                    if (chunkNode?["response"]?["usage"] is JsonObject ru)
+                        ExtractUsageFromNode(ru, ref realIn, ref realOut, ref realCr, ref realCw, ref hasGeo);
+                    else if (chunkNode?["usage"] is JsonObject uu)
+                        ExtractUsageFromNode(uu, ref realIn, ref realOut, ref realCr, ref realCw, ref hasGeo);
+
                     string? textChunk = chunkNode?["delta"]?.GetValue<string>()
                         ?? chunkNode?["text"]?.GetValue<string>()
                         ?? chunkNode?["output_text"]?.GetValue<string>();
 
                     if (!string.IsNullOrEmpty(textChunk))
                     {
+                        if (ttftMs == 0) ttftMs = sw.ElapsedMilliseconds;
                         var deltaJson = new JsonObject
                         {
                             ["type"] = "content_block_delta",
                             ["index"] = 0,
                             ["delta"] = new JsonObject
                             {
-                                ["type"] = "text",
+                                ["type"] = "text_delta",
                                 ["text"] = textChunk
                             }
                         }.ToJsonString();
@@ -2253,16 +2384,26 @@ public static class LocalProxyServer
                 catch { }
             }
 
+            sw.Stop();
+            RecordProxyUsage(agent, provider.Id ?? "", provider.Name ?? "", model, msgId,
+                realIn, realOut, realCr, realCw, hasGeo, sw.ElapsedMilliseconds, ttftMs);
+
             // content_block_stop
             var blockStopJson = new JsonObject { ["type"] = "content_block_stop", ["index"] = 0 }.ToJsonString();
             await WriteRawSseAsync(outStream, "content_block_stop", blockStopJson);
 
-            // message_delta
+            // message_delta（向客户端写回真实 usage）
             var msgDeltaJson = new JsonObject
             {
                 ["type"] = "message_delta",
                 ["delta"] = new JsonObject { ["stop_reason"] = "end_turn", ["stop_sequence"] = null },
-                ["usage"] = new JsonObject { ["output_tokens"] = 10 }
+                ["usage"] = new JsonObject
+                {
+                    ["input_tokens"] = realIn,
+                    ["output_tokens"] = realOut,
+                    ["cache_read_input_tokens"] = realCr,
+                    ["cache_creation_input_tokens"] = realCw,
+                }
             }.ToJsonString();
             await WriteRawSseAsync(outStream, "message_delta", msgDeltaJson);
 
@@ -2274,14 +2415,24 @@ public static class LocalProxyServer
         else
         {
             var respStr = await upstreamResp.Content.ReadAsStringAsync();
+            sw.Stop();
             var respNode = JsonNode.Parse(respStr);
+            if (respNode?["usage"] is JsonObject ru)
+                ExtractUsageFromNode(ru, ref realIn, ref realOut, ref realCr, ref realCw, ref hasGeo);
+            else if (respNode?["response"]?["usage"] is JsonObject rru)
+                ExtractUsageFromNode(rru, ref realIn, ref realOut, ref realCr, ref realCw, ref hasGeo);
+
+            var msgId = "msg_" + Guid.NewGuid().ToString("N");
+            RecordProxyUsage(agent, provider.Id ?? "", provider.Name ?? "", model, msgId,
+                realIn, realOut, realCr, realCw, hasGeo, sw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
+
             var content = respNode?["output_text"]?.GetValue<string>()
                 ?? respNode?["output"]?[0]?["content"]?[0]?["text"]?.GetValue<string>()
                 ?? "";
 
             var anthropicResp = new JsonObject
             {
-                ["id"] = "msg_" + Guid.NewGuid().ToString("N"),
+                ["id"] = msgId,
                 ["type"] = "message",
                 ["role"] = "assistant",
                 ["model"] = model,
@@ -2291,7 +2442,13 @@ public static class LocalProxyServer
                 },
                 ["stop_reason"] = "end_turn",
                 ["stop_sequence"] = null,
-                ["usage"] = new JsonObject { ["input_tokens"] = 1, ["output_tokens"] = 1 }
+                ["usage"] = new JsonObject
+                {
+                    ["input_tokens"] = realIn,
+                    ["output_tokens"] = realOut,
+                    ["cache_read_input_tokens"] = realCr,
+                    ["cache_creation_input_tokens"] = realCw,
+                }
             };
             await WriteJsonAsync(ctx, 200, anthropicResp);
         }

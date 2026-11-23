@@ -9,9 +9,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>APISwitch</AssemblyName>
     <RootNamespace>APISwitch</RootNamespace>
-    <Version>0.3.2</Version>
-    <FileVersion>0.3.2.0</FileVersion>
-    <AssemblyVersion>0.3.2.0</AssemblyVersion>
+    <Version>0.3.3</Version>
+    <FileVersion>0.3.3.0</FileVersion>
+    <AssemblyVersion>0.3.3.0</AssemblyVersion>
     <Product>APISwitch</Product>
     <Description>第三方 API 和谷歌官方订阅切换与管理</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
@@ -19,7 +19,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="System.Management" Version="10.0.13" />
     <PackageReference Include="Tomlyn" Version="2.10.1" />
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
   </ItemGroup>
 
   <ItemGroup>

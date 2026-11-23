@@ -53,12 +53,21 @@ FROM model_usage WHERE started_at > $from ORDER BY started_at ASC LIMIT 5000;";
             cmd.Parameters.AddWithValue("$from", fromMs);
 
             using var r = cmd.ExecuteReader();
+            var batch = new List<UsageStorage.UsageRecord>();
             while (r.Read())
             {
                 var startedMs = r.GetInt64(3);
                 if (startedMs > maxMs) maxMs = startedMs;
-                if (ParseRow(r)) added++;
-            }        }
+                var rec = ParseRow(r);
+                if (rec != null) batch.Add(rec);
+            }
+
+            if (batch.Count > 0)
+            {
+                if (!RecordBatch(batch)) return 0;
+                added = batch.Count;
+            }
+        }
         catch
         {
             // DB 被占用 / 损坏 / 版本不兼容：本次跳过，水位不推进，下次重试
@@ -69,36 +78,48 @@ FROM model_usage WHERE started_at > $from ORDER BY started_at ASC LIMIT 5000;";
         return added;
     }
 
-    // 注意：不能是 static——内部要调用实例方法 Record() 入库
-    bool ParseRow(Microsoft.Data.Sqlite.SqliteDataReader r)
+    UsageStorage.UsageRecord? ParseRow(Microsoft.Data.Sqlite.SqliteDataReader r)
     {
         try
         {
             // 只统计成功的请求；失败/取消的请求 token 可能不完整，计入会虚增
             var status = r.GetString(2);
             if (!string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase))
-                return false;
+                return null;
 
             long inTok = r.GetInt64(6);
             long outTok = r.GetInt64(7);
-            if (inTok == 0 && outTok == 0) return false;
-
-            var providerId = r.GetString(0);
-            var model = r.GetString(1);
             long reasoning = r.IsDBNull(8) ? 0 : r.GetInt64(8);
             long cacheWrite = r.IsDBNull(9) ? 0 : r.GetInt64(9);
             long cacheRead = r.IsDBNull(10) ? 0 : r.GetInt64(10);
+
+            if (inTok < cacheRead + cacheWrite)
+                inTok += cacheRead + cacheWrite;
+            if (reasoning > 0 && outTok < reasoning)
+                outTok += reasoning;
+
+            if (inTok == 0 && outTok == 0) return null;
+
+            var providerId = r.GetString(0);
+            var model = r.GetString(1);
+            long startedMs = r.GetInt64(3);
             long durationMs = r.IsDBNull(4) ? 0 : r.GetInt64(4);
             long ttftMs = r.IsDBNull(5) ? 0 : r.GetInt64(5);
 
             // started_at 是毫秒时间戳，转本地时间
-            var ts = DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(3)).LocalDateTime;
+            var ts = DateTimeOffset.FromUnixTimeMilliseconds(startedMs).LocalDateTime;
+            string sid = $"zcode:{startedMs}:{model}";
 
-            Record(model, inTok, outTok, ts, cacheRead, cacheWrite, durationMs, ttftMs,
-                providerId: providerId, providerName: "zcode");
-            return true;
+            return new UsageStorage.UsageRecord(
+                AgentId, providerId, "zcode", model,
+                inTok, outTok, ts,
+                CacheReadTokens: cacheRead,
+                CacheWriteTokens: cacheWrite,
+                DurationMs: durationMs,
+                TtftMs: ttftMs,
+                SourceId: sid);
         }
-        catch { return false; }
+        catch { return null; }
     }
 
     static bool TableExists(Microsoft.Data.Sqlite.SqliteConnection conn, string table)

@@ -2,6 +2,30 @@
 
 # APISwitch 更新日志
 
+## APISwitch v0.3.3 更新日志
+
+【重磅新增 · Antigravity 原生用量与性能监控】
+• 新增 `AntigravityUsageSource`，直接扫描 Antigravity IDE 本地对话记录（`~/.gemini/antigravity/conversations/`），用量监控支持客户端扩充至 **10 款**。
+• 深度解析 `steps.metadata`（`gen_metadata`），精准提取真实模型名称、输入/输出/缓存 Token、首字延迟（TTFT）与输出速度（tokens/s），彻底解决 Antigravity 会话显示「未知模型」的问题。
+• 支持通过**回填历史数据**一键重扫历史 Antigravity 对话并补齐真实模型归属与性能指标。
+
+【新增 · 用量监控界面精简与客户端快捷筛选栏】
+• 将用量监控顶栏标签由 5 个精简为 **4 个核心视图**（供应商明细、客户端汇总、模型汇总、调用明细），保留供应商下钻按模型展开能力。
+• 在时间筛选栏上方新增**客户端图标快捷筛选栏**：默认选中「全部」，支持一键点击任意客户端图标即时筛选对应客户端的全盘卡片、趋势图与明细列表。
+• 底部状态栏与调用明细新增「缓存写入」标注及区间平均输出速度 / 平均首字耗时统计。
+
+【修复 · Antigravity 额度同步与 Google AI Plus 订阅识别】
+• 统一将配额与可用模型接口（`fetchAvailableModels`、`retrieveUserQuota`、`loadCodeAssist`）锁定至 `daily-cloudcode-pa.googleapis.com`，并引入 `ReconcileQuotaWithModels` 交叉对齐逻辑，确保 APISwitch 与 Antigravity IDE 内部剩余额度完全一致。
+• 修复窗口失去焦点后后台额度刷新被暂停（`MainWindow_Deactivated`）及冷启动并发竞态导致的额度显示滞后问题。
+• 独立区分 **`Google AI Plus`（`g1-plus-tier`）** 与 `Pro` / `Starter`：Plus 订阅账号现已正确展示琥珀色 **`PLUS`** 徽章（不再误识别为 `PRO`），并正常展示其独立 Gemini 4 Argon 配额。
+
+【优化与修复】
+• 拆分并重构 `ClaudeCliProcess` 与 `ClaudeProcess` 进程清理逻辑，安全重启 Claude CLI / Desktop 不误伤其他进程。
+• 优化 `GeminiCliUsageSource`、`StepCodeUsageSource`、`ZCodeUsageSource`、`DshUsageSource` 的增量扫描与字段对齐精度。
+• 补全所有新增筛选控件与订阅徽章的中英文双语本地化词条。
+
+---
+
 ## APISwitch v0.3.2 更新日志
 
 【重磅新增 · 支持 Gemini 4 (Argon) 独立配额与限额查看】

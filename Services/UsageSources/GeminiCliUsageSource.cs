@@ -35,7 +35,7 @@ public sealed class GeminiCliUsageSource : UsageSourceBase
         if (!Directory.Exists(tmpRoot)) return 0; // 用户未安装或未运行 Gemini CLI
 
         int added = 0;
-        foreach (var file in EnumerateChatFiles(tmpRoot, maxAgeDays: 365))
+        foreach (var file in EnumerateChatFiles(tmpRoot, maxAgeDays: 400))
         {
             if (file.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase))
                 added += ScanJsonlFile(file);
@@ -51,7 +51,8 @@ public sealed class GeminiCliUsageSource : UsageSourceBase
         var info = new FileInfo(file);
         if (info.Length <= start) return 0;
 
-        var batch = new List<UsageStorage.UsageRecord>();
+        var deduped = new Dictionary<string, UsageStorage.UsageRecord>(StringComparer.Ordinal);
+        var fallback = new List<UsageStorage.UsageRecord>();
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -68,14 +69,27 @@ public sealed class GeminiCliUsageSource : UsageSourceBase
                     continue;
 
                 var r = ParseGeminiLine(line);
-                if (r != null) batch.Add(r);
+                if (r != null)
+                {
+                    if (!string.IsNullOrEmpty(r.SourceId))
+                        deduped[r.SourceId] = r;
+                    else
+                        fallback.Add(r);
+                }
             }
 
-            if (batch.Count > 0) RecordBatch(batch);
-            SetFileOffset(file, fs.Position);
+            var batch = new List<UsageStorage.UsageRecord>(deduped.Count + fallback.Count);
+            batch.AddRange(deduped.Values);
+            batch.AddRange(fallback);
+
+            if (batch.Count == 0 || RecordBatch(batch))
+            {
+                SetFileOffset(file, fs.Position);
+                return batch.Count;
+            }
         }
         catch { }
-        return batch.Count;
+        return 0;
     }
 
     int ScanJsonFile(string file)
@@ -83,11 +97,12 @@ public sealed class GeminiCliUsageSource : UsageSourceBase
         var wmKey = "gemini:json:" + file;
         if (GetWatermark(wmKey) == 1) return 0; // 该文件已完整扫描
 
-        var batch = new List<UsageStorage.UsageRecord>();
+        var deduped = new Dictionary<string, UsageStorage.UsageRecord>(StringComparer.Ordinal);
+        var fallback = new List<UsageStorage.UsageRecord>();
         try
         {
-            var text = File.ReadAllText(file);
-            var root = JsonNode.Parse(text);
+            using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var root = JsonNode.Parse(fs);
             var messages = root?["messages"] as JsonArray;
             if (messages != null)
             {
@@ -95,15 +110,28 @@ public sealed class GeminiCliUsageSource : UsageSourceBase
                 {
                     if (msgNode == null) continue;
                     var r = ParseGeminiJsonNode(msgNode);
-                    if (r != null) batch.Add(r);
+                    if (r != null)
+                    {
+                        if (!string.IsNullOrEmpty(r.SourceId))
+                            deduped[r.SourceId] = r;
+                        else
+                            fallback.Add(r);
+                    }
                 }
             }
 
-            if (batch.Count > 0) RecordBatch(batch);
-            SetWatermark(wmKey, 1);
+            var batch = new List<UsageStorage.UsageRecord>(deduped.Count + fallback.Count);
+            batch.AddRange(deduped.Values);
+            batch.AddRange(fallback);
+
+            if (batch.Count == 0 || RecordBatch(batch))
+            {
+                SetWatermark(wmKey, 1);
+                return batch.Count;
+            }
         }
         catch { }
-        return batch.Count;
+        return 0;
     }
 
     UsageStorage.UsageRecord? ParseGeminiLine(string line)
@@ -142,10 +170,14 @@ public sealed class GeminiCliUsageSource : UsageSourceBase
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt))
             ts = dt.ToLocalTime();
 
+        string msgId = node["id"]?.GetValue<string>() ?? "";
+        string sid = !string.IsNullOrEmpty(msgId) ? "gemini:" + msgId : "";
+
         return new UsageStorage.UsageRecord(
             AgentId, "", "Google", model,
             inTok, totalOut, ts,
-            CacheReadTokens: cacheRead);
+            CacheReadTokens: cacheRead,
+            SourceId: sid);
     }
 
     static IEnumerable<string> EnumerateChatFiles(string root, int maxAgeDays)

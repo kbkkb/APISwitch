@@ -65,12 +65,12 @@ public abstract class UsageSourceBase : IUsageSource
     /// <summary>记录一条用量。</summary>
     protected void Record(string model, long inTokens, long outTokens, DateTime ts,
         long cacheRead = 0, long cacheWrite = 0, long durationMs = 0, long ttftMs = 0,
-        string providerId = "", string providerName = "")
+        string providerId = "", string providerName = "", string sourceId = "")
         => UsageStorage.RecordUsage(AgentId, providerId, providerName, model,
-            inTokens, outTokens, ts, cacheRead, cacheWrite, durationMs, ttftMs);
+            inTokens, outTokens, ts, cacheRead, cacheWrite, durationMs, ttftMs, sourceId);
 
-    /// <summary>批量记录一组用量（使用单事务批处理）。</summary>
-    protected void RecordBatch(IEnumerable<UsageStorage.UsageRecord> records)
+    /// <summary>批量记录一组用量（使用单事务批处理）。返回是否成功提交。</summary>
+    protected bool RecordBatch(IEnumerable<UsageStorage.UsageRecord> records)
         => UsageStorage.RecordBatch(records);
 }
 

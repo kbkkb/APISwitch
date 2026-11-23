@@ -2,6 +2,30 @@
 
 # APISwitch Release Notes
 
+## APISwitch v0.3.3 Release Notes
+
+### [New · Native Antigravity Usage & Performance Monitoring]
+• Added `AntigravityUsageSource` to scan Antigravity IDE local conversation databases (`~/.gemini/antigravity/conversations/*.pb` + `*.db`), bringing total supported clients in Usage Monitor to **10**.
+• Parses `steps.metadata` (`gen_metadata`) to accurately extract real model identifiers, input/output/cached tokens, TTFT, and output speed (`tokens/s`), eliminating "Unknown Model" entries for Antigravity calls.
+• Supports one-click **Backfill History** to re-index historical Antigravity sessions with accurate model names and timing metrics.
+
+### [New · Usage Monitor UI Redesign & Client Filter Strip]
+• Streamlined Usage Monitor tabs from 5 to **4 focused views** (`Providers`, `Clients`, `Models`, `Recent Calls`), preserving full per-model drill-down inside `Providers`.
+• Added a quick **Client Icon Filter Strip** above the range controls with an **`All`** button (selected by default) plus dedicated icon pills for all 10 supported clients, enabling instant one-click filtering across cards, charts, and tables.
+• Added a **Cache Write** sub-column and **Avg Speed (`tokens/s`) / Avg TTFT** summary in the bottom status bar and call details.
+
+### [Fixes · Antigravity Quota Sync & Google AI Plus Tier Detection]
+• Locked quota & model endpoints (`fetchAvailableModels`, `retrieveUserQuota`, `loadCodeAssist`) to `daily-cloudcode-pa.googleapis.com` and added `ReconcileQuotaWithModels`, keeping APISwitch quota percentages aligned with the Antigravity IDE.
+• Fixed silent quota/tier drift caused by background refresh pausing when the window is deactivated (`MainWindow_Deactivated`), and resolved cold-start quota-fetch race conditions.
+• Separated **`Google AI Plus` (`g1-plus-tier`)** from `Pro` and `Starter/Free`: Plus accounts now show an amber **`PLUS`** badge instead of being misidentified as `PRO`, while retaining independent Gemini 4 Argon quota display when available.
+
+### [Fixes & Optimizations]
+• Refactored `ClaudeCliProcess` and `ClaudeProcess` termination logic to safely restart Claude CLI/Desktop without affecting unrelated processes.
+• Improved incremental scanning and timestamp/token accuracy across `GeminiCliUsageSource`, `StepCodeUsageSource`, `ZCodeUsageSource`, and `DshUsageSource`.
+• Added concise bilingual UI tooltips and localized strings for all new Usage Monitor controls and tier badges.
+
+---
+
 ## APISwitch v0.3.2 Release Notes
 
 ### [Key Feature · Gemini 4 (Argon) Independent Quota & Limit Monitoring]

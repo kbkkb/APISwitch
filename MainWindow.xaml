@@ -444,6 +444,9 @@
                                                                             <DataTrigger Binding="{Binding IsPromoPro}" Value="True">
                                                                                 <Setter Property="Foreground" Value="#64748B"/>
                                                                             </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsPlus}" Value="True">
+                                                                                <Setter Property="Foreground" Value="#0284C7"/>
+                                                                            </DataTrigger>
                                                                             <DataTrigger Binding="{Binding IsUltra}" Value="True">
                                                                                 <Setter Property="Foreground" Value="#D97706"/>
                                                                             </DataTrigger>
@@ -934,6 +937,12 @@
                             <TextBlock Text="{DynamicResource Claude.OpenSettingsBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnStopClaudeCli" ToolTip="{DynamicResource Claude.StopProcessTip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPower}" Fill="#EF4444" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Claude.StopProcessBtn}" Foreground="#EF4444" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- Cards List -->
@@ -1109,6 +1118,12 @@
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
                             <TextBlock Text="{DynamicResource Desktop.RestartBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnStopClaudeDesktop" ToolTip="{DynamicResource Desktop.StopProcessTip}">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPower}" Fill="#EF4444" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Desktop.StopProcessBtn}" Foreground="#EF4444" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenDesktopConfig">

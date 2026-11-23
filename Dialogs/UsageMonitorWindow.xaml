@@ -3,39 +3,43 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:APISwitch.Dialogs"
         Title="{DynamicResource Usage.Title}"
-        Width="1020" Height="760" MinWidth="860" MinHeight="600"
+        Width="1080" Height="780" MinWidth="900" MinHeight="620"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource WindowBgBrush}"
+        Background="#F4F7FC"
         FontFamily="{StaticResource AppFontFamily}"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
         Foreground="{StaticResource TextBrush}">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="12"/>
+        <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="12"/>
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- 分段式切换按钮（快速时间范围 / 视图 Tab） -->
+        <!-- 分段胶囊切换（白色悬浮激活块，轻盈现代） -->
         <Style x:Key="SegRadio" TargetType="RadioButton">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+            <Setter Property="Foreground" Value="#475569"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Padding" Value="12,5"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1"
+                                CornerRadius="6.5" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#F1F5FB"/>
+                                <Setter Property="Foreground" Value="#0F172A"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentGradient}"/>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#FFFFFF"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#D6DFEE"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -43,7 +47,13 @@
             </Setter>
         </Style>
 
-        <!-- 供应商卡片头部整行可点击（展开/收起模型明细） -->
+        <!-- 时间快速筛选微胶囊 -->
+        <Style x:Key="QuickPillRadio" TargetType="RadioButton" BasedOn="{StaticResource SegRadio}">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Padding" Value="10,4"/>
+        </Style>
+
+        <!-- 行头部整行可点击（展开/收起明细） -->
         <Style x:Key="RowHeaderBtn" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -53,7 +63,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -66,7 +76,72 @@
             </Setter>
         </Style>
 
-        <!-- 虚拟化列表（容器回收）：大列表只实例化可视区行，滚动/切换不卡顿 -->
+        <!-- 顶部精简工具小按钮 -->
+        <Style x:Key="ToolbarMiniBtn" TargetType="Button">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#334155"/>
+            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="9,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#C7D2FE"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 受支持客户端图标快捷筛选胶囊 -->
+        <Style x:Key="ClientFilterPill" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#475569"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Margin" Value="0,0,5,4"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1"
+                                CornerRadius="8" Padding="8,4" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#F8FAFC"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#CBD5E1"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF2FF"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#4F46E5"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 虚拟化列表（容器回收） -->
         <Style x:Key="VListBox" TargetType="ListBox">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -98,40 +173,79 @@
             </Setter>
         </Style>
 
+        <!-- KPI 统一白卡 -->
+        <Style x:Key="KpiCardBorder" TargetType="Border">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#E4E9F2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="12,8"/>
+        </Style>
     </Window.Resources>
 
-    <Border Background="#FFFFFF" BorderBrush="{DynamicResource SidebarBorderBrush}" BorderThickness="1.5" CornerRadius="12">
+    <Border Background="#F4F7FC" BorderBrush="#CBD7EE" BorderThickness="1.2" CornerRadius="12">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="48"/>
+                <RowDefinition Height="44"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <!-- 标题栏 -->
-            <Border Grid.Row="0" Background="{DynamicResource TitleBarBgBrush}" BorderBrush="{DynamicResource TitleBarBorderBrush}" BorderThickness="0,0,0,1" CornerRadius="11,11,0,0" MouseLeftButtonDown="Header_MouseDown">
-                <Grid Margin="18,0,8,0">
+            <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1"
+                    CornerRadius="11,11,0,0" MouseLeftButtonDown="Header_MouseDown">
+                <Grid Margin="16,0,6,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Path Data="{StaticResource IconZap}" Fill="{DynamicResource AccentBrush}" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="{DynamicResource Usage.Title}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <Border Width="24" Height="24" CornerRadius="7" Background="#EEF2FF" Margin="0,0,8,0">
+                            <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="{DynamicResource Usage.Title}" FontSize="14.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <Border Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="RangeSummaryText" FontSize="11" Foreground="#475569" Text="—"/>
+                        </Border>
                     </StackPanel>
-                    <Button HorizontalAlignment="Right" Style="{StaticResource CaptionCloseBtn}" Tag="{StaticResource IconClose}"
-                            WindowChrome.IsHitTestVisibleInChrome="True" Click="OnClose" ToolTip="{DynamicResource Usage.CloseTip}"/>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Button x:Name="RefreshBtn" Style="{StaticResource ToolbarMiniBtn}" ToolTip="{DynamicResource Usage.RefreshTip}" Click="OnRefreshNowClick" Margin="0,0,6,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconRefresh}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Usage.RefreshBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="ExportBtn" Style="{StaticResource ToolbarMiniBtn}" ToolTip="{DynamicResource Usage.ExportCsvTip}" Click="OnExportCsvClick" Margin="0,0,6,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconSave}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Usage.ExportCsvBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="BackfillBtn" Style="{StaticResource ToolbarMiniBtn}" Click="OnBackfillClick" Margin="0,0,6,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconImport}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Usage.BackfillBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="HelpBtn" Style="{StaticResource ToolbarMiniBtn}" Width="28" Padding="0" Click="OnHelpClick" ToolTip="{DynamicResource Usage.Note}" Margin="0,0,4,0">
+                            <TextBlock Text="?" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
+                        <Border Width="1" Height="16" Background="#E2E8F0" Margin="4,0"/>
+                        <Button x:Name="MaxRestoreBtn" Style="{StaticResource CaptionBtn}" Tag="{StaticResource IconMax}"
+                                Click="OnToggleMaximize" ToolTip="{DynamicResource Usage.MaxTip}"/>
+                        <Button Style="{StaticResource CaptionCloseBtn}" Tag="{StaticResource IconClose}"
+                                Click="OnClose" ToolTip="{DynamicResource Usage.CloseTip}"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
             <!-- 主内容 -->
-            <Grid Grid.Row="1" Margin="20,14,20,12">
+            <Grid Grid.Row="1" Margin="16,10,16,8">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- 工具栏：快速时间范围 + 自定义区间 -->
-                <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="10,8">
+                <!-- 顶部两行合一控制条（视图页签 + 筛选检索 / 时间区间） -->
+                <StackPanel Grid.Row="0">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -139,214 +253,296 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="2,1" VerticalAlignment="Center">
+                        <!-- 4 页签胶囊切换 -->
+                        <Border Grid.Column="0" Background="#E6ECF7" CornerRadius="9" Padding="3" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
-                                <RadioButton x:Name="Quick1DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1D}" Checked="OnQuickRangeChecked" Tag="1"/>
-                                <RadioButton x:Name="Quick7DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1W}" Checked="OnQuickRangeChecked" Tag="7"/>
-                                <RadioButton x:Name="Quick30DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick30D}" Checked="OnQuickRangeChecked" Tag="30"/>
-                                <RadioButton x:Name="Quick180DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick180D}" Checked="OnQuickRangeChecked" Tag="180"/>
-                                <RadioButton x:Name="Quick365DRadio" Style="{StaticResource SegRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1Y}" Checked="OnQuickRangeChecked" Tag="365"/>
+                                <RadioButton x:Name="TabProvidersRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabProviders}" Checked="OnTabProvidersChecked" IsChecked="True"/>
+                                <RadioButton x:Name="TabAgentsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabAgents}" Checked="OnTabAgentsChecked" Margin="2,0,0,0"/>
+                                <RadioButton x:Name="TabModelsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabModels}" Checked="OnTabModelsChecked" Margin="2,0,0,0"/>
+                                <RadioButton x:Name="TabCallsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabCalls}" Checked="OnTabCallsChecked" Margin="2,0,0,0"/>
                             </StackPanel>
                         </Border>
 
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Usage.From}" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
-                            <local:DateTimePickerBox x:Name="StartPicker" Width="158" ValueChanged="OnRangeFieldEdited"/>
-                            <TextBlock Text="{DynamicResource Usage.To}" VerticalAlignment="Center" Margin="12,0,6,0" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
-                            <local:DateTimePickerBox x:Name="EndPicker" Width="158" ValueChanged="OnRangeFieldEdited"/>
-                            <Button Content="{DynamicResource Usage.Apply}" Style="{StaticResource PrimaryButton}" Padding="16,7" Margin="12,0,0,0" Click="OnApplyRange"/>
+                        <!-- 搜索过滤 + 重置筛选 -->
+                        <StackPanel x:Name="TokenFilterStrip" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBox x:Name="SearchBox" Width="220" Height="30" Padding="9,3" FontSize="12"
+                                     Tag="{DynamicResource Usage.SearchPlaceholder}" TextChanged="OnSearchTextChanged"/>
+                            <Button x:Name="ClearFilterBtn" Style="{StaticResource ToolbarMiniBtn}" Height="30" Margin="6,0,0,0"
+                                    Content="{DynamicResource Usage.ClearFilterBtn}" Click="OnClearFiltersClick" Visibility="Collapsed"/>
                         </StackPanel>
                     </Grid>
-                </Border>
 
-                <!-- 汇总卡片 -->
-                <Grid Grid.Row="1" Margin="0,12,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+                    <!-- 时间区间条 -->
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="13,10">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <Border Width="24" Height="24" CornerRadius="7" Background="#EEF2FF">
-                                    <Path Data="{StaticResource IconZap}" Fill="#4F46E5" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                </Border>
-                                <TextBlock Text="{DynamicResource Usage.TotalTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock x:Name="TotalTokensText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#4F46E5" Margin="0,7,0,0"/>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="2" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="13,10">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <Border Width="24" Height="24" CornerRadius="7" Background="#E0F2FE">
-                                    <Path Data="{StaticResource IconImport}" Fill="#0369A1" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                </Border>
-                                <TextBlock Text="{DynamicResource Usage.InputTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock x:Name="InTokensText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#0369A1" Margin="0,7,0,0"/>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="4" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="13,10">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <Border Width="24" Height="24" CornerRadius="7" Background="#DCFCE7">
-                                    <Path Data="{StaticResource IconUpload}" Fill="#059669" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                </Border>
-                                <TextBlock Text="{DynamicResource Usage.OutputTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock x:Name="OutTokensText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#059669" Margin="0,7,0,0"/>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="6" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="13,10">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <Border Width="24" Height="24" CornerRadius="7" Background="#FEF3C7">
-                                    <Path Data="{StaticResource IconRefresh}" Fill="#D97706" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                </Border>
-                                <TextBlock Text="{DynamicResource Usage.Requests}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock x:Name="RequestsText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#D97706" Margin="0,7,0,0"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- 缓存命中率（速度与首字属单次调用维度，放在调用明细列，不在顶部汇总） -->
-                    <Border Grid.Column="8" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="13,10">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <Border Width="24" Height="24" CornerRadius="7" Background="#EDE9FE">
-                                    <Path Data="{StaticResource IconZap}" Fill="#7C3AED" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                </Border>
-                                <TextBlock Text="{DynamicResource Usage.CacheHitRate}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock x:Name="CacheHitText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#7C3AED" Margin="0,7,0,0"/>
-                            <TextBlock x:Name="CacheHitDetailText" Text="" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
-
-                <!-- 每日趋势图 -->
-                <Border Grid.Row="2" Margin="0,12,0,0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="14,10,14,8">
-                    <StackPanel>
-                        <Grid>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="{DynamicResource Usage.TrendTitle}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
-
-                                <!-- 柱状图图例 -->
-                                <StackPanel x:Name="BarLegendPanel" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="8" Height="8" Fill="#C7D2FE" Margin="16,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Usage.LegendIn}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                    <Ellipse Width="8" Height="8" Fill="#6366F1" Margin="12,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Usage.LegendOut}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                </StackPanel>
-
-                                <!-- 热力图图例 -->
-                                <StackPanel x:Name="HeatmapLegendPanel" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
-                                    <TextBlock Text="{DynamicResource Usage.HeatmapLess}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="16,0,4,0" VerticalAlignment="Center"/>
-                                    <Border Width="10" Height="10" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="1.5" Margin="2,0"/>
-                                    <Border Width="10" Height="10" Background="#C7D2FE" CornerRadius="1.5" Margin="2,0"/>
-                                    <Border Width="10" Height="10" Background="#818CF8" CornerRadius="1.5" Margin="2,0"/>
-                                    <Border Width="10" Height="10" Background="#6366F1" CornerRadius="1.5" Margin="2,0"/>
-                                    <Border Width="10" Height="10" Background="#4338CA" CornerRadius="1.5" Margin="2,0"/>
-                                    <TextBlock Text="{DynamicResource Usage.HeatmapMore}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </StackPanel>
-
-                            <!-- 图表模式切换 (柱状图 / 方格图) -->
-                            <Border HorizontalAlignment="Right" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="2,1">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="#E6ECF7" CornerRadius="8" Padding="3">
                                 <StackPanel Orientation="Horizontal">
-                                    <RadioButton x:Name="ChartModeBarRadio" Style="{StaticResource SegRadio}" GroupName="ChartMode" Content="{DynamicResource Usage.ChartModeBar}" Checked="OnChartModeChanged" Tag="bar" Padding="8,2" FontSize="11" IsChecked="True"/>
-                                    <RadioButton x:Name="ChartModeHeatmapRadio" Style="{StaticResource SegRadio}" GroupName="ChartMode" Content="{DynamicResource Usage.ChartModeHeatmap}" Checked="OnChartModeChanged" Tag="heatmap" Padding="8,2" FontSize="11"/>
+                                    <RadioButton x:Name="Quick1DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1D}" Checked="OnQuickRangeChecked" Tag="1"/>
+                                    <RadioButton x:Name="Quick7DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1W}" Checked="OnQuickRangeChecked" Tag="7" Margin="2,0,0,0"/>
+                                    <RadioButton x:Name="Quick30DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick30D}" Checked="OnQuickRangeChecked" Tag="30" Margin="2,0,0,0"/>
+                                    <RadioButton x:Name="Quick180DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick180D}" Checked="OnQuickRangeChecked" Tag="180" Margin="2,0,0,0"/>
+                                    <RadioButton x:Name="Quick365DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1Y}" Checked="OnQuickRangeChecked" Tag="365" Margin="2,0,0,0"/>
                                 </StackPanel>
                             </Border>
-                        </Grid>
-                        <Canvas x:Name="TrendCanvas" Height="128" Margin="0,6,0,0" ClipToBounds="True" SizeChanged="OnChartSizeChanged"/>
-                    </StackPanel>
-                </Border>
 
-                <!-- 视图切换 -->
-                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,14,0,0">
-                    <RadioButton x:Name="TabProvidersRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabProviders}" Checked="OnTabProvidersChecked" IsChecked="True"/>
-                    <RadioButton x:Name="TabAgentsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabAgents}" Checked="OnTabAgentsChecked" Margin="4,0,0,0"/>
-                    <RadioButton x:Name="TabModelsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabModels}" Checked="OnTabModelsChecked" Margin="4,0,0,0"/>
-                    <RadioButton x:Name="TabCallsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabCalls}" Checked="OnTabCallsChecked" Margin="4,0,0,0"/>
-                    <TextBlock x:Name="RangeSummaryText" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="14,2,0,0"/>
+                            <Button x:Name="FocusedDayChip" Style="{StaticResource ToolbarMiniBtn}" Height="26" Margin="8,0,0,0"
+                                    Click="OnClearFocusedDayClick" Visibility="Collapsed"
+                                    Background="#EEF2FF" BorderBrush="#C7D2FE" Foreground="{StaticResource AccentBrush}"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource Usage.From}" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"/>
+                            <local:DateTimePickerBox x:Name="StartPicker" Width="148" ValueChanged="OnRangeFieldEdited"/>
+                            <TextBlock Text="{DynamicResource Usage.To}" VerticalAlignment="Center" Margin="8,0,5,0" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"/>
+                            <local:DateTimePickerBox x:Name="EndPicker" Width="148" ValueChanged="OnRangeFieldEdited"/>
+                            <Button Content="{DynamicResource Usage.Apply}" Style="{StaticResource PrimaryButton}" Padding="14,5" FontSize="12" Margin="8,0,0,0" Click="OnApplyRange"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 受支持客户端快捷筛选按钮行（全部 + 10 个客户端） -->
+                    <ItemsControl x:Name="ClientFilterList" Margin="0,8,0,-4" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource ClientFilterPill}"
+                                        Click="OnClientPillClick"
+                                        Opacity="{Binding PillOpacity}"
+                                        ToolTip="{Binding TooltipText}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Image Source="{Binding ImageSource}" Width="13" Height="13"
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               Visibility="{Binding ImageVisibility}"
+                                               VerticalAlignment="Center"/>
+                                        <Path Data="{Binding IconGeometry}" Fill="{Binding IconBrush}"
+                                              Width="13" Height="13" Stretch="Uniform"
+                                              Visibility="{Binding PathVisibility}"
+                                              VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Label}" FontSize="11.5" Margin="5,0,0,0"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
 
-                <!-- 视图内容（三面板） -->
-                <Grid Grid.Row="4" Margin="0,10,0,0" Background="Transparent">
+                <!-- Token 核心摘要 + 趋势区 -->
+                <StackPanel x:Name="TokenSummarySection" Grid.Row="1" Margin="0,10,0,0">
+                    <!-- 5 张双行平衡 KPI 卡 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
 
-                    <!-- 面板 1：供应商下钻 -->
-                    <ListBox x:Name="ProvidersPanel" Style="{StaticResource VListBox}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                        <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="10,4,12,4" Margin="0,0,0,8">
+                        <Border Grid.Column="0" Style="{StaticResource KpiCardBorder}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" Fill="#4F46E5" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Usage.TotalTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="TotalTokensText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#0F172A" Margin="0,4,0,0"/>
+                                <TextBlock x:Name="TotalSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2" Style="{StaticResource KpiCardBorder}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" Fill="#0284C7" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Usage.InputTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="InTokensText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#0369A1" Margin="0,4,0,0"/>
+                                <TextBlock x:Name="InSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="4" Style="{StaticResource KpiCardBorder}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" Fill="#059669" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Usage.OutputTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="OutTokensText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#059669" Margin="0,4,0,0"/>
+                                <TextBlock x:Name="OutSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="6" Style="{StaticResource KpiCardBorder}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" Fill="#D97706" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Usage.Requests}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="RequestsText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#D97706" Margin="0,4,0,0"/>
+                                <TextBlock x:Name="ReqSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="8" Style="{StaticResource KpiCardBorder}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="7" Height="7" Fill="#7C3AED" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Usage.CacheHitRate}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="CacheHitText" Text="—" FontSize="20" FontWeight="Bold" Foreground="#7C3AED" Margin="0,4,0,0"/>
+                                <TextBlock x:Name="CacheHitDetailText" Text="" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- 趋势图 + 客户端多色占比条 -->
+                    <Border Margin="0,8,0,0" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Padding="14,9,14,7">
+                        <StackPanel>
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{DynamicResource Usage.TrendTitle}" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                                    <StackPanel x:Name="BarLegendPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Border Width="8" Height="8" CornerRadius="2" Background="#A5B4FC" Margin="14,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{DynamicResource Usage.LegendIn}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                        <Border Width="8" Height="8" CornerRadius="2" Background="#4F46E5" Margin="10,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{DynamicResource Usage.LegendOut}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="HeatmapLegendPanel" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                                        <TextBlock Text="{DynamicResource Usage.HeatmapLess}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="14,0,4,0" VerticalAlignment="Center"/>
+                                        <Border Width="9" Height="9" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="2" Margin="1.5,0"/>
+                                        <Border Width="9" Height="9" Background="#C7D2FE" CornerRadius="2" Margin="1.5,0"/>
+                                        <Border Width="9" Height="9" Background="#818CF8" CornerRadius="2" Margin="1.5,0"/>
+                                        <Border Width="9" Height="9" Background="#6366F1" CornerRadius="2" Margin="1.5,0"/>
+                                        <Border Width="9" Height="9" Background="#4338CA" CornerRadius="2" Margin="1.5,0"/>
+                                        <TextBlock Text="{DynamicResource Usage.HeatmapMore}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <!-- 客户端占比实时细条 -->
+                                    <StackPanel x:Name="ClientMixPanel" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Text="{DynamicResource Usage.ClientMixLabel}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                        <Border Background="#F1F5F9" CornerRadius="3" ClipToBounds="True" Height="7" Width="170" VerticalAlignment="Center">
+                                            <StackPanel x:Name="ClientMixBar" Orientation="Horizontal"/>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <Border Background="#EEF2F8" CornerRadius="6.5" Padding="2">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton x:Name="ChartModeBarRadio" Style="{StaticResource QuickPillRadio}" GroupName="ChartMode" Content="{DynamicResource Usage.ChartModeBar}" Checked="OnChartModeChanged" Tag="bar" Padding="8,2" FontSize="10.5" IsChecked="True"/>
+                                            <RadioButton x:Name="ChartModeHeatmapRadio" Style="{StaticResource QuickPillRadio}" GroupName="ChartMode" Content="{DynamicResource Usage.ChartModeHeatmap}" Checked="OnChartModeChanged" Tag="heatmap" Padding="8,2" FontSize="10.5"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+
+                            <Canvas x:Name="TrendCanvas" Height="106" Margin="0,6,0,0" ClipToBounds="True" SizeChanged="OnChartSizeChanged"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 主列表工作区（占据全部剩余高度） -->
+                <Grid Grid.Row="2" Margin="0,8,0,0">
+
+                    <!-- 面板 1：供应商明细 -->
+                    <Border x:Name="ProvidersPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="170"/>
+                                        <ColumnDefinition Width="56"/>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="144"/>
+                                        <ColumnDefinition Width="74"/>
+                                        <ColumnDefinition Width="86"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource Usage.ColName}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="{DynamicResource Usage.ColShare}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="{DynamicResource Usage.ColReqs}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="5" Text="{DynamicResource Usage.ColInOut}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="6" Text="{DynamicResource Usage.ColCacheHit}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="7" Text="{DynamicResource Usage.ColTotal}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                            </Border>
+                            <ListBox x:Name="ProvidersList" Grid.Row="1" Style="{StaticResource VListBox}" Padding="6,4">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="8,2">
                                             <StackPanel>
                                                 <Button Style="{StaticResource RowHeaderBtn}" Click="OnToggleProviderExpand" ToolTip="{DynamicResource Usage.ExpandTip}">
-                                                    <Grid Height="36" Margin="2,0,0,0">
+                                                    <Grid Height="34">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="20"/>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="170"/>
-                                                            <ColumnDefinition Width="44"/>
-                                                            <ColumnDefinition Width="76"/>
-                                                            <ColumnDefinition Width="130"/>
-                                                            <ColumnDefinition Width="78"/>
+                                                            <ColumnDefinition Width="56"/>
+                                                            <ColumnDefinition Width="82"/>
+                                                            <ColumnDefinition Width="144"/>
+                                                            <ColumnDefinition Width="74"/>
                                                             <ColumnDefinition Width="86"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Path Grid.Column="0" Data="{StaticResource IconChevronRight}" Fill="#94A3B8" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                                            <Path.RenderTransform>
-                                                                <RotateTransform Angle="{Binding ChevronAngle}"/>
-                                                            </Path.RenderTransform>
+                                                        <Path Grid.Column="0" Data="{StaticResource IconChevronRight}" Fill="#94A3B8" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                            <Path.RenderTransform><RotateTransform Angle="{Binding ChevronAngle}"/></Path.RenderTransform>
                                                         </Path>
                                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                                                            <TextBlock Text="{Binding ModelCountText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,2,0,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding ModelCountText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <Border Grid.Column="2" Height="7" CornerRadius="3.5" Background="#EEF2FF" VerticalAlignment="Center">
-                                                            <Border Width="{Binding BarWidth}" Height="7" CornerRadius="3.5" Background="{StaticResource AccentGradient}" HorizontalAlignment="Left"/>
+                                                        <Border Grid.Column="2" Height="6" CornerRadius="3" Background="#EEF2FF" VerticalAlignment="Center">
+                                                            <Border Width="{Binding BarWidth}" Height="6" CornerRadius="3" Background="{StaticResource AccentGradient}" HorizontalAlignment="Left"/>
                                                         </Border>
-                                                        <TextBlock Grid.Column="3" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="4" Text="{Binding ReqText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="5" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="6" Text="{Binding CacheText}" FontSize="11" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
-                                                        <TextBlock Grid.Column="7" Text="{Binding TotalText}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right" Padding="0,0,6,0"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding ReqNumText}" FontSize="11.5" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="5" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="6" Text="{Binding CacheText}" FontSize="11.5" FontWeight="Medium" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="7" Text="{Binding TotalText}" FontSize="12.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
                                                     </Grid>
                                                 </Button>
-                                                <ItemsControl ItemsSource="{Binding Models}" Visibility="{Binding ModelsVisibility}" Margin="8,2,6,4">
+                                                <ItemsControl ItemsSource="{Binding Models}" Visibility="{Binding ModelsVisibility}" Margin="20,0,0,4">
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
                                                             <Grid Height="26">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="170"/>
-                                                                    <ColumnDefinition Width="44"/>
-                                                                    <ColumnDefinition Width="76"/>
-                                                                    <ColumnDefinition Width="130"/>
-                                                                    <ColumnDefinition Width="78"/>
+                                                                    <ColumnDefinition Width="56"/>
+                                                                    <ColumnDefinition Width="82"/>
+                                                                    <ColumnDefinition Width="144"/>
+                                                                    <ColumnDefinition Width="74"/>
                                                                     <ColumnDefinition Width="86"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <Border Grid.Column="0" Height="1" VerticalAlignment="Bottom" Background="#F1F5F9" Margin="0,0,10,0"/>
-                                                                <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="14,0,0,0" ToolTip="{Binding Name}"/>
-                                                                <Border Grid.Column="1" Height="5" CornerRadius="2.5" Background="#EEF2FF" VerticalAlignment="Center">
-                                                                    <Border Width="{Binding BarWidth}" Height="5" CornerRadius="2.5" Background="#A5B4FC" HorizontalAlignment="Left"/>
+                                                                <Border Grid.Column="0" Grid.ColumnSpan="7" Height="1" VerticalAlignment="Top" Background="#F8FAFC"/>
+                                                                <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="6,0,8,0" ToolTip="{Binding Name}"/>
+                                                                <Border Grid.Column="1" Height="4.5" CornerRadius="2.2" Background="#F1F5F9" VerticalAlignment="Center">
+                                                                    <Border Width="{Binding BarWidth}" Height="4.5" CornerRadius="2.2" Background="#A5B4FC" HorizontalAlignment="Left"/>
                                                                 </Border>
-                                                                <TextBlock Grid.Column="2" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="3" Text="{Binding ReqText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="4" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                                <TextBlock Grid.Column="2" Text="{Binding ShareText}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right" Padding="0,0,6,0"/>
+                                                                <TextBlock Grid.Column="3" Text="{Binding ReqNumText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                                <TextBlock Grid.Column="4" Text="{Binding InOutText}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
                                                                 <TextBlock Grid.Column="5" Text="{Binding CacheText}" FontSize="11" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
-                                                                <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                                                <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
                                                             </Grid>
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>
@@ -354,195 +550,256 @@
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
 
                     <!-- 面板 2：客户端汇总 -->
-                    <ListBox x:Name="AgentsPanel" Style="{StaticResource VListBox}" Visibility="Collapsed">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                        <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="12,6,12,6" Margin="0,0,0,8">
-                                            <Grid Height="36">
+                    <Border x:Name="AgentsPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Visibility="Collapsed" ClipToBounds="True">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="170"/>
+                                        <ColumnDefinition Width="56"/>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="144"/>
+                                        <ColumnDefinition Width="74"/>
+                                        <ColumnDefinition Width="86"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource Usage.ColAgent}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="{DynamicResource Usage.ColShare}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="{DynamicResource Usage.ColReqs}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="5" Text="{DynamicResource Usage.ColInOut}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="6" Text="{DynamicResource Usage.ColCacheHit}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="7" Text="{DynamicResource Usage.ColTotal}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                            </Border>
+                            <ListBox x:Name="AgentsList" Grid.Row="1" Style="{StaticResource VListBox}" Padding="6,4">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource RowHeaderBtn}" Click="OnAgentRowFilterClick">
+                                            <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="8,0">
+                                                <Grid Height="36">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="20"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="170"/>
+                                                        <ColumnDefinition Width="56"/>
+                                                        <ColumnDefinition Width="82"/>
+                                                        <ColumnDefinition Width="144"/>
+                                                        <ColumnDefinition Width="74"/>
+                                                        <ColumnDefinition Width="86"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding AgentBrush}" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                    <Border Grid.Column="2" Height="6" CornerRadius="3" Background="#EEF2FF" VerticalAlignment="Center">
+                                                        <Border Width="{Binding BarWidth}" Height="6" CornerRadius="3" Background="{Binding AgentBrush}" HorizontalAlignment="Left"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="3" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right" Padding="0,0,6,0"/>
+                                                    <TextBlock Grid.Column="4" Text="{Binding ReqNumText}" FontSize="11.5" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                    <TextBlock Grid.Column="5" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                    <TextBlock Grid.Column="6" Text="{Binding CacheText}" FontSize="11.5" FontWeight="Medium" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                    <TextBlock Grid.Column="7" Text="{Binding TotalText}" FontSize="12.5" FontWeight="Bold" Foreground="{Binding AgentBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                </Grid>
+                                            </Border>
+                                        </Button>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- 面板 3：模型汇总 -->
+                    <Border x:Name="ModelsPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Visibility="Collapsed" ClipToBounds="True">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="170"/>
+                                        <ColumnDefinition Width="56"/>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="144"/>
+                                        <ColumnDefinition Width="74"/>
+                                        <ColumnDefinition Width="86"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource Usage.ColModel}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="{DynamicResource Usage.ColShare}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="{DynamicResource Usage.ColReqs}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="5" Text="{DynamicResource Usage.ColInOut}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="6" Text="{DynamicResource Usage.ColCacheHit}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="7" Text="{DynamicResource Usage.ColTotal}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                            </Border>
+                            <ListBox x:Name="ModelsList" Grid.Row="1" Style="{StaticResource VListBox}" Padding="6,4">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="8,2">
+                                            <StackPanel>
+                                                <Button Style="{StaticResource RowHeaderBtn}" Click="OnToggleModelExpand" ToolTip="{DynamicResource Usage.ExpandTip}">
+                                                    <Grid Height="34">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="20"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="170"/>
+                                                            <ColumnDefinition Width="56"/>
+                                                            <ColumnDefinition Width="82"/>
+                                                            <ColumnDefinition Width="144"/>
+                                                            <ColumnDefinition Width="74"/>
+                                                            <ColumnDefinition Width="86"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Path Grid.Column="0" Data="{StaticResource IconChevronRight}" Fill="#94A3B8" Width="10" Height="10" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                            <Path.RenderTransform><RotateTransform Angle="{Binding ChevronAngle}"/></Path.RenderTransform>
+                                                        </Path>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                                            <TextBlock Text="{Binding ProviderCountText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                        <Border Grid.Column="2" Height="6" CornerRadius="3" Background="#EEF2FF" VerticalAlignment="Center">
+                                                            <Border Width="{Binding BarWidth}" Height="6" CornerRadius="3" Background="{StaticResource AccentGradient}" HorizontalAlignment="Left"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="3" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right" Padding="0,0,6,0"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding ReqNumText}" FontSize="11.5" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="5" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="6" Text="{Binding CacheText}" FontSize="11.5" FontWeight="Medium" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                        <TextBlock Grid.Column="7" Text="{Binding TotalText}" FontSize="12.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                    </Grid>
+                                                </Button>
+                                                <ItemsControl ItemsSource="{Binding Providers}" Visibility="{Binding ProvidersVisibility}" Margin="20,0,0,4">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Height="26">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="170"/>
+                                                                    <ColumnDefinition Width="56"/>
+                                                                    <ColumnDefinition Width="82"/>
+                                                                    <ColumnDefinition Width="144"/>
+                                                                    <ColumnDefinition Width="74"/>
+                                                                    <ColumnDefinition Width="86"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Grid.Column="0" Grid.ColumnSpan="7" Height="1" VerticalAlignment="Top" Background="#F8FAFC"/>
+                                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,8,0">
+                                                                    <TextBlock Text="{Binding NameText}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding NameText}"/>
+                                                                    <TextBlock Text="{Binding RawModelText}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="8,1,0,0" TextTrimming="CharacterEllipsis" MaxWidth="220" ToolTip="{Binding RawModel}"/>
+                                                                </StackPanel>
+                                                                <Border Grid.Column="1" Height="4.5" CornerRadius="2.2" Background="#F1F5F9" VerticalAlignment="Center">
+                                                                    <Border Width="{Binding BarWidth}" Height="4.5" CornerRadius="2.2" Background="#A5B4FC" HorizontalAlignment="Left"/>
+                                                                </Border>
+                                                                <TextBlock Grid.Column="2" Text="{Binding ShareText}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right" Padding="0,0,6,0"/>
+                                                                <TextBlock Grid.Column="3" Text="{Binding ReqNumText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                                <TextBlock Grid.Column="4" Text="{Binding InOutText}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                                <TextBlock Grid.Column="5" Text="{Binding CacheText}" FontSize="11" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                                <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- 面板 4：调用明细 -->
+                    <Border x:Name="CallsPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Visibility="Collapsed" ClipToBounds="True">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="106"/>
+                                        <ColumnDefinition Width="1.0*"/>
+                                        <ColumnDefinition Width="1.3*"/>
+                                        <ColumnDefinition Width="72"/>
+                                        <ColumnDefinition Width="72"/>
+                                        <ColumnDefinition Width="76"/>
+                                        <ColumnDefinition Width="68"/>
+                                        <ColumnDefinition Width="78"/>
+                                        <ColumnDefinition Width="74"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Usage.ColTime}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource Usage.ColAgent}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" Text="{DynamicResource Usage.ColProvider}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Text="{DynamicResource Usage.ColModel}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="{DynamicResource Usage.ColIn}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="5" Text="{DynamicResource Usage.ColOut}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="6" Text="{DynamicResource Usage.ColTotal}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="7" Text="{DynamicResource Usage.ColCache}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="8" Text="{DynamicResource Usage.ColSpeed}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                    <TextBlock Grid.Column="9" Text="{DynamicResource Usage.ColTtft}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                </Grid>
+                            </Border>
+                            <ListBox x:Name="CallsList" Grid.Row="1" Style="{StaticResource VListBox}" Padding="6,2">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#F8FAFC" BorderThickness="0,0,0,1" Padding="8,0">
+                                            <Grid Height="30">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="22"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="170"/>
-                                                    <ColumnDefinition Width="44"/>
+                                                    <ColumnDefinition Width="120"/>
+                                                    <ColumnDefinition Width="106"/>
+                                                    <ColumnDefinition Width="1.0*"/>
+                                                    <ColumnDefinition Width="1.3*"/>
+                                                    <ColumnDefinition Width="72"/>
+                                                    <ColumnDefinition Width="72"/>
                                                     <ColumnDefinition Width="76"/>
-                                                    <ColumnDefinition Width="130"/>
-                                                    <ColumnDefinition Width="86"/>
+                                                    <ColumnDefinition Width="68"/>
+                                                    <ColumnDefinition Width="78"/>
+                                                    <ColumnDefinition Width="74"/>
                                                 </Grid.ColumnDefinitions>
-                                                <Ellipse Grid.Column="0" Width="9" Height="9" Fill="{Binding AgentBrush}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                <Border Grid.Column="2" Height="7" CornerRadius="3.5" Background="#EEF2FF" VerticalAlignment="Center">
-                                                    <Border Width="{Binding BarWidth}" Height="7" CornerRadius="3.5" Background="{Binding AgentBrush}" HorizontalAlignment="Left"/>
+                                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                <Border Grid.Column="1" Background="{Binding AgentBg}" CornerRadius="5" Padding="7,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding AgentName}" FontSize="10.5" FontWeight="SemiBold" Foreground="{Binding AgentBrush}" VerticalAlignment="Center"/>
                                                 </Border>
-                                                <TextBlock Grid.Column="3" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="4" Text="{Binding ReqText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="5" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="13" FontWeight="Bold" Foreground="{Binding AgentBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Provider}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" ToolTip="{Binding Provider}"/>
+                                                <TextBlock Grid.Column="3" Text="{Binding Model}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" ToolTip="{Binding Model}"/>
+                                                <TextBlock Grid.Column="4" Text="{Binding InText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding OutText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                <TextBlock Grid.Column="7" Text="{Binding CacheText}" FontSize="11.5" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                <TextBlock Grid.Column="8" Text="{Binding SpeedText}" FontSize="11.5" Foreground="#DC2626" VerticalAlignment="Center" TextAlignment="Right"/>
+                                                <TextBlock Grid.Column="9" Text="{Binding TtftText}" FontSize="11.5" Foreground="#CA8A04" VerticalAlignment="Center" TextAlignment="Right"/>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                    <!-- 面板 3：模型汇总（跨供应商合并同模型） -->
-                    <ListBox x:Name="ModelsPanel" Style="{StaticResource VListBox}" Visibility="Collapsed">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="10,4,12,4" Margin="0,0,0,8">
-                                    <StackPanel>
-                                        <Button Style="{StaticResource RowHeaderBtn}" Click="OnToggleModelExpand" ToolTip="{DynamicResource Usage.ExpandTip}">
-                                            <Grid Height="36" Margin="2,0,0,0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="20"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="170"/>
-                                                    <ColumnDefinition Width="44"/>
-                                                    <ColumnDefinition Width="76"/>
-                                                    <ColumnDefinition Width="130"/>
-                                                    <ColumnDefinition Width="78"/>
-                                                    <ColumnDefinition Width="86"/>
-                                                </Grid.ColumnDefinitions>
-                                                <Path Grid.Column="0" Data="{StaticResource IconChevronRight}" Fill="#94A3B8" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                                    <Path.RenderTransform>
-                                                        <RotateTransform Angle="{Binding ChevronAngle}"/>
-                                                    </Path.RenderTransform>
-                                                </Path>
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                                                    <TextBlock Text="{Binding ProviderCountText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="8,2,0,0" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                                <Border Grid.Column="2" Height="7" CornerRadius="3.5" Background="#EEF2FF" VerticalAlignment="Center">
-                                                    <Border Width="{Binding BarWidth}" Height="7" CornerRadius="3.5" Background="{StaticResource AccentGradient}" HorizontalAlignment="Left"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="3" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="4" Text="{Binding ReqText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="5" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="6" Text="{Binding CacheText}" FontSize="11" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
-                                                <TextBlock Grid.Column="7" Text="{Binding TotalText}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                            </Grid>
-                                        </Button>
-                                        <ItemsControl ItemsSource="{Binding Providers}" Visibility="{Binding ProvidersVisibility}" Margin="8,2,6,4">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid Height="26">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="170"/>
-                                                            <ColumnDefinition Width="44"/>
-                                                            <ColumnDefinition Width="76"/>
-                                                            <ColumnDefinition Width="130"/>
-                                                            <ColumnDefinition Width="78"/>
-                                                            <ColumnDefinition Width="86"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <Border Grid.Column="0" Height="1" VerticalAlignment="Bottom" Background="#F1F5F9" Margin="0,0,10,0"/>
-                                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                            <TextBlock Text="{Binding NameText}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding NameText}"/>
-                                                            <TextBlock Text="{Binding RawModelText}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="8,1,0,0" TextTrimming="CharacterEllipsis" MaxWidth="220" ToolTip="{Binding RawModel}"/>
-                                                        </StackPanel>
-                                                        <Border Grid.Column="1" Height="5" CornerRadius="2.5" Background="#EEF2FF" VerticalAlignment="Center">
-                                                            <Border Width="{Binding BarWidth}" Height="5" CornerRadius="2.5" Background="#A5B4FC" HorizontalAlignment="Left"/>
-                                                        </Border>
-                                                        <TextBlock Grid.Column="2" Text="{Binding ShareText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="3" Text="{Binding ReqText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="4" Text="{Binding InOutText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="5" Text="{Binding CacheText}" FontSize="11" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
-                                                        <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-
-                    <!-- 面板 4：调用明细 -->
-                    <Grid x:Name="CallsPanel" Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <Border Grid.Row="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="10,0" Margin="0,0,0,6">
-                            <Grid Height="30">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="128"/>
-                                    <ColumnDefinition Width="104"/>
-                                    <ColumnDefinition Width="1.1*"/>
-                                    <ColumnDefinition Width="1.2*"/>
-                                    <ColumnDefinition Width="76"/>
-                                    <ColumnDefinition Width="76"/>
-                                    <ColumnDefinition Width="80"/>
-                                    <ColumnDefinition Width="78"/>
-                                    <ColumnDefinition Width="86"/>
-                                    <ColumnDefinition Width="86"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{DynamicResource Usage.ColTime}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{DynamicResource Usage.ColAgent}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="2" Text="{DynamicResource Usage.ColProvider}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="3" Text="{DynamicResource Usage.ColModel}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="4" Text="{DynamicResource Usage.ColIn}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                <TextBlock Grid.Column="5" Text="{DynamicResource Usage.ColOut}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                <TextBlock Grid.Column="6" Text="{DynamicResource Usage.ColTotal}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                <TextBlock Grid.Column="7" Text="{DynamicResource Usage.ColCache}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                <TextBlock Grid.Column="8" Text="{DynamicResource Usage.ColSpeed}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                <TextBlock Grid.Column="9" Text="{DynamicResource Usage.ColTtft}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                            </Grid>
-                        </Border>
-                        <ListBox x:Name="CallsList" Grid.Row="1" Style="{StaticResource VListBox}">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Height="30">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="128"/>
-                                            <ColumnDefinition Width="104"/>
-                                            <ColumnDefinition Width="1.1*"/>
-                                            <ColumnDefinition Width="1.2*"/>
-                                            <ColumnDefinition Width="76"/>
-                                            <ColumnDefinition Width="76"/>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="78"/>
-                                            <ColumnDefinition Width="86"/>
-                                            <ColumnDefinition Width="86"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="11.5" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
-                                        <Border Grid.Column="1" Background="{Binding AgentBg}" CornerRadius="5" Padding="7,2.5" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding AgentName}" FontSize="10.5" FontWeight="SemiBold" Foreground="{Binding AgentBrush}" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <TextBlock Grid.Column="2" Text="{Binding Provider}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" ToolTip="{Binding Provider}"/>
-                                        <TextBlock Grid.Column="3" Text="{Binding Model}" FontSize="12" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" ToolTip="{Binding Model}"/>
-                                        <TextBlock Grid.Column="4" Text="{Binding InText}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                        <TextBlock Grid.Column="5" Text="{Binding OutText}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                        <TextBlock Grid.Column="6" Text="{Binding TotalText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" TextAlignment="Right"/>
-                                        <TextBlock Grid.Column="7" Text="{Binding CacheText}" FontSize="12" Foreground="#7C3AED" VerticalAlignment="Center" TextAlignment="Right"/>
-                                        <TextBlock Grid.Column="8" Text="{Binding SpeedText}" FontSize="12" Foreground="#DC2626" VerticalAlignment="Center" TextAlignment="Right"/>
-                                        <TextBlock Grid.Column="9" Text="{Binding TtftText}" FontSize="12" Foreground="#CA8A04" VerticalAlignment="Center" TextAlignment="Right"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Grid>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
 
                     <!-- 空数据遮罩 -->
-                    <Border x:Name="EmptyOverlay" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Visibility="Collapsed">
+                    <Border x:Name="EmptyOverlay" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Visibility="Collapsed">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
-                            <Path Data="{StaticResource IconZap}" Fill="#C7D2FE" Width="36" Height="36" Stretch="Uniform" HorizontalAlignment="Center"/>
+                            <Path Data="{StaticResource IconZap}" Fill="#C7D2FE" Width="32" Height="32" Stretch="Uniform" HorizontalAlignment="Center"/>
                             <TextBlock Text="{DynamicResource Usage.NoData}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Center" Margin="0,10,0,0"/>
                             <TextBlock Text="{DynamicResource Usage.NoDataTip}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,6,0,0" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"/>
                         </StackPanel>
                     </Border>
                 </Grid>
 
-                <!-- 说明 + 回填入 -->
-                <Grid Grid.Row="5" Margin="0,10,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="{DynamicResource Usage.Note}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                    <Button Grid.Column="1" x:Name="BackfillBtn" Style="{StaticResource GhostButton}" Content="{DynamicResource Usage.BackfillBtn}" Click="OnBackfillClick" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                <!-- 极简单行底栏 -->
+                <Grid Grid.Row="3" Margin="2,6,2,0">
+                    <TextBlock Text="{DynamicResource Usage.FooterHint}" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="FooterStatusText" HorizontalAlignment="Right" FontSize="10.5" Foreground="#64748B" VerticalAlignment="Center"/>
                 </Grid>
             </Grid>
         </Grid>

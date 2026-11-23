@@ -249,10 +249,14 @@
     <sys:String x:Key="Codex.EmptyTitle">No Codex providers yet</sys:String>
     <sys:String x:Key="Claude.HeroTitle">Claude Code Providers</sys:String>
     <sys:String x:Key="Claude.OpenSettingsBtn">Open settings.json</sys:String>
+    <sys:String x:Key="Claude.StopProcessBtn">Safe Close</sys:String>
+    <sys:String x:Key="Claude.StopProcessTip">Safely terminate all running Claude Code (CLI) and lingering background processes to prevent data collection and bans</sys:String>
     <sys:String x:Key="Claude.EmptyTitle">No Claude Code providers yet</sys:String>
     <sys:String x:Key="Desktop.HeroTitle">Claude Desktop Client Gateway</sys:String>
     <sys:String x:Key="Desktop.RestartBtn">Restart Claude</sys:String>
     <sys:String x:Key="Desktop.RestartTip">Restart the Claude desktop client to load the latest config</sys:String>
+    <sys:String x:Key="Desktop.StopProcessBtn">Safe Close</sys:String>
+    <sys:String x:Key="Desktop.StopProcessTip">Safely terminate Claude Desktop and all background/MCP child processes to prevent data collection and bans</sys:String>
     <sys:String x:Key="Desktop.OpenConfigBtn">Open desktop config</sys:String>
     <sys:String x:Key="Desktop.EmptyTitle">No Claude Desktop providers yet</sys:String>
     <sys:String x:Key="Oc.HeroTitle">OpenCode Provider Pool</sys:String>
@@ -318,6 +322,10 @@
     <sys:String x:Key="Msg.SwitchedRouterFmt">{0} switched to "{1}" (local router takeover)</sys:String>
     <sys:String x:Key="Msg.SwitchedPlainFmt">{0} switched to "{1}"</sys:String>
     <sys:String x:Key="Msg.DesktopSwitchedNeedRestartFmt">Claude client switched to "{0}" (restart to apply)</sys:String>
+    <sys:String x:Key="Msg.ClaudeCliStoppedFmt">Successfully closed Claude Code processes ({0} process(es) terminated)</sys:String>
+    <sys:String x:Key="Msg.ClaudeCliNotRunning">No running Claude Code processes found</sys:String>
+    <sys:String x:Key="Msg.ClaudeDesktopStoppedFmt">Successfully closed Claude Desktop ({0} process(es) terminated)</sys:String>
+    <sys:String x:Key="Msg.ClaudeDesktopNotRunning">No running Claude Desktop processes found</sys:String>
     <sys:String x:Key="Msg.CodexSwitchedAutoFmt">Codex switched to "{0}" (bridging auto-enabled)</sys:String>
     <sys:String x:Key="Msg.CodexSwitchedHotFmt">Codex hot-switched to "{0}" (router takeover, no client restart needed)</sys:String>
     <sys:String x:Key="Msg.CodexSwitchedRestartFmt">Codex switched to "{0}" (restart the client if it's running)</sys:String>
@@ -550,11 +558,13 @@
     <sys:String x:Key="Ag.ActUnknownError">Unknown error</sys:String>
     <sys:String x:Key="Ag.ActTipPending">Handshake activation has not run yet — click "Activate" on a card or "Batch Activate" on the toolbar</sys:String>
     <sys:String x:Key="Ag.TierStarterFree">Starter (Free)</sys:String>
+    <sys:String x:Key="Ag.TierPlus">Google AI Plus</sys:String>
     <sys:String x:Key="Ag.TierPro">Google AI Pro</sys:String>
     <sys:String x:Key="Ag.TierProPaid">Google AI Pro (Subscription)</sys:String>
     <sys:String x:Key="Ag.TierProPromo">Google AI Pro (Promotional)</sys:String>
     <sys:String x:Key="Ag.TierUltra">Google AI Ultra</sys:String>
     <sys:String x:Key="Ag.TierStarterTooltip">Starter tier with free baseline quotas</sys:String>
+    <sys:String x:Key="Ag.TierPlusTooltip">Google AI Plus tier: Baseline weekly quotas on Antigravity (no 5H limit or independent Argon pool)</sys:String>
     <sys:String x:Key="Ag.TierProPaidTooltip">Paid Subscription: Full access to independent Gemini 4 Argon quota and advanced models</sys:String>
     <sys:String x:Key="Ag.TierProPromoTooltip">Promotional/Trial access: Supports Gemini 3.8 and Claude 3.7, no independent Argon quota</sys:String>
     <sys:String x:Key="Ag.TierProTooltip">Google AI Pro tier</sys:String>
@@ -645,6 +655,7 @@
     <sys:String x:Key="Usage.AgentZCode">zcode</sys:String>
     <sys:String x:Key="Usage.AgentDsh">dsh</sys:String>
     <sys:String x:Key="Usage.AgentGeminiCli">Gemini CLI</sys:String>
+    <sys:String x:Key="Usage.AgentAntigravity">Antigravity</sys:String>
     <sys:String x:Key="Usage.AgentRequests">{0} requests</sys:String>
     <sys:String x:Key="Usage.ColTime">Time</sys:String>
     <sys:String x:Key="Usage.ColAgent">Client</sys:String>
@@ -664,7 +675,7 @@
     <sys:String x:Key="Usage.BackfillConfirmMsg">Rescan all local session logs and rebuild usage stats so the cache hit, duration and TTFT metrics are populated. The usage database is backed up automatically first (timestamped); the event table will be cleared and rebuilt. Continue?</sys:String>
     <sys:String x:Key="Usage.BackfillDoneFmt">Backfill complete: {0} records written, {1} with cache data and {2} with timing data.</sys:String>
     <sys:String x:Key="Usage.BackfillFailFmt">Backfill failed: {0}</sys:String>
-    <sys:String x:Key="Usage.Note">Note: usage is computed by scanning local Codex / Claude Code / OpenCode / Pi / Gemini CLI session records, so calls made while the app was not running are included. Data is kept for 1 year. Cache hit rate = hits / (fresh input + hits + writes); speed = output tokens / total duration; TTFT is derived from each client's message-level timestamps (logs do not record the first streamed packet, so it is an estimate) and shows "—" when it cannot be derived.</sys:String>
+    <sys:String x:Key="Usage.Note">Note: usage is computed by scanning local Codex / Claude Code / OpenCode / Pi / Antigravity / Gemini CLI / dsh session records, so calls made while the app was not running are included. Data is kept for 1 year. Cache hit rate = hits / (fresh input + hits + writes); speed = output tokens / total duration; TTFT is derived from each client's message-level timestamps (logs do not record the first streamed packet, so it is an estimate) and shows "—" when it cannot be derived.</sys:String>
 
     <!-- Usage monitor redesign -->
     <sys:String x:Key="Usage.TabProviders">Providers</sys:String>
@@ -686,4 +697,28 @@
     <sys:String x:Key="Usage.ExpandTip">Expand to see the model breakdown of this provider</sys:String>
     <sys:String x:Key="Usage.ModelsFmt">{0} models</sys:String>
     <sys:String x:Key="Usage.UnknownModel">Unknown model</sys:String>
+    <sys:String x:Key="Usage.RefreshBtn">Refresh</sys:String>
+    <sys:String x:Key="Usage.RefreshTip">Rescan local session logs and refresh all stats now</sys:String>
+    <sys:String x:Key="Usage.ExportCsvBtn">Export</sys:String>
+    <sys:String x:Key="Usage.ExportCsvTip">Export filtered call records to CSV</sys:String>
+    <sys:String x:Key="Usage.ExportCsvDoneFmt">Exported {0} records to {1}</sys:String>
+    <sys:String x:Key="Usage.FilterAllAgents">All Clients</sys:String>
+    <sys:String x:Key="Usage.ClientAllPill">All</sys:String>
+    <sys:String x:Key="Usage.SearchPlaceholder">Filter model / provider...</sys:String>
+    <sys:String x:Key="Usage.ClearFilterBtn">Reset</sys:String>
+    <sys:String x:Key="Usage.ActiveDaysSubFmt">{0} active days · {1}/day</sys:String>
+    <sys:String x:Key="Usage.FreshCacheSubFmt">Fresh {0} · Cache {1}</sys:String>
+    <sys:String x:Key="Usage.IoRatioSubFmt">Avg {0}/req · In/Out {1}</sys:String>
+    <sys:String x:Key="Usage.ReqDailySubFmt">{0}/day avg · Peak {1}</sys:String>
+    <sys:String x:Key="Usage.ColName">Name</sys:String>
+    <sys:String x:Key="Usage.ColShare">Share</sys:String>
+    <sys:String x:Key="Usage.ColReqs">Reqs</sys:String>
+    <sys:String x:Key="Usage.ColInOut">In / Out</sys:String>
+    <sys:String x:Key="Usage.ColCacheHit">Cache Hit</sys:String>
+    <sys:String x:Key="Usage.ClientMixLabel">Client Mix</sys:String>
+    <sys:String x:Key="Usage.ChartDayCallsFmt">{0} reqs</sys:String>
+    <sys:String x:Key="Usage.FocusedDayFmt">Focused {0} (click bar again to clear)</sys:String>
+    <sys:String x:Key="Usage.FooterHint">Covers local Codex / Claude Code / OpenCode / Pi / Antigravity / Gemini CLI / dsh logs (1-year retention)</sys:String>
+    <sys:String x:Key="Usage.FooterSummary">{0} reqs · {1} active days</sys:String>
+    <sys:String x:Key="Usage.MaxTip">Maximize / Restore</sys:String>
 </ResourceDictionary>

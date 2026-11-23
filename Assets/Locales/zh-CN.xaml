@@ -249,10 +249,14 @@
     <sys:String x:Key="Codex.EmptyTitle">还没有 Codex 供应商</sys:String>
     <sys:String x:Key="Claude.HeroTitle">Claude Code 供应商</sys:String>
     <sys:String x:Key="Claude.OpenSettingsBtn">打开 settings.json</sys:String>
+    <sys:String x:Key="Claude.StopProcessBtn">关闭进程</sys:String>
+    <sys:String x:Key="Claude.StopProcessTip">彻底终止所有运行中的 Claude Code (CLI) 及其后台残留进程，防止后台信息收集导致封号</sys:String>
     <sys:String x:Key="Claude.EmptyTitle">还没有 Claude Code 供应商</sys:String>
     <sys:String x:Key="Desktop.HeroTitle">Claude Desktop 客户端网关</sys:String>
     <sys:String x:Key="Desktop.RestartBtn">重启 Claude</sys:String>
     <sys:String x:Key="Desktop.RestartTip">一键重启 Claude 桌面客户端以加载最新配置</sys:String>
+    <sys:String x:Key="Desktop.StopProcessBtn">关闭进程</sys:String>
+    <sys:String x:Key="Desktop.StopProcessTip">彻底终止 Claude 桌面客户端及全部后台/MCP子进程，防止后台信息收集导致封号</sys:String>
     <sys:String x:Key="Desktop.OpenConfigBtn">打开桌面配置</sys:String>
     <sys:String x:Key="Desktop.EmptyTitle">还没有 Claude 桌面端供应商</sys:String>
     <sys:String x:Key="Oc.HeroTitle">OpenCode API 供应商池</sys:String>
@@ -318,6 +322,10 @@
     <sys:String x:Key="Msg.SwitchedRouterFmt">{0} 已切换到「{1}」（本地路由已接管）</sys:String>
     <sys:String x:Key="Msg.SwitchedPlainFmt">{0} 已切换到「{1}」</sys:String>
     <sys:String x:Key="Msg.DesktopSwitchedNeedRestartFmt">Claude 客户端已切换到「{0}」（需重启生效）</sys:String>
+    <sys:String x:Key="Msg.ClaudeCliStoppedFmt">已安全关闭 Claude Code 相关进程（共终止 {0} 个进程）</sys:String>
+    <sys:String x:Key="Msg.ClaudeCliNotRunning">未检测到运行中的 Claude Code 进程</sys:String>
+    <sys:String x:Key="Msg.ClaudeDesktopStoppedFmt">已安全关闭 Claude 桌面客户端（共终止 {0} 个进程）</sys:String>
+    <sys:String x:Key="Msg.ClaudeDesktopNotRunning">未检测到运行中的 Claude 桌面客户端</sys:String>
     <sys:String x:Key="Msg.CodexSwitchedAutoFmt">Codex 已切换到「{0}」（已自动开启本地路由转译）</sys:String>
     <sys:String x:Key="Msg.CodexSwitchedHotFmt">Codex 已热切换到「{0}」（本地路由已接管，无需重启客户端）</sys:String>
     <sys:String x:Key="Msg.CodexSwitchedRestartFmt">Codex 已切换到「{0}」（若客户端已开，请重启生效）</sys:String>
@@ -550,11 +558,13 @@
     <sys:String x:Key="Ag.ActUnknownError">未知错误</sys:String>
     <sys:String x:Key="Ag.ActTipPending">尚未执行握手激活，可点击卡片右侧「激活」或顶部「批量激活」</sys:String>
     <sys:String x:Key="Ag.TierStarterFree">Starter 免费版</sys:String>
+    <sys:String x:Key="Ag.TierPlus">Google AI Plus</sys:String>
     <sys:String x:Key="Ag.TierPro">Google AI Pro</sys:String>
     <sys:String x:Key="Ag.TierProPaid">Google AI Pro 订阅版</sys:String>
     <sys:String x:Key="Ag.TierProPromo">Google AI Pro 体验版</sys:String>
     <sys:String x:Key="Ag.TierUltra">Google AI Ultra</sys:String>
     <sys:String x:Key="Ag.TierStarterTooltip">Starter 基础免费额度</sys:String>
+    <sys:String x:Key="Ag.TierPlusTooltip">Google AI Plus 订阅档位：在 Antigravity 享有基础周限额度（无 5H 限制与独立 Argon 额度池）</sys:String>
     <sys:String x:Key="Ag.TierProPaidTooltip">官方付费订阅版：享有独立 Gemini 4 Argon 额度池及高阶模型全量权益</sys:String>
     <sys:String x:Key="Ag.TierProPromoTooltip">体验/活动渠道权益：支持 Gemini 3.8 与 Claude 3.7，无独立 Argon 额度池</sys:String>
     <sys:String x:Key="Ag.TierProTooltip">Google AI Pro 订阅档位</sys:String>
@@ -645,6 +655,7 @@
     <sys:String x:Key="Usage.AgentZCode">zcode</sys:String>
     <sys:String x:Key="Usage.AgentDsh">dsh</sys:String>
     <sys:String x:Key="Usage.AgentGeminiCli">Gemini CLI</sys:String>
+    <sys:String x:Key="Usage.AgentAntigravity">Antigravity</sys:String>
     <sys:String x:Key="Usage.AgentRequests">{0} 次请求</sys:String>
     <sys:String x:Key="Usage.ColTime">时间</sys:String>
     <sys:String x:Key="Usage.ColAgent">客户端</sys:String>
@@ -664,7 +675,7 @@
     <sys:String x:Key="Usage.BackfillConfirmMsg">将重新扫描全部本地会话日志并重建用量统计，用于补齐缓存命中、耗时与首字等指标。操作前会自动备份用量数据库（带时间戳），原事件表会被清空后重建。是否继续？</sys:String>
     <sys:String x:Key="Usage.BackfillDoneFmt">回填完成：共写入 {0} 条记录，其中 {1} 条含缓存数据、{2} 条含耗时数据。</sys:String>
     <sys:String x:Key="Usage.BackfillFailFmt">回填失败：{0}</sys:String>
-    <sys:String x:Key="Usage.Note">说明：通过扫描 Codex / Claude Code / OpenCode / Pi / Gemini CLI 等本地会话记录统计用量（应用未运行期间产生的调用也会被纳入），数据保留 1 年。缓存命中率 = 命中 / (新增输入 + 命中 + 写入)；速度 = 输出 token / 整轮耗时；首字由各客户端的消息级时间戳推算（日志不记录流式首包，属近似值），无法推算时显示"—"。</sys:String>
+    <sys:String x:Key="Usage.Note">说明：通过扫描 Codex / Claude Code / OpenCode / Pi / Antigravity / Gemini CLI / dsh 等本地会话记录统计用量（应用未运行期间产生的调用也会被纳入），数据保留 1 年。缓存命中率 = 命中 / (新增输入 + 命中 + 写入)；速度 = 输出 token / 整轮耗时；首字由各客户端的消息级时间戳推算（日志不记录流式首包，属近似值），无法推算时显示"—"。</sys:String>
 
     <!-- 用量监控重构新增 -->
     <sys:String x:Key="Usage.TabProviders">供应商明细</sys:String>
@@ -686,4 +697,28 @@
     <sys:String x:Key="Usage.ExpandTip">展开查看该供应商下的模型明细</sys:String>
     <sys:String x:Key="Usage.ModelsFmt">{0} 个模型</sys:String>
     <sys:String x:Key="Usage.UnknownModel">未知模型</sys:String>
+    <sys:String x:Key="Usage.RefreshBtn">刷新</sys:String>
+    <sys:String x:Key="Usage.RefreshTip">立即重扫本地会话日志并刷新全部数据</sys:String>
+    <sys:String x:Key="Usage.ExportCsvBtn">导出</sys:String>
+    <sys:String x:Key="Usage.ExportCsvTip">导出当前时间范围与筛选条件下的调用明细为 CSV</sys:String>
+    <sys:String x:Key="Usage.ExportCsvDoneFmt">已导出 {0} 条明细至 {1}</sys:String>
+    <sys:String x:Key="Usage.FilterAllAgents">全部客户端</sys:String>
+    <sys:String x:Key="Usage.ClientAllPill">全部</sys:String>
+    <sys:String x:Key="Usage.SearchPlaceholder">搜索模型 / 供应商...</sys:String>
+    <sys:String x:Key="Usage.ClearFilterBtn">重置筛选</sys:String>
+    <sys:String x:Key="Usage.ActiveDaysSubFmt">{0} 活跃天 · 日均 {1}</sys:String>
+    <sys:String x:Key="Usage.FreshCacheSubFmt">新增 {0} · 缓存 {1}</sys:String>
+    <sys:String x:Key="Usage.IoRatioSubFmt">均 {0}/次 · 入/出 {1}</sys:String>
+    <sys:String x:Key="Usage.ReqDailySubFmt">日均 {0} 次 · 峰值 {1}</sys:String>
+    <sys:String x:Key="Usage.ColName">名称</sys:String>
+    <sys:String x:Key="Usage.ColShare">占比</sys:String>
+    <sys:String x:Key="Usage.ColReqs">请求数</sys:String>
+    <sys:String x:Key="Usage.ColInOut">输入 / 输出</sys:String>
+    <sys:String x:Key="Usage.ColCacheHit">缓存命中</sys:String>
+    <sys:String x:Key="Usage.ClientMixLabel">客户端占比</sys:String>
+    <sys:String x:Key="Usage.ChartDayCallsFmt">{0} 次请求</sys:String>
+    <sys:String x:Key="Usage.FocusedDayFmt">已聚焦 {0}（点击趋势柱取消）</sys:String>
+    <sys:String x:Key="Usage.FooterHint">数据源覆盖 Codex / Claude Code / OpenCode / Pi / Antigravity / Gemini CLI / dsh 等本地记录（保留 1 年）</sys:String>
+    <sys:String x:Key="Usage.FooterSummary">{0} 次请求 · {1} 活跃天</sys:String>
+    <sys:String x:Key="Usage.MaxTip">最大化 / 还原窗口</sys:String>
 </ResourceDictionary>

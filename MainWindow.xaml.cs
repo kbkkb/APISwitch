@@ -45,6 +45,7 @@ public partial class MainWindow : Window
 
     System.Windows.Threading.DispatcherTimer? _agQuotaTimer;
     bool _isRefreshingAgQuotas = false;
+    DateTime _lastAgQuotaRefreshUtc = DateTime.MinValue;
     CancellationTokenSource? _batchCts;
     System.Windows.Forms.NotifyIcon? _notifyIcon;
     bool _isExiting = false;
@@ -137,16 +138,15 @@ public partial class MainWindow : Window
         };
         _agQuotaTimer.Tick += (_, _) =>
         {
-            if (IsActive && WindowState != WindowState.Minimized && (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity")
+            bool visibleOnAg = WindowState != WindowState.Minimized
+                && (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity";
+            if (visibleOnAg || (DateTime.UtcNow - _lastAgQuotaRefreshUtc) >= TimeSpan.FromMinutes(3))
             {
                 _ = RefreshAllAgQuotasAsync(silent: true);
             }
         };
-        if (IsActive && WindowState != WindowState.Minimized)
-        {
-            _agQuotaTimer.Start();
-            _ = RefreshAllAgQuotasAsync(silent: true);
-        }
+        _agQuotaTimer.Start();
+        _ = RefreshAllAgQuotasAsync(silent: true);
     }
 
     void OnWindowActivated(object? sender, EventArgs e)
@@ -159,14 +159,14 @@ public partial class MainWindow : Window
 
     void OnWindowDeactivated(object? sender, EventArgs e)
     {
-        _agQuotaTimer?.Stop();
+        // 保持定时器持续运行，确保用户切入 AGY 编码期间 APISwitch 仍在后台定期同步最新额度
     }
 
     void OnWindowStateChanged(object? sender, EventArgs e)
     {
         if (_trayTransition) return;
         // 最小化 = 最小化到任务栏（任务栏上留着这个任务的按钮，标准 Windows 行为），
-        // 这里不做任何拦截/改写；只有非最小化且处于前台时才刷新配额。
+        // 这里不做任何拦截/改写；只有非最小化且处于前台时才立即触发一次同步。
         if (WindowState != WindowState.Minimized && IsActive)
         {
             OnForegroundEntered();
@@ -175,8 +175,8 @@ public partial class MainWindow : Window
 
     void OnForegroundEntered()
     {
-        _agQuotaTimer?.Stop();
-        _agQuotaTimer?.Start();
+        if (_agQuotaTimer != null && !_agQuotaTimer.IsEnabled)
+            _agQuotaTimer.Start();
 
         if ((Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity")
         {
@@ -637,15 +637,14 @@ public partial class MainWindow : Window
 
         try
         {
+            // 先确保账号元数据与当前活动态加载完毕，再执行配额并发查询，杜绝并发加载与存盘导致的实例竞争
+            await RefreshAntigravityAsync();
+
             if (_profiles.Count == 0)
             {
                 if (!silent) ShowToast(I18nService.T("Msg.AgRefreshNone"));
                 return;
             }
-
-            // 性能关键：账号列表刷新（进程枚举 + SQLite + 文件加载）与配额请求互相独立，
-            // 以前是串行 await，白白多等一整个列表刷新的时间。现在并发跑。
-            var listTask = RefreshAntigravityAsync();
 
             var targets = _profiles.ToList();
             using var semaphore = new SemaphoreSlim(4);
@@ -673,7 +672,9 @@ public partial class MainWindow : Window
             });
 
             await Task.WhenAll(tasks);
-            await listTask;
+            _lastAgQuotaRefreshUtc = DateTime.UtcNow;
+
+            await RefreshAntigravityAsync();
 
             Dispatcher.Invoke(() =>
             {
@@ -1988,6 +1989,26 @@ public partial class MainWindow : Window
 
     void OnOpenClaudeSettings(object sender, RoutedEventArgs e) => OpenFile(ClaudeCli.SettingsPath);
 
+    async void OnStopClaudeCli(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var (ok, count) = await ClaudeCliProcess.StopClaudeCliAsync();
+            if (count > 0)
+            {
+                ShowToast(I18nService.F("Msg.ClaudeCliStoppedFmt", count));
+            }
+            else
+            {
+                ShowToast(I18nService.T("Msg.ClaudeCliNotRunning"));
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast(ex.Message, isError: true);
+        }
+    }
+
     // ---------- Claude Desktop ----------
 
     void RefreshDesktop()
@@ -2170,6 +2191,26 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowToast(I18nService.F("Msg.RestartFailFmt", "Claude", ex.Message), isError: true);
+        }
+    }
+
+    async void OnStopClaudeDesktop(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var (ok, count) = await ClaudeProcess.StopClaudeDesktopAsync();
+            if (count > 0)
+            {
+                ShowToast(I18nService.F("Msg.ClaudeDesktopStoppedFmt", count));
+            }
+            else
+            {
+                ShowToast(I18nService.T("Msg.ClaudeDesktopNotRunning"));
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast(ex.Message, isError: true);
         }
     }
 
