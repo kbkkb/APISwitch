@@ -31,11 +31,56 @@ jobs:
         run: |
           .\scripts\package.ps1
 
+      - name: Prepare Bilingual Release Notes
+        shell: powershell
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v', 'V').Trim()
+          if (-not $ver -or $ver -eq "main") {
+            [xml]$proj = Get-Content "APISwitch.csproj"
+            $ver = $proj.Project.PropertyGroup.Version
+          }
+
+          function Extract-Section($path, $version) {
+            if (-not (Test-Path $path)) { return "" }
+            $lines = Get-Content -Path $path -Encoding UTF8
+            $sb = New-Object System.Text.StringBuilder
+            $capturing = $false
+            foreach ($line in $lines) {
+              if ($line.StartsWith("## ")) {
+                if ($capturing) { break }
+                if ($line.IndexOf($version, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                  $capturing = $true
+                  continue
+                }
+              }
+              if ($capturing) {
+                if ($line.Trim() -eq "---") { break }
+                [void]$sb.AppendLine($line)
+              }
+            }
+            return $sb.ToString().Trim()
+          }
+
+          $zh = Extract-Section "RELEASE_NOTES_zh.md" $ver
+          $en = Extract-Section "RELEASE_NOTES.md" $ver
+          $outPath = Join-Path $env:RUNNER_TEMP "release_notes_body.md"
+
+          if ($zh -and $en) {
+            $body = "## 简体中文`n<!-- lang:zh -->`n$zh`n<!-- /lang:zh -->`n`n---`n`n## English`n<!-- lang:en -->`n$en`n<!-- /lang:en -->`n"
+          } elseif ($zh) {
+            $body = "<!-- lang:zh -->`n$zh`n<!-- /lang:zh -->`n"
+          } elseif ($en) {
+            $body = "<!-- lang:en -->`n$en`n<!-- /lang:en -->`n"
+          } else {
+            $body = Get-Content -Path "RELEASE_NOTES.md" -Raw -Encoding UTF8
+          }
+          [System.IO.File]::WriteAllText($outPath, $body, [System.Text.UTF8Encoding]::new($false))
+
       - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: APISwitch ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
+          body_path: ${{ runner.temp }}/release_notes_body.md
           files: |
             Release_Package/APISwitch-Setup-*.exe
             Release_Package/APISwitch-*-win-x64.zip

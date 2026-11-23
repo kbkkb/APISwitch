@@ -164,6 +164,15 @@ public static class UpdateService
             var cleanVer = tagName.TrimStart('v', 'V').Trim();
             var (notesZh, notesEn) = ReleaseNotesHelper.ParseBilingual(body, cleanVer);
 
+            if (string.IsNullOrWhiteSpace(notesZh) && !string.IsNullOrWhiteSpace(tagName))
+            {
+                notesZh = await FetchRemoteNotesSectionAsync(tagName, cleanVer, "RELEASE_NOTES_zh.md");
+            }
+            if (string.IsNullOrWhiteSpace(notesEn) && !string.IsNullOrWhiteSpace(tagName))
+            {
+                notesEn = await FetchRemoteNotesSectionAsync(tagName, cleanVer, "RELEASE_NOTES.md");
+            }
+
             return new UpdateInfo
             {
                 HasUpdate = hasUpdate,
@@ -286,5 +295,23 @@ Start-Process -FilePath $mainExe
 
         Process.Start(psi);
         System.Windows.Application.Current.Shutdown();
+    }
+
+    private static async Task<string> FetchRemoteNotesSectionAsync(string tagName, string cleanVer, string fileName)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var rawUrl = $"https://raw.githubusercontent.com/{RepoOwner}/{RepoName}/{Uri.EscapeDataString(tagName)}/{fileName}";
+            using var resp = await Http.GetAsync(rawUrl, cts.Token);
+            if (!resp.IsSuccessStatusCode) return "";
+
+            var content = await resp.Content.ReadAsStringAsync(cts.Token);
+            return ReleaseNotesHelper.ExtractVersionSection(content, cleanVer);
+        }
+        catch
+        {
+            return "";
+        }
     }
 }

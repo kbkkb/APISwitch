@@ -886,7 +886,15 @@ public partial class App : System.Windows.Application
                 var uZh = uInfo.GetLocalizedReleaseNotes("zh-CN");
                 var uEn = uInfo.GetLocalizedReleaseNotes("en-US");
 
-                sb.AppendLine($"bilingual_probe=ok;zhParsed={zhOk};enParsed={enOk};localZh={localZhOk};localEn={localEnOk};uZh={!string.IsNullOrEmpty(uZh)};uEn={!string.IsNullOrEmpty(uEn)}");
+                var commentBody = "## 简体中文\r\n<!-- lang:zh -->\r\n中文更新条目\r\n<!-- /lang:zh -->\r\n## English\r\n<!-- lang:en -->\r\nEnglish update item\r\n<!-- /lang:en -->";
+                var (cZh, cEn) = ReleaseNotesHelper.ParseBilingual(commentBody, "9.9.9");
+                var commentTagsOk = cZh.Contains("中文更新条目") && !cZh.Contains("English update") && cEn.Contains("English update item");
+
+                var navEnglishOnly = "[English](RELEASE_NOTES.md) | [简体中文](RELEASE_NOTES_zh.md)\r\n# APISwitch Release Notes\r\n## APISwitch v9.9.9 Release Notes\r\n• Pure English entry";
+                var (nZh, nEn) = ReleaseNotesHelper.ParseBilingual(navEnglishOnly, "9.9.9");
+                var navBypassOk = string.IsNullOrEmpty(nZh) && nEn.Contains("Pure English entry");
+
+                sb.AppendLine($"bilingual_probe=ok;zhParsed={zhOk};enParsed={enOk};localZh={localZhOk};localEn={localEnOk};uZh={!string.IsNullOrEmpty(uZh)};uEn={!string.IsNullOrEmpty(uEn)};commentTagsOk={commentTagsOk};navBypassOk={navBypassOk}");
             }
             catch (Exception ex)
             {

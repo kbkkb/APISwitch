@@ -47,16 +47,21 @@ public static class ReleaseNotesHelper
                 if (!string.IsNullOrWhiteSpace(hdrEn)) enNotes = hdrEn;
             }
 
-            // 3. 若均未匹配出双语分区，按是否有中文字符归入对应语言
+            // 3. 若均未匹配出双语分区，先剔除顶部语言切换导航行，再按是否有中文字符归入对应语言
             if (string.IsNullOrWhiteSpace(zhNotes) && string.IsNullOrWhiteSpace(enNotes))
             {
-                if (Regex.IsMatch(body, @"[\u4e00-\u9fa5]"))
+                var cleanedBody = Regex.Replace(
+                    body,
+                    @"(?m)^\[English\]\([^)]+\)\s*\|\s*\[[^\]]+\]\([^)]+\)\s*\r?\n?",
+                    "").Trim();
+
+                if (Regex.IsMatch(cleanedBody, @"[\u4e00-\u9fa5]"))
                 {
-                    zhNotes = body.Trim();
+                    zhNotes = cleanedBody;
                 }
                 else
                 {
-                    enNotes = body.Trim();
+                    enNotes = cleanedBody;
                 }
             }
         }
@@ -157,47 +162,57 @@ public static class ReleaseNotesHelper
 
             if (filePath == null) return "";
 
-            var content = File.ReadAllText(filePath, Encoding.UTF8).Replace("\r\n", "\n");
-            var cleanVer = string.IsNullOrWhiteSpace(targetVersion) ? "" : targetVersion.TrimStart('v', 'V').Trim();
-
-            var lines = content.Split('\n');
-            var resultSb = new StringBuilder();
-            bool capturing = false;
-
-            for (int i = 0; i < lines.Length; i++)
-            {
-                var line = lines[i];
-
-                if (line.StartsWith("## "))
-                {
-                    if (capturing)
-                    {
-                        // 结束当前版本块
-                        break;
-                    }
-
-                    if (string.IsNullOrEmpty(cleanVer) || line.Contains(cleanVer, StringComparison.OrdinalIgnoreCase))
-                    {
-                        capturing = true;
-                        continue;
-                    }
-                }
-
-                if (capturing)
-                {
-                    if (line.Trim() == "---")
-                    {
-                        break;
-                    }
-                    resultSb.AppendLine(line);
-                }
-            }
-
-            return resultSb.ToString().Trim();
+            var content = File.ReadAllText(filePath, Encoding.UTF8);
+            return ExtractVersionSection(content, targetVersion);
         }
         catch
         {
             return "";
         }
+    }
+
+    /// <summary>
+    /// 从 Markdown 更新日志全文中提取指定版本号的段落正文。
+    /// </summary>
+    public static string ExtractVersionSection(string? markdownContent, string? targetVersion)
+    {
+        if (string.IsNullOrWhiteSpace(markdownContent)) return "";
+
+        var content = markdownContent.Replace("\r\n", "\n");
+        var cleanVer = string.IsNullOrWhiteSpace(targetVersion) ? "" : targetVersion.TrimStart('v', 'V').Trim();
+
+        var lines = content.Split('\n');
+        var resultSb = new StringBuilder();
+        bool capturing = false;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+
+            if (line.StartsWith("## "))
+            {
+                if (capturing)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrEmpty(cleanVer) || line.Contains(cleanVer, StringComparison.OrdinalIgnoreCase))
+                {
+                    capturing = true;
+                    continue;
+                }
+            }
+
+            if (capturing)
+            {
+                if (line.Trim() == "---")
+                {
+                    break;
+                }
+                resultSb.AppendLine(line);
+            }
+        }
+
+        return resultSb.ToString().Trim();
     }
 }
