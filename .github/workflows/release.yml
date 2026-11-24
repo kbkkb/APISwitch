@@ -32,7 +32,7 @@ jobs:
           .\scripts\package.ps1
 
       - name: Prepare Bilingual Release Notes
-        shell: powershell
+        shell: pwsh
         run: |
           $ver = "${{ github.ref_name }}".TrimStart('v', 'V').Trim()
           if (-not $ver -or $ver -eq "main") {
@@ -63,10 +63,12 @@ jobs:
 
           $zh = Extract-Section "RELEASE_NOTES_zh.md" $ver
           $en = Extract-Section "RELEASE_NOTES.md" $ver
-          $outPath = Join-Path $env:RUNNER_TEMP "release_notes_body.md"
+          $tempDir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+          $outPath = Join-Path $tempDir "release_notes_body.md"
+          $zhTitle = -join ([char]0x7B80, [char]0x4F53, [char]0x4E2D, [char]0x6587)
 
           if ($zh -and $en) {
-            $body = "## 简体中文`n<!-- lang:zh -->`n$zh`n<!-- /lang:zh -->`n`n---`n`n## English`n<!-- lang:en -->`n$en`n<!-- /lang:en -->`n"
+            $body = "## $zhTitle`n<!-- lang:zh -->`n$zh`n<!-- /lang:zh -->`n`n---`n`n## English`n<!-- lang:en -->`n$en`n<!-- /lang:en -->`n"
           } elseif ($zh) {
             $body = "<!-- lang:zh -->`n$zh`n<!-- /lang:zh -->`n"
           } elseif ($en) {
@@ -74,7 +76,9 @@ jobs:
           } else {
             $body = Get-Content -Path "RELEASE_NOTES.md" -Raw -Encoding UTF8
           }
-          [System.IO.File]::WriteAllText($outPath, $body, [System.Text.UTF8Encoding]::new($false))
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          [System.IO.File]::WriteAllText($outPath, $body, $utf8NoBom)
+          Write-Host "Prepared release notes ($($body.Length) chars) at $outPath"
 
       - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
