@@ -576,6 +576,16 @@
     <sys:String x:Key="Ag.FullStandby">满额待命</sys:String>
     <sys:String x:Key="Ag.ResetDone">已重置</sys:String>
     <sys:String x:Key="Ag.RefreshedDone">已刷新</sys:String>
+    <sys:String x:Key="Ag.TimerNotStarted">未开始计时</sys:String>
+    <sys:String x:Key="Ag.TimerReadyRefresh">可刷新</sys:String>
+    <sys:String x:Key="Ag.TimerIdleTipFmt">当前满额（100%），尚未开始 {0} 周期计时&#x0a;首次调用或点击「激活」后启动倒计时</sys:String>
+    <sys:String x:Key="Ag.TimerResetAtTipFmt">预计重置时间：{0}</sys:String>
+    <sys:String x:Key="Ag.TimerExhaustedTipFmt">当前周期额度已用尽，预计于 {0} 恢复</sys:String>
+    <sys:String x:Key="Ag.TimerReadyTip">已到达预计重置时间，点击右侧「刷新」同步最新额度</sys:String>
+    <sys:String x:Key="Ag.Window5h">5 小时</sys:String>
+    <sys:String x:Key="Ag.WindowWeekly">7 天</sys:String>
+    <sys:String x:Key="Ag.TodayPrefix">今天</sys:String>
+    <sys:String x:Key="Ag.TomorrowPrefix">明天</sys:String>
     <sys:String x:Key="Ag.LeftHoursMinFmt">剩 {0}h {1}m</sys:String>
     <sys:String x:Key="Ag.LeftMinutesFmt">剩 {0}m</sys:String>
     <sys:String x:Key="Ag.LeftDaysHoursFmt">剩 {0}天{1}小时</sys:String>

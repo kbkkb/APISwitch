@@ -86,6 +86,15 @@ public class Profile : INotifyPropertyChanged
     }
     private bool _isActivating;
 
+    // 刷新额度中标志（UI 微交互：刷新按钮旋转动画 + 防抖）
+    [JsonIgnore]
+    public bool IsRefreshingQuota
+    {
+        get => _isRefreshingQuota;
+        set { if (_isRefreshingQuota != value) { _isRefreshingQuota = value; OnPropertyChanged(nameof(IsRefreshingQuota)); } }
+    }
+    private bool _isRefreshingQuota;
+
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged(string name) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -291,6 +300,143 @@ public class Profile : INotifyPropertyChanged
         }
     }
 
+    static System.Windows.Media.SolidColorBrush CreateFrozenBrush(byte r, byte g, byte b)
+    {
+        var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    static readonly System.Windows.Media.Brush MutedBadgeFg = CreateFrozenBrush(0x94, 0xA3, 0xB8);
+    static readonly System.Windows.Media.Brush IdleBadgeFg = CreateFrozenBrush(0x64, 0x74, 0x8B);
+    static readonly System.Windows.Media.Brush IdleBadgeBg = CreateFrozenBrush(0xF1, 0xF5, 0xF9);
+    static readonly System.Windows.Media.Brush ReadyBadgeFg = CreateFrozenBrush(0x04, 0x78, 0x57);
+    static readonly System.Windows.Media.Brush ReadyBadgeBg = CreateFrozenBrush(0xEC, 0xFD, 0xF5);
+    static readonly System.Windows.Media.Brush ExhaustedBadgeFg = CreateFrozenBrush(0xB4, 0x53, 0x09);
+    static readonly System.Windows.Media.Brush ExhaustedBadgeBg = CreateFrozenBrush(0xFE, 0xF3, 0xC7);
+    static readonly System.Windows.Media.Brush ActiveBadgeFg = CreateFrozenBrush(0x03, 0x69, 0xA1);
+    static readonly System.Windows.Media.Brush ActiveBadgeBg = CreateFrozenBrush(0xE0, 0xF2, 0xFE);
+
+    /// <summary>
+    /// 判断配额桶是否处于「满额且尚未开始计时」状态：
+    /// Google API 对未开始计时的满额桶（100%）会返回动态滑动的整周期占位 resetTime（如 +5h / +7d）。
+    /// </summary>
+    internal static bool IsTimerStandby(double? fraction, string? resetTimeRaw, DateTime? referenceUtc, TimeSpan windowDuration)
+    {
+        if (!fraction.HasValue || fraction.Value < 0.9999) return false;
+        if (string.IsNullOrEmpty(resetTimeRaw)) return true;
+        if (ParseResetUtc(resetTimeRaw) is { } resetUtc)
+        {
+            var baseUtc = referenceUtc.HasValue ? referenceUtc.Value.ToUniversalTime() : DateTime.UtcNow;
+            var spanAtSync = resetUtc.ToUniversalTime() - baseUtc;
+            if (spanAtSync >= windowDuration - TimeSpan.FromMinutes(2))
+                return true;
+        }
+        return false;
+    }
+
+    static string FormatLocalResetTime(DateTime utcDt)
+    {
+        var local = utcDt.ToUniversalTime().ToLocalTime();
+        var today = DateTime.Now.Date;
+        if (local.Date == today)
+            return $"{I18nService.T("Ag.TodayPrefix")} {local:HH:mm}";
+        if (local.Date == today.AddDays(1))
+            return $"{I18nService.T("Ag.TomorrowPrefix")} {local:HH:mm}";
+        return local.ToString("MM-dd HH:mm");
+    }
+
+    static string FormatLeft5h(TimeSpan diff)
+    {
+        if (diff.TotalHours >= 1)
+            return I18nService.F("Ag.LeftHoursMinFmt", (int)diff.TotalHours, diff.Minutes);
+        return I18nService.F("Ag.LeftMinutesFmt", diff.Minutes);
+    }
+
+    static string FormatLeftWeekly(TimeSpan diff)
+    {
+        if (diff.TotalDays >= 1)
+            return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
+        if (diff.TotalHours >= 1)
+            return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
+        return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
+    }
+
+    readonly record struct QuotaBadgeState(
+        string Text,
+        System.Windows.Media.Brush Fg,
+        System.Windows.Media.Brush Bg,
+        string? Tooltip);
+
+    QuotaBadgeState EvaluateQuotaBadge(bool isSupported, double? fraction, string? resetTimeRaw, bool is5h, bool isArgon = false)
+    {
+        if (is5h)
+        {
+            if (!isSupported || (isArgon && !fraction.HasValue))
+                return new QuotaBadgeState(I18nService.T("Ag.No5hLimit"), MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
+            if (!fraction.HasValue)
+                return new QuotaBadgeState(I18nService.T("Ag.NotActivatedShort"), MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
+            if (IsTimerStandby(fraction, resetTimeRaw, QuotaUpdatedAt, TimeSpan.FromHours(5)))
+                return new QuotaBadgeState(
+                    I18nService.T("Ag.TimerNotStarted"),
+                    IdleBadgeFg,
+                    IdleBadgeBg,
+                    I18nService.F("Ag.TimerIdleTipFmt", I18nService.T("Ag.Window5h")));
+        }
+        else
+        {
+            if (!fraction.HasValue)
+            {
+                if (isArgon && QuotaUpdatedAt.HasValue)
+                {
+                    var noArgonText = SubscriptionTier?.Contains("Ultra", StringComparison.OrdinalIgnoreCase) == true
+                        ? I18nService.T("Ag.ArgonSharedWithGemini")
+                        : I18nService.T("Ag.ArgonNotAvailable");
+                    return new QuotaBadgeState(noArgonText, MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
+                }
+                return new QuotaBadgeState("", MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
+            }
+            if (IsTimerStandby(fraction, resetTimeRaw, QuotaUpdatedAt, TimeSpan.FromDays(7)))
+                return new QuotaBadgeState(
+                    I18nService.T("Ag.TimerNotStarted"),
+                    IdleBadgeFg,
+                    IdleBadgeBg,
+                    I18nService.F("Ag.TimerIdleTipFmt", I18nService.T("Ag.WindowWeekly")));
+        }
+
+        if (ParseResetUtc(resetTimeRaw) is { } dt)
+        {
+            var diff = dt.ToUniversalTime() - DateTime.UtcNow;
+            if (diff.TotalSeconds <= 0)
+            {
+                return new QuotaBadgeState(
+                    I18nService.T("Ag.TimerReadyRefresh"),
+                    ReadyBadgeFg,
+                    ReadyBadgeBg,
+                    I18nService.T("Ag.TimerReadyTip"));
+            }
+
+            var leftText = is5h ? FormatLeft5h(diff) : FormatLeftWeekly(diff);
+            var resetTimeText = FormatLocalResetTime(dt);
+            if (fraction.Value <= 0.02)
+            {
+                return new QuotaBadgeState(
+                    leftText,
+                    ExhaustedBadgeFg,
+                    ExhaustedBadgeBg,
+                    I18nService.F("Ag.TimerExhaustedTipFmt", resetTimeText));
+            }
+
+            return new QuotaBadgeState(
+                leftText,
+                ActiveBadgeFg,
+                ActiveBadgeBg,
+                I18nService.F("Ag.TimerResetAtTipFmt", resetTimeText));
+        }
+
+        return new QuotaBadgeState("", MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
+    }
+
     [JsonIgnore]
     public bool Has5hQuota => IsProTier && Quota5hFraction.HasValue;
 
@@ -305,24 +451,16 @@ public class Profile : INotifyPropertyChanged
     public string Quota5hPercentText => (IsProTier && Quota5hFraction.HasValue) ? $"{Math.Round(Quota5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
-    public string Quota5hCountdown
-    {
-        get
-        {
-            if (!IsProTier) return I18nService.T("Ag.No5hLimit");
-            if (!Quota5hFraction.HasValue) return I18nService.T("Ag.NotActivatedShort");
-            if (string.IsNullOrEmpty(Quota5hResetTime)) return I18nService.T("Ag.FullStandby");
-            if (ParseResetUtc(Quota5hResetTime) is { } dt)
-            {
-                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
-                if (diff.TotalHours >= 1)
-                    return I18nService.F("Ag.LeftHoursMinFmt", (int)diff.TotalHours, diff.Minutes);
-                return I18nService.F("Ag.LeftMinutesFmt", diff.Minutes);
-            }
-            return "";
-        }
-    }
+    public string Quota5hCountdown => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Text;
+    [JsonIgnore]
+    public System.Windows.Media.Brush Quota5hCountdownFg => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Fg;
+    [JsonIgnore]
+    public System.Windows.Media.Brush Quota5hCountdownBg => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Bg;
+    [JsonIgnore]
+    public string? Quota5hCountdownTooltip => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Tooltip;
+    [JsonIgnore]
+    public System.Windows.Visibility Quota5hCountdownVisibility =>
+        string.IsNullOrEmpty(Quota5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
     [JsonIgnore]
     public double QuotaWeeklyPercentValue
@@ -335,24 +473,16 @@ public class Profile : INotifyPropertyChanged
     public string QuotaWeeklyPercentText => QuotaWeeklyFraction.HasValue ? $"{Math.Round(QuotaWeeklyFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string QuotaWeeklyCountdown
-    {
-        get
-        {
-            if (string.IsNullOrEmpty(QuotaWeeklyResetTime)) return "";
-            if (ParseResetUtc(QuotaWeeklyResetTime) is { } dt)
-            {
-                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");
-                if (diff.TotalDays >= 1)
-                    return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
-                if (diff.TotalHours >= 1)
-                    return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
-                return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
-            }
-            return "";
-        }
-    }
+    public string QuotaWeeklyCountdown => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Text;
+    [JsonIgnore]
+    public System.Windows.Media.Brush QuotaWeeklyCountdownFg => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Fg;
+    [JsonIgnore]
+    public System.Windows.Media.Brush QuotaWeeklyCountdownBg => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Bg;
+    [JsonIgnore]
+    public string? QuotaWeeklyCountdownTooltip => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Tooltip;
+    [JsonIgnore]
+    public System.Windows.Visibility QuotaWeeklyCountdownVisibility =>
+        string.IsNullOrEmpty(QuotaWeeklyCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
     [JsonIgnore]
     public bool Has3pQuota => Quota3p5hFraction.HasValue || Quota3pWeeklyFraction.HasValue;
@@ -368,23 +498,16 @@ public class Profile : INotifyPropertyChanged
     public string Quota3p5hPercentText => (IsProTier && Quota3p5hFraction.HasValue) ? $"{Math.Round(Quota3p5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
-    public string Quota3p5hCountdown
-    {
-        get
-        {
-            if (!IsProTier) return I18nService.T("Ag.No5hLimit");
-            if (!Quota3p5hFraction.HasValue) return I18nService.T("Ag.NotActivatedShort");
-            if (string.IsNullOrEmpty(Quota3p5hResetTime)) return I18nService.T("Ag.FullStandby");
-            if (ParseResetUtc(Quota3p5hResetTime) is { } dt)
-            {
-                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
-                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursMinFmt", (int)diff.TotalHours, diff.Minutes);
-                return I18nService.F("Ag.LeftMinutesFmt", diff.Minutes);
-            }
-            return "";
-        }
-    }
+    public string Quota3p5hCountdown => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Text;
+    [JsonIgnore]
+    public System.Windows.Media.Brush Quota3p5hCountdownFg => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Fg;
+    [JsonIgnore]
+    public System.Windows.Media.Brush Quota3p5hCountdownBg => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Bg;
+    [JsonIgnore]
+    public string? Quota3p5hCountdownTooltip => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Tooltip;
+    [JsonIgnore]
+    public System.Windows.Visibility Quota3p5hCountdownVisibility =>
+        string.IsNullOrEmpty(Quota3p5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
     [JsonIgnore]
     public double Quota3pWeeklyPercentValue
@@ -397,22 +520,16 @@ public class Profile : INotifyPropertyChanged
     public string Quota3pWeeklyPercentText => Quota3pWeeklyFraction.HasValue ? $"{Math.Round(Quota3pWeeklyFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string Quota3pWeeklyCountdown
-    {
-        get
-        {
-            if (string.IsNullOrEmpty(Quota3pWeeklyResetTime)) return "";
-            if (ParseResetUtc(Quota3pWeeklyResetTime) is { } dt)
-            {
-                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");
-                if (diff.TotalDays >= 1) return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
-                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
-                return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
-            }
-            return "";
-        }
-    }
+    public string Quota3pWeeklyCountdown => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Text;
+    [JsonIgnore]
+    public System.Windows.Media.Brush Quota3pWeeklyCountdownFg => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Fg;
+    [JsonIgnore]
+    public System.Windows.Media.Brush Quota3pWeeklyCountdownBg => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Bg;
+    [JsonIgnore]
+    public string? Quota3pWeeklyCountdownTooltip => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Tooltip;
+    [JsonIgnore]
+    public System.Windows.Visibility Quota3pWeeklyCountdownVisibility =>
+        string.IsNullOrEmpty(Quota3pWeeklyCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
     [JsonIgnore]
     public bool HasArgonQuota => QuotaArgon5hFraction.HasValue || QuotaArgonWeeklyFraction.HasValue;
@@ -428,22 +545,16 @@ public class Profile : INotifyPropertyChanged
     public string QuotaArgon5hPercentText => (IsProTier && QuotaArgon5hFraction.HasValue) ? $"{Math.Round(QuotaArgon5hFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string QuotaArgon5hCountdown
-    {
-        get
-        {
-            if (!QuotaArgon5hFraction.HasValue) return I18nService.T("Ag.No5hLimit");
-            if (string.IsNullOrEmpty(QuotaArgon5hResetTime)) return I18nService.T("Ag.FullStandby");
-            if (ParseResetUtc(QuotaArgon5hResetTime) is { } dt)
-            {
-                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.ResetDone");
-                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursMinFmt", (int)diff.TotalHours, diff.Minutes);
-                return I18nService.F("Ag.LeftMinutesFmt", diff.Minutes);
-            }
-            return "";
-        }
-    }
+    public string QuotaArgon5hCountdown => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Text;
+    [JsonIgnore]
+    public System.Windows.Media.Brush QuotaArgon5hCountdownFg => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Fg;
+    [JsonIgnore]
+    public System.Windows.Media.Brush QuotaArgon5hCountdownBg => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Bg;
+    [JsonIgnore]
+    public string? QuotaArgon5hCountdownTooltip => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Tooltip;
+    [JsonIgnore]
+    public System.Windows.Visibility QuotaArgon5hCountdownVisibility =>
+        string.IsNullOrEmpty(QuotaArgon5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
     [JsonIgnore]
     public double QuotaArgonWeeklyPercentValue
@@ -456,27 +567,16 @@ public class Profile : INotifyPropertyChanged
     public string QuotaArgonWeeklyPercentText => QuotaArgonWeeklyFraction.HasValue ? $"{Math.Round(QuotaArgonWeeklyFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string QuotaArgonWeeklyCountdown
-    {
-        get
-        {
-            if (!string.IsNullOrEmpty(QuotaArgonWeeklyResetTime) && ParseResetUtc(QuotaArgonWeeklyResetTime) is { } dt)
-            {
-                var diff = dt.ToUniversalTime() - DateTime.UtcNow;
-                if (diff.TotalSeconds <= 0) return I18nService.T("Ag.RefreshedDone");
-                if (diff.TotalDays >= 1) return I18nService.F("Ag.LeftDaysHoursFmt", (int)diff.TotalDays, diff.Hours);
-                if (diff.TotalHours >= 1) return I18nService.F("Ag.LeftHoursFmt", (int)diff.TotalHours);
-                return I18nService.F("Ag.LeftMinFmt", diff.Minutes);
-            }
-            if (!QuotaArgonWeeklyFraction.HasValue && QuotaUpdatedAt.HasValue)
-            {
-                if (SubscriptionTier?.Contains("Ultra", StringComparison.OrdinalIgnoreCase) == true)
-                    return I18nService.T("Ag.ArgonSharedWithGemini");
-                return I18nService.T("Ag.ArgonNotAvailable");
-            }
-            return "";
-        }
-    }
+    public string QuotaArgonWeeklyCountdown => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Text;
+    [JsonIgnore]
+    public System.Windows.Media.Brush QuotaArgonWeeklyCountdownFg => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Fg;
+    [JsonIgnore]
+    public System.Windows.Media.Brush QuotaArgonWeeklyCountdownBg => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Bg;
+    [JsonIgnore]
+    public string? QuotaArgonWeeklyCountdownTooltip => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Tooltip;
+    [JsonIgnore]
+    public System.Windows.Visibility QuotaArgonWeeklyCountdownVisibility =>
+        string.IsNullOrEmpty(QuotaArgonWeeklyCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
     [JsonIgnore]
     public string QuotaUpdatedText

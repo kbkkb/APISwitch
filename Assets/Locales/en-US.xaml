@@ -576,6 +576,16 @@
     <sys:String x:Key="Ag.FullStandby">Full quota, standing by</sys:String>
     <sys:String x:Key="Ag.ResetDone">Reset</sys:String>
     <sys:String x:Key="Ag.RefreshedDone">Refreshed</sys:String>
+    <sys:String x:Key="Ag.TimerNotStarted">Not started</sys:String>
+    <sys:String x:Key="Ag.TimerReadyRefresh">Ready</sys:String>
+    <sys:String x:Key="Ag.TimerIdleTipFmt">Full quota (100%) — {0} cycle has not started yet&#x0a;Timer starts after the first request or clicking "Activate"</sys:String>
+    <sys:String x:Key="Ag.TimerResetAtTipFmt">Expected reset: {0}</sys:String>
+    <sys:String x:Key="Ag.TimerExhaustedTipFmt">Quota exhausted for this cycle; expected recovery at {0}</sys:String>
+    <sys:String x:Key="Ag.TimerReadyTip">Reset time reached — click "Refresh" to sync latest quota</sys:String>
+    <sys:String x:Key="Ag.Window5h">5-hour</sys:String>
+    <sys:String x:Key="Ag.WindowWeekly">7-day</sys:String>
+    <sys:String x:Key="Ag.TodayPrefix">Today</sys:String>
+    <sys:String x:Key="Ag.TomorrowPrefix">Tomorrow</sys:String>
     <sys:String x:Key="Ag.LeftHoursMinFmt">{0}h {1}m left</sys:String>
     <sys:String x:Key="Ag.LeftMinutesFmt">{0}m left</sys:String>
     <sys:String x:Key="Ag.LeftDaysHoursFmt">{0}d {1}h left</sys:String>

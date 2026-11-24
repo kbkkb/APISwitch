@@ -1002,7 +1002,35 @@ public partial class App : System.Windows.Application
                 var reconcileOk = Math.Abs((pRec.QuotaArgonWeeklyFraction ?? 0) - 0.918) < 1e-6 &&
                                   Math.Abs((pRec.Quota3pWeeklyFraction ?? 0) - 0.93) < 1e-6;
 
-                sb.AppendLine($"ag_tier_flapping_probe=ok;demotePrevented={demotePrevented};argonUpdated={argonUpdated};promoOk={promoOk};starterOk={starterOk};plus3pOk={plus3pOk};reconcileOk={reconcileOk}");
+                // 7) 满额且尚未开始计时的占位 resetTime（5H=+300.5m / Weekly=+10080.5m）应显示「未开始计时」而非剩余倒计时
+                var nowUtc = DateTime.UtcNow;
+                var pStandby = new Models.Profile
+                {
+                    Email = "test-standby@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    IsPaidSubscription = true,
+                    QuotaUpdatedAt = nowUtc,
+                    Quota5hFraction = 1.0,
+                    Quota5hResetTime = nowUtc.AddMinutes(300.5).ToString("O"),
+                    QuotaWeeklyFraction = 1.0,
+                    QuotaWeeklyResetTime = nowUtc.AddMinutes(10080.5).ToString("O"),
+                    Quota3p5hFraction = 0.96,
+                    Quota3p5hResetTime = nowUtc.AddMinutes(279).ToString("O"),
+                    Quota3pWeeklyFraction = 0.01,
+                    Quota3pWeeklyResetTime = nowUtc.AddHours(20).ToString("O")
+                };
+                var expectedIdle = I18nService.T("Ag.TimerNotStarted");
+                var expectedExhaustedSample = I18nService.F("Ag.TimerExhaustedTipFmt", "SPLIT_TOKEN");
+                var exhaustedPrefix = expectedExhaustedSample.Split("SPLIT_TOKEN")[0];
+                var standbyTimerOk = pStandby.Quota5hCountdown == expectedIdle &&
+                                     pStandby.QuotaWeeklyCountdown == expectedIdle &&
+                                     pStandby.Quota5hCountdownFg.IsFrozen &&
+                                     pStandby.Quota5hCountdownBg.IsFrozen &&
+                                     pStandby.Quota3p5hCountdown.Contains("4") &&
+                                     !string.IsNullOrEmpty(pStandby.Quota3p5hCountdownTooltip) &&
+                                     (pStandby.Quota3pWeeklyCountdownTooltip?.Contains(exhaustedPrefix) == true);
+
+                sb.AppendLine($"ag_tier_flapping_probe=ok;demotePrevented={demotePrevented};argonUpdated={argonUpdated};promoOk={promoOk};starterOk={starterOk};plus3pOk={plus3pOk};reconcileOk={reconcileOk};standbyTimerOk={standbyTimerOk}");
             }
             catch (Exception ex)
             {

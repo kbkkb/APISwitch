@@ -146,6 +146,7 @@ dotnet build -c Release
 - [x] **Usage Performance Metrics & Backfill (v0.3.1)**: Cache hit rate, output speed and time to first token across summary cards, recent calls and per-model / per-provider drill-downs, plus one-click backfill of historical data.
 - [x] **More Agent Platforms & Heatmap Grid (v0.3.2)**: Extended usage monitoring to Gemini CLI, StepCode, zcode, and dsh; refined Google Pro subscription tier vs promotional quota detection; introduced long-range Contribution Heatmap Grid and 400-day data retention.
 - [x] **Antigravity Native Usage, Client Filter Bar & Plus Tier (v0.3.3)**: Added native Antigravity conversation database usage/model/speed scanning (10 clients total), streamlined Usage Monitor with a quick Client Icon Filter Strip, aligned quota sync with `daily-cloudcode-pa`, and added `Google AI Plus` tier detection.
+- [x] **Quota Timer UX, Dual-Column Adaptation & Bilingual Updater (v0.3.4)**: Added untouched 100% bucket "Not started" detection, 5-state countdown pills with local reset tooltips, per-card refresh spin feedback, toggleable dual-column quota panel adaptation, and bilingual GitHub Release notes parsing.
 - [ ] **Automated Routing & Health Check**: Support automated load balancing, model routing rules, and upstream health-checked failover.
 
 ---

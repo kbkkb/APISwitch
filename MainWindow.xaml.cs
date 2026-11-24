@@ -521,6 +521,8 @@ public partial class MainWindow : Window
     async void OnCardRefreshQuota(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Profile target) return;
+        if (target.IsRefreshingQuota) return;
+        target.IsRefreshingQuota = true;
         try
         {
             var ok = await AgQuotaService.RefreshQuotaAsync(target);
@@ -540,6 +542,10 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowToast(I18nService.F("Msg.AgRefreshQuotaErrorFmt", ex.Message), isError: true);
+        }
+        finally
+        {
+            target.IsRefreshingQuota = false;
         }
     }
 

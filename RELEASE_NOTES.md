@@ -2,6 +2,23 @@
 
 # APISwitch Release Notes
 
+## APISwitch v0.3.4 Release Notes
+
+### [Improvements · Quota Countdown & Refresh UX]
+• **Accurate "Not started" Timer Detection**: Identified that Google's quota API returns a sliding full-cycle placeholder `resetTime` (e.g., `+5h` / `+7d`) for untouched 100% buckets. APISwitch now detects untouched buckets via `IsTimerStandby` and displays a **`Not started`** pill instead of a misleading countdown.
+• **5-State Status Pills & Local Reset Tooltips**: Upgraded quota countdown labels into color-coded status pills (`Not started`, `Counting down`, `Exhausted`, `Ready to refresh`, `Not activated / No 5H limit`) with hover tooltips showing the exact expected local reset time (`Today HH:mm`, `Tomorrow HH:mm`, or `MM-dd HH:mm`).
+• **Refresh Button Feedback**: Added a spin animation and duplicate-click guard (`IsRefreshingQuota`) to per-account quota refresh buttons.
+
+### [Adaptation · Dual-Column Quota Layout]
+• Adapted the Antigravity account card layout to match upstream removal of the separate Pro Argon quota pool: folded the Argon column by default behind a single frontend toggle (`Profile.ShowArgonQuotaColumn`), presenting a clean 50/50 dual-column panel (`Gemini` & `Claude & GPT`) while keeping backend quota parsing intact for quick re-enablement if needed.
+
+### [Fixes · Bilingual Update Dialog Release Notes]
+• Fixed an issue where selecting "中文" in the update dialog still displayed English release notes:
+  - Updated the GitHub Actions release workflow to generate bilingual Release bodies (`<!-- lang:zh -->` and `<!-- lang:en -->` blocks).
+  - Hardened `ReleaseNotesHelper.ParseBilingual` to strip language navigation links before language detection and added remote `RELEASE_NOTES_zh.md` fallback fetching in `UpdateService`.
+
+---
+
 ## APISwitch v0.3.3 Release Notes
 
 ### [New · Native Antigravity Usage & Performance Monitoring]

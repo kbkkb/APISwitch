@@ -501,9 +501,13 @@
                                                             <TextBlock Text="{DynamicResource Ag.ActivateQuotaBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="{DynamicResource Ag.RefreshQuotaTip}">
+                                                    <Button x:Name="RefreshQuotaBtn" Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="{DynamicResource Ag.RefreshQuotaTip}">
                                                         <StackPanel Orientation="Horizontal">
-                                                            <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                            <Path x:Name="RefreshIcon" Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                                <Path.RenderTransform>
+                                                                    <RotateTransform x:Name="RefreshIconRotate" Angle="0"/>
+                                                                </Path.RenderTransform>
+                                                            </Path>
                                                             <TextBlock Text="{DynamicResource Ag.RefreshQuotaBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                     </Button>
@@ -535,10 +539,14 @@
                                                         <!-- Gemini 5H -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
-                                                                <TextBlock Text="{Binding Quota5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                <Border Background="{Binding Quota5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                        VerticalAlignment="Center" Visibility="{Binding Quota5hCountdownVisibility}"
+                                                                        ToolTip="{Binding Quota5hCountdownTooltip}">
+                                                                    <TextBlock Text="{Binding Quota5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota5hCountdownFg}"/>
+                                                                </Border>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right"/>
+                                                            <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
                                                                     Foreground="{StaticResource GreenBrush}"/>
@@ -546,10 +554,14 @@
                                                         <!-- Gemini Weekly -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
-                                                                <TextBlock Text="{Binding QuotaWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                <Border Background="{Binding QuotaWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                        VerticalAlignment="Center" Visibility="{Binding QuotaWeeklyCountdownVisibility}"
+                                                                        ToolTip="{Binding QuotaWeeklyCountdownTooltip}">
+                                                                    <TextBlock Text="{Binding QuotaWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaWeeklyCountdownFg}"/>
+                                                                </Border>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right"/>
+                                                            <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaWeeklyPercentValue, Mode=OneWay}"
                                                                     Foreground="{StaticResource AccentBrush}"/>
@@ -569,10 +581,14 @@
                                                         <!-- Argon 5H -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
-                                                                <TextBlock Text="{Binding QuotaArgon5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                <Border Background="{Binding QuotaArgon5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                        VerticalAlignment="Center" Visibility="{Binding QuotaArgon5hCountdownVisibility}"
+                                                                        ToolTip="{Binding QuotaArgon5hCountdownTooltip}">
+                                                                    <TextBlock Text="{Binding QuotaArgon5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaArgon5hCountdownFg}"/>
+                                                                </Border>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding QuotaArgon5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#14B8A6" HorizontalAlignment="Right"/>
+                                                            <TextBlock Text="{Binding QuotaArgon5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#14B8A6" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgon5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
                                                                     Foreground="#14B8A6"/>
@@ -580,10 +596,14 @@
                                                         <!-- Argon Weekly -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
-                                                                <TextBlock Text="{Binding QuotaArgonWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                <Border Background="{Binding QuotaArgonWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                        VerticalAlignment="Center" Visibility="{Binding QuotaArgonWeeklyCountdownVisibility}"
+                                                                        ToolTip="{Binding QuotaArgonWeeklyCountdownTooltip}">
+                                                                    <TextBlock Text="{Binding QuotaArgonWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaArgonWeeklyCountdownFg}"/>
+                                                                </Border>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding QuotaArgonWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#0891B2" HorizontalAlignment="Right"/>
+                                                            <TextBlock Text="{Binding QuotaArgonWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#0891B2" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgonWeeklyPercentValue, Mode=OneWay}"
                                                                     Foreground="#0891B2"/>
@@ -603,10 +623,14 @@
                                                         <!-- Claude 5H -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
-                                                                <TextBlock Text="{Binding Quota3p5hCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                <Border Background="{Binding Quota3p5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                        VerticalAlignment="Center" Visibility="{Binding Quota3p5hCountdownVisibility}"
+                                                                        ToolTip="{Binding Quota3p5hCountdownTooltip}">
+                                                                    <TextBlock Text="{Binding Quota3p5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3p5hCountdownFg}"/>
+                                                                </Border>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right"/>
+                                                            <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3p5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
                                                                     Foreground="#10B981"/>
@@ -614,10 +638,14 @@
                                                         <!-- Claude Weekly -->
                                                         <Grid Margin="0,0,0,3">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}"/>
-                                                                <TextBlock Text="{Binding Quota3pWeeklyCountdown}" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="8,1,0,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                <Border Background="{Binding Quota3pWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                        VerticalAlignment="Center" Visibility="{Binding Quota3pWeeklyCountdownVisibility}"
+                                                                        ToolTip="{Binding Quota3pWeeklyCountdownTooltip}">
+                                                                    <TextBlock Text="{Binding Quota3pWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3pWeeklyCountdownFg}"/>
+                                                                </Border>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right"/>
+                                                            <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                                         </Grid>
                                                         <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3pWeeklyPercentValue, Mode=OneWay}"
                                                                     Foreground="#8B5CF6"/>
@@ -648,6 +676,27 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActivating}" Value="False">
                                             <Setter TargetName="ActivateIcon" Property="Opacity" Value="1"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsRefreshingQuota}" Value="True">
+                                            <Setter TargetName="RefreshQuotaBtn" Property="IsEnabled" Value="False"/>
+                                            <Setter TargetName="RefreshIcon" Property="Opacity" Value="0.6"/>
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard Name="RefreshSpin">
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="RefreshIconRotate"
+                                                                        Storyboard.TargetProperty="Angle"
+                                                                        From="0" To="360" Duration="0:0:0.8"
+                                                                        RepeatBehavior="Forever"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <StopStoryboard BeginStoryboardName="RefreshSpin"/>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsRefreshingQuota}" Value="False">
+                                            <Setter TargetName="RefreshQuotaBtn" Property="IsEnabled" Value="True"/>
+                                            <Setter TargetName="RefreshIcon" Property="Opacity" Value="1"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>

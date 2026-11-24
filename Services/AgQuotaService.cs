@@ -700,13 +700,14 @@ public static class AgQuotaService
         return min;
     }
 
-    /// <summary>取配额摘要中最早的未来重置时间（用于 429 倒计时展示）。</summary>
+    /// <summary>取配额摘要中最早的未来重置时间（用于 429 倒计时展示，自动忽略满额未开始计时的占位时间）。</summary>
     private static DateTime? EarliestQuotaReset(Profile profile)
     {
         DateTime? earliest = null;
-        void Consider(string? raw)
+        void Consider(double? fraction, string? raw, TimeSpan window)
         {
             if (string.IsNullOrEmpty(raw)) return;
+            if (Profile.IsTimerStandby(fraction, raw, profile.QuotaUpdatedAt, window)) return;
             if (DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var dt)
                 && dt > DateTime.UtcNow && dt < DateTime.UtcNow.AddDays(8))
@@ -714,12 +715,12 @@ public static class AgQuotaService
                 if (earliest == null || dt < earliest) earliest = dt;
             }
         }
-        Consider(profile.Quota5hResetTime);
-        Consider(profile.QuotaWeeklyResetTime);
-        Consider(profile.Quota3p5hResetTime);
-        Consider(profile.Quota3pWeeklyResetTime);
-        Consider(profile.QuotaArgon5hResetTime);
-        Consider(profile.QuotaArgonWeeklyResetTime);
+        Consider(profile.Quota5hFraction, profile.Quota5hResetTime, TimeSpan.FromHours(5));
+        Consider(profile.QuotaWeeklyFraction, profile.QuotaWeeklyResetTime, TimeSpan.FromDays(7));
+        Consider(profile.Quota3p5hFraction, profile.Quota3p5hResetTime, TimeSpan.FromHours(5));
+        Consider(profile.Quota3pWeeklyFraction, profile.Quota3pWeeklyResetTime, TimeSpan.FromDays(7));
+        Consider(profile.QuotaArgon5hFraction, profile.QuotaArgon5hResetTime, TimeSpan.FromHours(5));
+        Consider(profile.QuotaArgonWeeklyFraction, profile.QuotaArgonWeeklyResetTime, TimeSpan.FromDays(7));
         return earliest;
     }
     /// <summary>流式握手结果三态。</summary>
