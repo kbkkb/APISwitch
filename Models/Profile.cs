@@ -41,6 +41,21 @@ public class Profile : INotifyPropertyChanged
     public double? QuotaArgonWeeklyFraction { get; set; }
     public string? QuotaArgonWeeklyResetTime { get; set; }
 
+    /// <summary>
+    /// 前端是否展示独立的 Gemini 4 Argon 配额栏。
+    /// 当前默认关闭（false），仅保留双栏展示；若后续 Pro 再次开放独立高级模型额度池，改为 true 即可一键恢复三栏展示。
+    /// </summary>
+    public static bool ShowArgonQuotaColumn => false;
+
+    public static System.Windows.GridLength ArgonQuotaColumnWidth =>
+        ShowArgonQuotaColumn ? new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) : new System.Windows.GridLength(0);
+
+    public static System.Windows.GridLength ArgonSeparatorColumnWidth =>
+        ShowArgonQuotaColumn ? new System.Windows.GridLength(16) : new System.Windows.GridLength(0);
+
+    public static System.Windows.Visibility ArgonQuotaColumnVisibility =>
+        ShowArgonQuotaColumn ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
     // Virtual Device Profile (sync with storage.json)
     public DeviceProfile? DeviceProfile { get; set; }
 

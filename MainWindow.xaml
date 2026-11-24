@@ -1,6 +1,7 @@
 <Window x:Class="APISwitch.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="clr-namespace:APISwitch.Models"
         Title="APISwitch"
         Height="720" Width="1140" MinHeight="600" MinWidth="960"
         WindowStartupLocation="CenterScreen"
@@ -518,8 +519,8 @@
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="16"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="16"/>
+                                                        <ColumnDefinition Width="{x:Static models:Profile.ArgonQuotaColumnWidth}"/>
+                                                        <ColumnDefinition Width="{x:Static models:Profile.ArgonSeparatorColumnWidth}"/>
                                                         <ColumnDefinition Width="*"/>
                                                     </Grid.ColumnDefinitions>
 
@@ -557,7 +558,8 @@
                                                     <Rectangle Grid.Column="1" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"/>
 
                                                     <!-- Middle Column: Gemini 4 Argon -->
-                                                    <StackPanel Grid.Column="2" ToolTip="{Binding ArgonColumnTooltip}">
+                                                    <StackPanel Grid.Column="2" ToolTip="{Binding ArgonColumnTooltip}"
+                                                                Visibility="{x:Static models:Profile.ArgonQuotaColumnVisibility}">
                                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                                             <Border Background="#ECFEFF" CornerRadius="4" Padding="6,2">
                                                                 <TextBlock Text="{DynamicResource Ag.GeminiArgonModels}" FontSize="11" FontWeight="SemiBold" Foreground="#0891B2"/>
@@ -587,7 +589,8 @@
                                                                     Foreground="#0891B2"/>
                                                     </StackPanel>
 
-                                                    <Rectangle Grid.Column="3" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"/>
+                                                    <Rectangle Grid.Column="3" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"
+                                                               Visibility="{x:Static models:Profile.ArgonQuotaColumnVisibility}"/>
 
                                                     <!-- Right Column: Claude & GPT Models -->
                                                     <StackPanel Grid.Column="4">
