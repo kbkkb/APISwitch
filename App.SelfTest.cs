@@ -787,6 +787,7 @@ public partial class App
                 var usageAppData = Path.Combine(sandbox, "appdata");
                 Directory.CreateDirectory(usageAppData);
                 Environment.SetEnvironmentVariable("APISWITCH_APPDATA", usageAppData);
+                AppSettingsService.Reload();
                 UsageScanner.Reset();
 
                 // 1) source_id 幂等合并：代理先记 + 扫描后补，合并为 1 条并保留高优字段
@@ -1135,19 +1136,140 @@ CREATE TABLE gen_metadata (idx integer PRIMARY KEY, data blob, size integer NOT 
                     cacheReadTokens: 0, cacheWriteTokens: 0, durationMs: 5000, ttftMs: 400, sourceId: "selftest:codex:widget:1");
                 UsageScanner.ScanAntigravityQuick();
                 var wStats = UsageStorage.GetAntigravityWidgetStats(tsWidget);
-                AppSettingsService.Current.FloatingWidgetCapsuleLeft = 1234;
-                AppSettingsService.Current.FloatingWidgetCapsuleTop = 888;
+                AppSettingsService.Current.FloatingWidgetAnchorX = 2544;
+                AppSettingsService.Current.FloatingWidgetAnchorY = 1396;
+                AppSettingsService.Current.FloatingWidgetAnchorRight = true;
+                AppSettingsService.Current.FloatingWidgetAnchorBottom = true;
                 AppSettingsService.Save();
                 var reloadedSettings = AppSettingsService.Load();
+
+                // 验证冷启动窄胶囊 -> 配额加载变宽 -> 展开详情 -> 收起胶囊 全程零漂移
+                var waSim = new Rect(0, 0, 2560, 1400);
+                var pNarrow = Dialogs.FloatingWidgetWindow.ComputeAnchoredPlacement(2544, 1396, true, true, 245, 58, waSim);
+                var pWide = Dialogs.FloatingWidgetWindow.ComputeAnchoredPlacement(2544, 1396, true, true, 396, 58, waSim);
+                var pExp = Dialogs.FloatingWidgetWindow.ComputeAnchoredPlacement(2544, 1396, true, true, 392, 420, waSim);
+                var pCollapsed = Dialogs.FloatingWidgetWindow.ComputeAnchoredPlacement(2544, 1396, true, true, 396, 58, waSim);
+                bool anchorStableOk = Math.Abs(pNarrow.Left - (2544 - 245)) < 0.01 &&
+                                      Math.Abs(pWide.Left - 2148) < 0.01 &&
+                                      Math.Abs(pWide.Top - 1338) < 0.01 &&
+                                      Math.Abs(pExp.Left - (2544 - 392)) < 0.01 &&
+                                      Math.Abs(pExp.Top - (1396 - 420)) < 0.01 &&
+                                      Math.Abs(pCollapsed.Left - 2148) < 0.01 &&
+                                      Math.Abs(pCollapsed.Top - 1338) < 0.01;
+
                 bool widgetStatsOk = (wStats.TodayRequests - wBefore.TodayRequests) == 1 &&
                                      (wStats.TodayTotalTokens - wBefore.TodayTotalTokens) == 3000 &&
                                      Math.Abs(wStats.LastSpeedTokPerSec - 100.0) < 0.5 &&
                                      wStats.LastTtftMs == 950 &&
                                      wStats.LastModel == "gemini-4-neon" &&
-                                     reloadedSettings.FloatingWidgetCapsuleLeft == 1234 &&
-                                     reloadedSettings.FloatingWidgetCapsuleTop == 888;
+                                     reloadedSettings.FloatingWidgetAnchorX == 2544 &&
+                                     reloadedSettings.FloatingWidgetAnchorY == 1396 &&
+                                      reloadedSettings.FloatingWidgetAnchorRight == true &&
+                                     reloadedSettings.FloatingWidgetAnchorBottom == true &&
+                                     anchorStableOk;
 
-                sb.AppendLine($"usage_accuracy_probe=ok;codexOk={codexOk};claudeOk={claudeOk};piOk={piOk};ocOk={ocOk};gemOk={gemOk};dshOk={dshOk};agOk={agOk};agDbOk={agDbOk};mergeOk={mergeOk};stepModelOk={stepModelOk};modelDrawerOk={modelDrawerOk};widgetStatsOk={widgetStatsOk}");
+                // Antigravity 2.x Hub 凭据结构往返与 app_storage.json 同步断言
+                var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var syncTestProfile = new Models.Profile
+                {
+                    Email = "sync@example.com",
+                    AccessToken = "ya29.test",
+                    RefreshToken = "1//refresh",
+                    ExpiryTimestamp = nowUnix + 3500
+                };
+                var credJson = Services.AgToolsService.BuildCredentialManagerJson(syncTestProfile, "custom_writer_123");
+                var parsedCred = Services.AgToolsService.ParseCredentialManagerJson(credJson);
+                var hubStoragePath = Services.AgPaths.HubAppStoragePath;
+                Directory.CreateDirectory(Path.GetDirectoryName(hubStoragePath)!);
+                File.WriteAllText(hubStoragePath, "{\"keepMe\":42}");
+                Services.AgToolsService.WriteHubLastLoginEmail("sync@example.com");
+                var hubStorageAfter = File.ReadAllText(hubStoragePath);
+                bool agCredSyncOk = Services.AgAuthFlow.DefaultOAuthScopes.Contains("https://www.googleapis.com/auth/aicode", StringComparison.Ordinal) &&
+                                    credJson.Contains("\"id_token_email\":\"sync@example.com\"", StringComparison.Ordinal) &&
+                                    credJson.Contains("\"expires_in\":", StringComparison.Ordinal) &&
+                                    parsedCred != null &&
+                                    parsedCred.Email == "sync@example.com" &&
+                                    parsedCred.AccessToken == "ya29.test" &&
+                                    parsedCred.RefreshToken == "1//refresh" &&
+                                    parsedCred.WriterId == "custom_writer_123" &&
+                                    Services.AgToolsService.ReadHubLastLoginEmail() == "sync@example.com" &&
+                                    hubStorageAfter.Contains("\"keepMe\"", StringComparison.Ordinal);
+
+                // Antigravity 分池跳过已激活池与低功耗模型挑选断言
+                var nowUtc = DateTime.UtcNow;
+                var pPoolA = new Models.Profile
+                {
+                    Email = "poolA@example.com",
+                    QuotaUpdatedAt = nowUtc,
+                    Quota5hFraction = 1.0,
+                    Quota5hResetTime = nowUtc.AddHours(5).ToString("O"),
+                    Quota3p5hFraction = 0.82,
+                    Quota3p5hResetTime = nowUtc.AddHours(3).ToString("O"),
+                    ModelQuotas = new List<Models.AgModelQuotaInfo>
+                    {
+                        new() { ModelId = "gemini-3.8-flash-high", IsPickerVisible = true },
+                        new() { ModelId = "gemini-3.8-flash-low", IsPickerVisible = true },
+                        new() { ModelId = "claude-sonnet-5-5-high", IsPickerVisible = true },
+                        new() { ModelId = "claude-sonnet-5-5-low", IsPickerVisible = true },
+                        new() { ModelId = "gemini-4-argon-low", IsPickerVisible = true }
+                    }
+                };
+                var planA = pPoolA.EvaluatePoolActivationNeed(nowUtc);
+                var pPoolB = new Models.Profile
+                {
+                    Email = "poolB@example.com",
+                    QuotaUpdatedAt = nowUtc,
+                    Quota5hFraction = 0.91,
+                    Quota5hResetTime = nowUtc.AddHours(4).ToString("O"),
+                    Quota3p5hFraction = 1.0,
+                    Quota3p5hResetTime = nowUtc.AddHours(3).AddMinutes(10).ToString("O"),
+                    ModelQuotas = pPoolA.ModelQuotas
+                };
+                var planB = pPoolB.EvaluatePoolActivationNeed(nowUtc);
+                var gemPicked = Services.AgQuotaService.PickCliGeminiCandidates(pPoolA);
+                var p3Picked = Services.AgQuotaService.PickCliThirdPartyCandidates(pPoolA);
+
+                // Free (Starter) 账号：Gemini 无 5h、周桶余量仍为 1.0 但已进入倒计时；3P 虽带 3p-5h 待机但 3p-weekly 已激活 → 两池均须跳过
+                var pFreeActive = new Models.Profile
+                {
+                    Email = "free@example.com",
+                    SubscriptionTier = "Starter",
+                    QuotaUpdatedAt = nowUtc,
+                    Quota5hFraction = null,
+                    QuotaWeeklyFraction = 1.0,
+                    QuotaWeeklyResetTime = nowUtc.AddDays(6).AddHours(23).AddMinutes(40).ToString("O"),
+                    Quota3p5hFraction = 1.0,
+                    Quota3p5hResetTime = nowUtc.AddHours(5).ToString("O"),
+                    Quota3pWeeklyFraction = 0.9745,
+                    Quota3pWeeklyResetTime = nowUtc.AddDays(6).AddHours(23).ToString("O"),
+                    ModelQuotas = pPoolA.ModelQuotas
+                };
+                var planFree = pFreeActive.EvaluatePoolActivationNeed(nowUtc);
+
+                // Free 账号刚激活完前 2 分钟：余量仍显示 1.0 且滑窗仍在 7 天附近，依靠 GeminiActivatedAt 仍判为已激活且 UI 徽章不为"未开始"
+                var pFreeJustNow = new Models.Profile
+                {
+                    Email = "freejustnow@example.com",
+                    SubscriptionTier = "Starter",
+                    QuotaUpdatedAt = nowUtc,
+                    QuotaWeeklyFraction = 1.0,
+                    QuotaWeeklyResetTime = nowUtc.AddDays(7).ToString("O"),
+                    GeminiActivatedAt = nowUtc.AddSeconds(-10)
+                };
+                bool freeJustNowOk = pFreeJustNow.EvaluatePoolActivationNeed(nowUtc).GeminiAlreadyActive &&
+                                     pFreeJustNow.QuotaWeeklyCountdown != Services.I18nService.T("Ag.TimerNotStarted");
+
+                var detectedIdeVer = Services.AgPaths.GetInstalledIdeVersion();
+                bool agPoolSkipOk = planA.NeedGemini && !planA.NeedThirdParty && planA.ThirdPartyAlreadyActive && !planA.NeedArgon &&
+                                    !planB.NeedsAnyCliCall && planB.AllSupportedAlreadyActive &&
+                                    !planFree.NeedsAnyCliCall && planFree.GeminiAlreadyActive && planFree.ThirdPartyAlreadyActive &&
+                                    freeJustNowOk &&
+                                    !string.IsNullOrWhiteSpace(detectedIdeVer) &&
+                                    detectedIdeVer != "2.23.1" &&
+                                    gemPicked.FirstOrDefault() == "gemini-3.8-flash-low" &&
+                                    p3Picked.FirstOrDefault() == "claude-sonnet-5-5-low";
+
+                sb.AppendLine($"usage_accuracy_probe=ok;codexOk={codexOk};claudeOk={claudeOk};piOk={piOk};ocOk={ocOk};gemOk={gemOk};dshOk={dshOk};agOk={agOk};agDbOk={agDbOk};mergeOk={mergeOk};stepModelOk={stepModelOk};modelDrawerOk={modelDrawerOk};widgetStatsOk={widgetStatsOk};agCredSyncOk={agCredSyncOk};agPoolSkipOk={agPoolSkipOk}");
             }
             catch (Exception ex)
             {
@@ -1157,6 +1279,7 @@ CREATE TABLE gen_metadata (idx integer PRIMARY KEY, data blob, size integer NOT 
             {
                 UsageScanner.Reset();
                 Environment.SetEnvironmentVariable("APISWITCH_APPDATA", prevAppData);
+                AppSettingsService.Reload();
             }
         }
         catch (Exception ex)

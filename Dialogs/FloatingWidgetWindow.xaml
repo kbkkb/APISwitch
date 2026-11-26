@@ -9,6 +9,7 @@
         ShowInTaskbar="False"
         ResizeMode="NoResize"
         SizeToContent="WidthAndHeight"
+        WindowStartupLocation="Manual"
         FontFamily="{StaticResource AppFontFamily}"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"

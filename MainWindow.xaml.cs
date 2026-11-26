@@ -144,14 +144,18 @@ public partial class MainWindow : Window
         };
         _agQuotaTimer.Tick += (_, _) =>
         {
-            bool visibleOnAg = WindowState != WindowState.Minimized
+            bool visibleOnAg = IsVisible && WindowState != WindowState.Minimized
                 && (Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity";
             bool widgetActive = AppSettingsService.Current.FloatingWidgetEnabled
                 && _floatingWidget is { IsVisible: true };
             var elapsed = DateTime.UtcNow - _lastAgQuotaRefreshUtc;
-            if (visibleOnAg || (widgetActive && elapsed >= TimeSpan.FromMinutes(2)) || elapsed >= TimeSpan.FromMinutes(3))
+            if (visibleOnAg)
             {
-                _ = RefreshAllAgQuotasAsync(silent: true);
+                _ = RefreshAllAgQuotasAsync(silent: true, activeOnly: false);
+            }
+            else if ((widgetActive && elapsed >= TimeSpan.FromMinutes(2)) || elapsed >= TimeSpan.FromMinutes(5))
+            {
+                _ = RefreshAllAgQuotasAsync(silent: true, activeOnly: true);
             }
         };
         _agQuotaTimer.Start();
@@ -187,9 +191,10 @@ public partial class MainWindow : Window
         if (_agQuotaTimer != null && !_agQuotaTimer.IsEnabled)
             _agQuotaTimer.Start();
 
-        if ((Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity")
+        if ((Tabs?.SelectedItem as TabItem)?.Tag?.ToString() == "antigravity" &&
+            (DateTime.UtcNow - _lastAgQuotaRefreshUtc).TotalSeconds >= 30)
         {
-            _ = RefreshAllAgQuotasAsync(silent: true);
+            _ = RefreshAllAgQuotasAsync(silent: true, activeOnly: false);
         }
     }
 
@@ -203,7 +208,8 @@ public partial class MainWindow : Window
         {
             case "antigravity":
                 _ = RefreshAntigravityAsync();
-                _ = RefreshAllAgQuotasAsync(silent: true);
+                if ((DateTime.UtcNow - _lastAgQuotaRefreshUtc).TotalSeconds >= 30)
+                    _ = RefreshAllAgQuotasAsync(silent: true, activeOnly: false);
                 break;
             case "codex": RefreshCodex(); break;
             case "claude": RefreshClaude(); break;

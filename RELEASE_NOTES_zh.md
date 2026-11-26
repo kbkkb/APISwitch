@@ -2,6 +2,27 @@
 
 # APISwitch 更新日志
 
+## APISwitch v0.3.6 更新日志
+
+【修复 · Antigravity 2.x (Hub) 账号切换与凭据双向同步】
+• **双向同步 `gemini:antigravity` 原生会话**：全面适配 Antigravity 2.x（Hub 架构）凭据存储机制，支持从 Windows 凭据管理器 `gemini:antigravity` 与 `app_storage.json` 自动回采在 IDE 内新登录或重登的有效凭据；切换写入时补全原生 `id_token_email`、`expires_in`、`writer_id` 并原子同步 `agy.onboarding.lastLoginUsername` 与全部 `state.vscdb`。
+• **补齐 OAuth 权限域与失效拦截**：Google 登录授权新增 `https://www.googleapis.com/auth/aicode` 权限域消除 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` 报错；切号前强制向 Google 刷新并校验目标账号 Token（兼容刷新令牌轮换并消除后台递归写入），若凭据已吊销则提前拦截并提示重登，不再重启出 `UNAVAILABLE (code 503)` 未登录报错。
+• **进程清理与并发冲突消除**：关闭 IDE 时同步清理残留的 `language_server` 子进程；自动重启后延后 8 秒再静默刷新配额，避免抢占 IDE 首启鉴权；CLI 激活非当前账号后严格还原 `gemini:antigravity`，杜绝串联覆盖正在使用的账号。
+
+【提速与省流 · 按配额池智能跳过已激活池 & 极简激活指令】
+• **按池自动跳过已激活池**：新增 `EvaluatePoolActivationNeed` 分池判断——已在倒计时的 `Gemini` 或 `Claude / GPT` 池自动跳过，全部可用池已处于计时态的账号 **零 CLI 调用、零冷却直接跳过**。
+• **Free / Plus 账号周限额防重复触发**：针对免费号与 Plus 账号严格优先检查 **7 天周限额周期**（包含刚激活完余量仍显示 `100%` 的周期锁定），彻底避免被 Google 附加的 `3p-5h` 桶误触发每 5 小时重复扣减周额度。
+• **全链路加速与 `"只回复1"` 极简指令**：移除每次激活前耗时的无效子进程探测，直接并行拉取配额汇总与模型明细并优先选用 `-low` 低思考档模型；激活提示词由开放式 `"hi"` 改为封闭指令 `"只回复1"` 并加上 `--disable-slash-commands`，将输出锁定为单 Token，大幅缩减批量激活耗时与额度消耗。
+
+【安全加固 · 动态版本对齐与闲置账号降频防风控】
+• **动态读取真实客户端版本**：自动探测本机 `Antigravity.exe` 真实版本号（如 `2.35.2`）构建请求头，告别硬编码旧版本号。
+• **后台轮询活跃优先与错峰抖动**：后台定时刷新仅高频同步当前正在使用的活跃账号；闲置账号降频至前台 15 分钟 / 托盘后台 30 分钟低频错峰刷新（并修复最小化至系统托盘时的前台误判）；批量激活连续发起 CLI 请求时保留 2–4 秒自然随机间隔。
+
+【优化 · 桌面悬浮窗跨重启零漂移记忆】
+• 重构悬浮窗位置持久化模型为基于屏幕工作区边缘的不可变基准锚点（`FloatingWidgetAnchorX/Y/Right/Bottom`），彻底修复关闭重开、冷启动窄胶囊加载以及展开/收起切换时的位置漂移问题。
+
+---
+
 ## APISwitch v0.3.5 更新日志
 
 【重磅新增 · Antigravity 桌面实时悬浮窗组件】

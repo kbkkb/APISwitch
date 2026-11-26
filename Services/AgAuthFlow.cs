@@ -11,6 +11,9 @@ namespace APISwitch.Services;
 
 public static class AgAuthFlow
 {
+    public const string DefaultOAuthScopes =
+        "openid https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs https://www.googleapis.com/auth/aicode";
+
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public static async Task<Profile> StartGoogleLoginAsync(CancellationToken cancellationToken = default)
@@ -26,7 +29,7 @@ public static class AgAuthFlow
         var redirectUri = $"http://127.0.0.1:{port}/oauth-callback";
         var state = Guid.NewGuid().ToString("N");
 
-        var scopes = "openid https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs";
+        var scopes = DefaultOAuthScopes;
         var authUrl = $"https://accounts.google.com/o/oauth2/v2/auth?" +
                       $"client_id={Uri.EscapeDataString(AgQuotaService.ClientId)}" +
                       $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +

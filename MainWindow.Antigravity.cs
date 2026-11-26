@@ -35,35 +35,50 @@ public partial class MainWindow
         // 进程枚举、SQLite 读取、账号文件加载都比较重，放到后台线程执行，避免 UI 卡顿
         await Task.Run(() =>
         {
-            // 1. Try detecting active email from ~/.gemini/oauth_creds.json
+            // 0. Prioritize syncing active OAuth session back from Antigravity 2.x Hub (Windows Credential Manager: gemini:antigravity)
             try
             {
-                if (File.Exists(AgToolsService.GeminiCredsPath))
+                var sysEmail = AgToolsService.CaptureCurrentActiveCredentialsToStore();
+                if (!string.IsNullOrEmpty(sysEmail))
                 {
-                    var credsText = File.ReadAllText(AgToolsService.GeminiCredsPath);
-                    using var doc = JsonDocument.Parse(credsText);
-                    if (doc.RootElement.TryGetProperty("id_token", out var idElem))
+                    email = sysEmail;
+                    state = "signedIn";
+                }
+            }
+            catch { }
+
+            // 1. Fallback to ~/.gemini/oauth_creds.json
+            if (string.IsNullOrEmpty(email))
+            {
+                try
+                {
+                    if (File.Exists(AgToolsService.GeminiCredsPath))
                     {
-                        var idToken = idElem.GetString();
-                        if (!string.IsNullOrEmpty(idToken))
+                        var credsText = File.ReadAllText(AgToolsService.GeminiCredsPath);
+                        using var doc = JsonDocument.Parse(credsText);
+                        if (doc.RootElement.TryGetProperty("id_token", out var idElem))
                         {
-                            var parts = idToken.Split('.');
-                            if (parts.Length >= 2)
+                            var idToken = idElem.GetString();
+                            if (!string.IsNullOrEmpty(idToken))
                             {
-                                var payload = parts[1].Replace('-', '+').Replace('_', '/');
-                                switch (payload.Length % 4) { case 2: payload += "=="; break; case 3: payload += "="; break; }
-                                using var pDoc = JsonDocument.Parse(Convert.FromBase64String(payload));
-                                if (pDoc.RootElement.TryGetProperty("email", out var emElem))
+                                var parts = idToken.Split('.');
+                                if (parts.Length >= 2)
                                 {
-                                    email = emElem.GetString();
-                                    state = "signedIn";
+                                    var payload = parts[1].Replace('-', '+').Replace('_', '/');
+                                    switch (payload.Length % 4) { case 2: payload += "=="; break; case 3: payload += "="; break; }
+                                    using var pDoc = JsonDocument.Parse(Convert.FromBase64String(payload));
+                                    if (pDoc.RootElement.TryGetProperty("email", out var emElem))
+                                    {
+                                        email = emElem.GetString();
+                                        state = "signedIn";
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                catch { }
             }
-            catch { }
 
             // 2. Fallback to state.vscdb
             if (db != null)
@@ -241,10 +256,14 @@ public partial class MainWindow
         try
         {
             SetBusy(I18nService.F("Msg.AgActivatingFmt", target.Email));
-            var (ok, latencyMs, msg, rateLimited) = await AgQuotaService.ActivateAccountQuotaAsync(target);
+            var (ok, latencyMs, msg, rateLimited, skippedAll) = await AgQuotaService.ActivateAccountQuotaDetailedAsync(target, forcePreRefresh: true);
             ClearBusy();
             await RefreshAntigravityAsync();
-            if (ok)
+            if (skippedAll)
+            {
+                ShowToast(I18nService.F("Msg.AgAlreadyActiveFmt", target.Email));
+            }
+            else if (ok)
             {
                 ShowToast(I18nService.F("Msg.AgActivatedFmt", target.Email, latencyMs));
             }
@@ -292,8 +311,10 @@ public partial class MainWindow
             return;
         }
 
-        var count = _profiles.Count;
+        var targets = _profiles.ToList();
+        var count = targets.Count;
         int successCount = 0;
+        int skippedCount = 0;
         int failCount = 0;
         bool canceled = false;
 
@@ -307,7 +328,35 @@ public partial class MainWindow
 
         try
         {
-            for (int i = 0; i < _profiles.Count; i++)
+            // 1. 先并行刷新超过 45s 未同步的账号配额，以便精准跳过已激活的配额池
+            var staleTargets = targets.Where(p =>
+                !p.QuotaUpdatedAt.HasValue || (DateTime.UtcNow - p.QuotaUpdatedAt.Value).TotalSeconds > 45).ToList();
+            if (staleTargets.Count > 0)
+            {
+                SetBusy(I18nService.F("Msg.AgBatchPrecheckFmt", staleTargets.Count));
+                using var precheckSem = new SemaphoreSlim(4);
+                var precheckTasks = staleTargets.Select(async p =>
+                {
+                    await precheckSem.WaitAsync(ct);
+                    try
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        await AgQuotaService.RefreshQuotaAsync(p);
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch { }
+                    finally { precheckSem.Release(); }
+                });
+                await Task.WhenAll(precheckTasks);
+                Dispatcher.Invoke(() =>
+                {
+                    foreach (var x in targets) x.NotifyQuotaUiChanged();
+                    NotifyFloatingWidgetProfilesUpdated();
+                });
+            }
+
+            // 2. 逐号按需激活未开始计时的池；全部池均已在计时中的账号直接跳过（零 CLI 延迟）
+            for (int i = 0; i < targets.Count; i++)
             {
                 if (ct.IsCancellationRequested)
                 {
@@ -315,15 +364,30 @@ public partial class MainWindow
                     break;
                 }
 
-                var p = _profiles[i];
+                var p = targets[i];
+                var plan = p.EvaluatePoolActivationNeed();
+                if (!plan.NeedsAnyCliCall)
+                {
+                    p.IsActivated = true;
+                    p.ActivationError = null;
+                    p.QuotaExhausted = false;
+                    p.QuotaExhaustedResetAt = null;
+                    ProfileStore.Save(p);
+                    p.NotifyQuotaUiChanged();
+                    skippedCount++;
+                    continue;
+                }
+
+                bool didCliCall = false;
                 p.IsActivating = true;
-                Dispatcher.Invoke(() => ProfileList.Items.Refresh());
-                SetBusy(I18nService.F("Msg.AgBatchProgressFmt", i + 1, count, p.Email));
+                SetBusy(I18nService.F("Msg.AgBatchProgressPoolsFmt", i + 1, count, p.Email, plan.DescribePendingPools()));
 
                 try
                 {
-                    var (ok, latencyMs, msg, rateLimited) = await AgQuotaService.ActivateAccountQuotaAsync(p, ct);
-                    if (ok) successCount++;
+                    var (ok, latencyMs, msg, rateLimited, skippedAll) = await AgQuotaService.ActivateAccountQuotaDetailedAsync(p, ct, forcePreRefresh: false);
+                    didCliCall = !skippedAll;
+                    if (skippedAll) skippedCount++;
+                    else if (ok) successCount++;
                     else failCount++;
                 }
                 catch (OperationCanceledException)
@@ -341,13 +405,14 @@ public partial class MainWindow
                 finally
                 {
                     p.IsActivating = false;
+                    p.NotifyQuotaUiChanged();
                 }
 
-                await RefreshAntigravityAsync();
-
-                if (i < _profiles.Count - 1)
+                // 只有刚真实发过 CLI 请求且后面还有需要 CLI 激活的账号时，才保留 2~4s 自然间隔以防同 IP 并发关联
+                bool hasPendingAfter = targets.Skip(i + 1).Any(x => x.EvaluatePoolActivationNeed().NeedsAnyCliCall);
+                if (didCliCall && hasPendingAfter)
                 {
-                    var delay = Random.Shared.Next(1500, 3000);
+                    var delay = Random.Shared.Next(2000, 4000);
                     SetBusy(I18nService.F("Msg.AgBatchCooldownFmt", i + 1, count, delay / 1000.0));
                     try { await Task.Delay(delay, ct); }
                     catch (OperationCanceledException) { canceled = true; break; }
@@ -367,7 +432,9 @@ public partial class MainWindow
         await RefreshAntigravityAsync();
 
         if (canceled)
-            ShowToast(I18nService.F("Msg.AgBatchCanceledFmt", successCount, failCount, count - successCount - failCount));
+            ShowToast(I18nService.F("Msg.AgBatchCanceledFmt", successCount + skippedCount, failCount, count - successCount - skippedCount - failCount));
+        else if (skippedCount > 0)
+            ShowToast(I18nService.F("Msg.AgBatchDoneSkipFmt", successCount, skippedCount, failCount));
         else
             ShowToast(I18nService.F("Msg.AgBatchDoneFmt", successCount, failCount));
     }
@@ -422,6 +489,7 @@ public partial class MainWindow
 
     async Task SwitchToProfile(Profile target)
     {
+        bool autoRestart = AutoRestartCheck.IsChecked == true;
         SetBusy(I18nService.F("Msg.AgSwitchingFmt", target.Email));
         try
         {
@@ -433,37 +501,78 @@ public partial class MainWindow
                 return;
             }
 
-            // 1. Sync credentials to system (oauth_creds.json, Credential Manager, Antigravity Tools, storage.json)
-            await AgToolsService.ApplySystemCredentialsAsync(target);
-
-            // 2. Inject or restore full authentication session in state.vscdb
-            var db = AgPaths.FindStateDb();
-            if (db != null)
+            // 0. Capture outgoing session credentials from Credential Manager before overwriting them,
+            //    and sync fresh tokens into target if it was the active session re-authenticated inside IDE.
+            await Task.Run(() =>
             {
-                var authValues = AgAuthHelper.BuildAuthValues(target);
-                if (authValues.Count > 0)
+                AgToolsService.CaptureCurrentActiveCredentialsToStore();
+                if (!string.IsNullOrWhiteSpace(target.Email))
                 {
-                    target.Values[AgState.KeyOauthToken] = authValues[AgState.KeyOauthToken];
-                    target.Values[AgState.KeyUserStatus] = authValues[AgState.KeyUserStatus];
-                    ProfileStore.Save(target);
-                    await Task.Run(() => AgDb.WriteAuth(db, target.Values));
+                    var latest = ProfileStore.Load().FirstOrDefault(x =>
+                        !string.IsNullOrWhiteSpace(x.Email) &&
+                        x.Email.Equals(target.Email, StringComparison.OrdinalIgnoreCase));
+                    if (latest != null)
+                    {
+                        if (!string.IsNullOrEmpty(latest.RefreshToken)) target.RefreshToken = latest.RefreshToken;
+                        if (!string.IsNullOrEmpty(latest.AccessToken)) target.AccessToken = latest.AccessToken;
+                        if (!string.IsNullOrEmpty(latest.IdToken)) target.IdToken = latest.IdToken;
+                        if (latest.ExpiryTimestamp.HasValue) target.ExpiryTimestamp = latest.ExpiryTimestamp;
+                    }
                 }
-                else if (target.Values != null && target.Values.Count > 0)
-                {
-                    await Task.Run(() => AgDb.WriteAuth(db, target.Values));
-                }
-                else
-                {
-                    await Task.Run(() => AgDb.ClearAuth(db));
-                }
+            });
+
+            // 1. Refresh & verify target credentials before writing system credentials or launching IDE
+            var (credOk, authExpired, credErr) = await AgToolsService.TryApplySystemCredentialsAsync(
+                target, forceTokenRefresh: true, syncIdeMeta: true);
+            if (!credOk)
+            {
+                ClearBusy();
+                ShowToast(
+                    authExpired
+                        ? I18nService.F("Msg.AgSwitchTokenExpiredFmt", target.Email, credErr ?? "")
+                        : I18nService.F("Msg.AgSwitchFailFmt", credErr ?? ""),
+                    isError: true);
+                return;
             }
 
-            // 3. Trigger cloud handshake in background to bind cloud companion project
-            _ = Task.Run(async () =>
+            // 2. Inject or restore full authentication session across all state.vscdb locations
+            var dbs = AgPaths.FindAllStateDbs();
+            var authValues = AgAuthHelper.BuildAuthValues(target);
+            if (authValues.Count > 0)
             {
-                try { await AgQuotaService.ActivateProfileAsync(target); }
-                catch { }
-            });
+                target.Values[AgState.KeyOauthToken] = authValues[AgState.KeyOauthToken];
+                target.Values[AgState.KeyUserStatus] = authValues[AgState.KeyUserStatus];
+                ProfileStore.Save(target);
+            }
+
+            if (dbs.Count > 0)
+            {
+                await Task.Run(() =>
+                {
+                    foreach (var dbPath in dbs)
+                    {
+                        try
+                        {
+                            if (target.Values != null && target.Values.Count > 0)
+                                AgDb.WriteAuth(dbPath, target.Values);
+                            else
+                                AgDb.ClearAuth(dbPath);
+                        }
+                        catch { }
+                    }
+                });
+            }
+
+            // 3. Avoid concurrent cloudcode-pa storm while IDE language_server is booting;
+            //    only trigger immediate background handshake when not auto-restarting IDE.
+            if (!autoRestart)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try { await AgQuotaService.ActivateProfileAsync(target); }
+                    catch { }
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -472,7 +581,7 @@ public partial class MainWindow
             return;
         }
 
-        if (AutoRestartCheck.IsChecked == true)
+        if (autoRestart)
         {
             // 启动后必须验证主窗口真的出现了：被单例锁挡掉会静默退出，
             // 以前不验证，白屏了也提示"已重启"。
@@ -483,11 +592,27 @@ public partial class MainWindow
                 ShowToast(I18nService.T("Msg.AgIdeStartVerifyFail"), isError: true);
                 return;
             }
+
+            // Give language_server ~8s to finish initial get_auth_status uncontested, then refresh quota silently
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(8000);
+                    await AgQuotaService.RefreshQuotaAsync(target);
+                    Dispatcher.Invoke(() =>
+                    {
+                        target.NotifyQuotaUiChanged();
+                        NotifyFloatingWidgetProfilesUpdated();
+                    });
+                }
+                catch { }
+            });
         }
 
         ClearBusy();
         await RefreshAntigravityAsync();
-        ShowToast((AutoRestartCheck.IsChecked == true ? I18nService.F("Msg.AgSwitchedRestartFmt", target.Email) : I18nService.F("Msg.AgSwitchedFmt", target.Email)));
+        ShowToast((autoRestart ? I18nService.F("Msg.AgSwitchedRestartFmt", target.Email) : I18nService.F("Msg.AgSwitchedFmt", target.Email)));
     }
 
     /// <summary>反重力 IDE 重启过程的日志（排查白屏用）。</summary>
@@ -502,7 +627,7 @@ public partial class MainWindow
         _ = RefreshAntigravityAsync();
     }
 
-    async Task RefreshAllAgQuotasAsync(bool silent, CancellationToken ct = default)
+    async Task RefreshAllAgQuotasAsync(bool silent, CancellationToken ct = default, bool activeOnly = false)
     {
         if (_isRefreshingAgQuotas) return;
         _isRefreshingAgQuotas = true;
@@ -518,15 +643,40 @@ public partial class MainWindow
                 return;
             }
 
-            var targets = _profiles.ToList();
-            using var semaphore = new SemaphoreSlim(4);
+            List<Profile> targets;
+            if (!silent)
+            {
+                targets = _profiles.ToList();
+            }
+            else
+            {
+                // 后台静默轮询降频防风控：优先刷新当前活跃账号；闲置账号前台 ≥15 分钟 / 后台 ≥30 分钟同步一次，消除同频齐刷特征
+                var nowUtc = DateTime.UtcNow;
+                var idleInterval = activeOnly ? TimeSpan.FromMinutes(30) : TimeSpan.FromMinutes(15);
+                targets = _profiles.Where(p =>
+                {
+                    if (!p.QuotaUpdatedAt.HasValue) return true;
+                    var age = nowUtc - p.QuotaUpdatedAt.Value;
+                    return p.IsCurrent ? age >= TimeSpan.FromSeconds(50) : age >= idleInterval;
+                }).ToList();
 
-            var tasks = targets.Select(async p =>
+                if (targets.Count == 0)
+                {
+                    return;
+                }
+            }
+
+            using var semaphore = new SemaphoreSlim(silent ? 2 : 4);
+            bool staggered = silent && targets.Count > 1;
+
+            var tasks = targets.Select(async (p, idx) =>
             {
                 await semaphore.WaitAsync(ct);
                 try
                 {
                     ct.ThrowIfCancellationRequested();
+                    if (staggered && idx > 0)
+                        await Task.Delay(Random.Shared.Next(150, 450), ct);
                     await AgQuotaService.RefreshQuotaAsync(p);
                 }
                 catch (OperationCanceledException)

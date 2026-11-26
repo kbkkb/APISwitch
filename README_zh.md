@@ -31,8 +31,8 @@ APISwitch 针对主流 AI 编程助手与客户端提供深度的原生配置管
 ## 核心特性
 
 ### 1. 多工具统一管理与零侵入切换
-- **Antigravity 桌面实时悬浮窗（v0.3.5 重磅新增）**：默认停靠主屏幕右下角的置顶极简胶囊（主窗最小化或收进托盘后依然常驻），实时展示 `Gemini` 与 `Claude / GPT` 的 **5h + 周限** 双维额度、**今日单端用量**及**最新生成速率（`tok/s`）**；点击即向内展开详情卡，含双池进度条、最近模型与首字 TTFT、可折叠可用模型及一键快捷切号，采用防误触「收起 ▾」按钮与零漂移基准锚定。
-- **Antigravity 账号快捷切换与智能模型目录**：凭证快照存档一键切号并自动刷新登录态（防 Refresh Token 轮换失效）；全量对齐 `daily-cloudcode-pa`，精准识别「未开始计时」占位时间与 **`PRO`** / **`Google AI Plus`（`PLUS`）** / **`EXP`** 订阅档位；基于官方选择器白名单按思考强度合并展示可用模型（如 `Gemini 4 Neon [Low–XHigh]`）。
+- **Antigravity 桌面实时悬浮窗（v0.3.5 新增 / v0.3.6 零漂移优化）**：默认停靠主屏幕右下角的置顶极简胶囊（主窗最小化或收进托盘后依然常驻），实时展示 `Gemini` 与 `Claude / GPT` 的 **5h + 周限** 双维额度、**今日单端用量**及**最新生成速率（`tok/s`）**；点击即向内展开详情卡，含双池进度条、最近模型与首字 TTFT、可折叠可用模型及一键快捷切号，采用防误触「收起 ▾」按钮与跨重启基准边缘锚定零漂移记忆。
+- **Antigravity 2.x 账号切换与按池智能激活**：支持 Antigravity 2.x（Hub）`gemini:antigravity` 凭据双向同步、切号前 Token 强校验及残留进程清理；全量对齐 `daily-cloudcode-pa`，精准识别「未开始计时」占位时间与 **`PRO`** / **`Google AI Plus`（`PLUS`）** / **`EXP`** 订阅档位；批量激活自动跳过已在倒计时的配额池与 Free 号已激活周限额，结合 `agy.exe` 低功耗 `-low` 模型与单 Token 指令高效触发；后台定时刷新自动聚焦活跃账号并动态对齐本机版本号以降低风控。
 - **全六端统一卡片 UI 与现代托盘菜单**：全面统一 Antigravity、Codex、Claude Code CLI、Claude Desktop、OpenCode 与 Pi 六端卡片及 Hero 视觉风格，搭配自绘圆角系统托盘菜单（内嵌彩色 `G` / `C` 配额胶囊）。
 - **跨端供应商智能互通**：支持在 Claude CLI、Claude Desktop、Codex、OpenCode、Pi 之间一键互相复制供应商配置，智能完成字段自动映射（Auth Token ↔ Bearer Token / API Key），一次录入，全端复用。
 - **模型配置池化管理**：针对 OpenCode 与 Pi 提供模型配置池机制，清晰标记「已加入配置 / 未加入配置」状态，支持按需激活与批量维护。
@@ -80,7 +80,7 @@ APISwitch 针对主流 AI 编程助手与客户端提供深度的原生配置管
 
 ## 工作原理
 
-- **Google Antigravity**：登录态存储在 VS Code 架构的 globalStorage SQLite 数据库（`ItemTable`）中，核心字段为 `antigravityUnifiedStateSync.oauthToken` 和 `userStatus`（base64 编码的 Protobuf）。APISwitch 内置轻量 Protobuf 解码器，安全解析邮箱、订阅计划与配额信息；切换时执行安全事务写入，并自动维护 `.backup` 文件。
+- **Google Antigravity**：适配 Antigravity 2.x（Hub）Windows 凭据管理器 `gemini:antigravity`、`app_storage.json` 与 VS Code globalStorage SQLite（`ItemTable` 中的 Protobuf 字段），实现登录态双向同步、切号前 Token 校验与残留 `language_server` 子进程安全清理。
 - **Claude Code CLI**：精准修改 `~/.claude/settings.json` 中 `env` 的 `ANTHROPIC_*` 相关环境变量，对于 `hooks`、`permissions` 等其他系统及业务配置严格原样保留。
 - **Claude Desktop**：针对桌面客户端的 Cowork 推理网关参数（`inferenceProvider`、`inferenceGatewayBaseUrl`、`inferenceGatewayApiKey` 等）进行配置写入与维护；切换回「官方」档位时干净移除网关参数，无缝恢复官方原生登录。
 - **OpenAI Codex**：配置 `~/.codex/config.toml` 中的 `model_provider` 与 `[model_providers.<id>]` 节点，同时联动 `auth.json` 鉴权信息。支持直接连接第三方端点或经由本地网关进行协议适配。
@@ -150,6 +150,7 @@ dotnet build -c Release
 - [x] **Antigravity 原生用量、客户端筛选栏与 Plus 订阅支持（v0.3.3）**：新增 Antigravity 本地对话数据库用量/模型/速度解析（支持共 10 款客户端），新增客户端图标快捷筛选栏，对齐 `daily-cloudcode-pa` 额度同步并支持 `Google AI Plus` 订阅识别。
 - [x] **额度计时提示优化、双栏适配与双语更新修复（v0.3.4）**：新增满额未开始计时识别与五态微胶囊、本地预计重置时间悬停提示、单卡刷新旋转反馈、可切换双栏配额面板适配及双语更新日志修复。
 - [x] **桌面悬浮窗、模型智能合并与全端 UI 重构（v0.3.5）**：上线右下角默认停靠且零漂移收起的桌面悬浮窗（实时 `5h+周` 额度、今日 Antigravity 单端用量与 `tok/s` 速率及一键切号），可用模型白名单过滤与思考强度合并、全六端与用量监控 UI 统一重构、支持 JSON/CSV 导出、现代化托盘菜单以及全工程分部类拆分。
+- [x] **Hub 切号修复、分池快速激活与防风控加固（v0.3.6）**：修复 Antigravity 2.x 切号 `503` 未登录问题（`gemini:antigravity` 双向同步、`auth/aicode` 权限域与 `language_server` 清理），上线按配额池自动跳过与 Free 号周限额防重复触发、极简 `"只回复1"` 激活提速、动态版本号与闲置账号降频防风控及悬浮窗跨重启位置零漂移记忆。
 - [ ] **自动化规则与路由策略**：计划支持基于模型、用量、耗时及供应商健康度的自动化负载均衡与故障转移路由。
 
 ---

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using APISwitch.Models;
@@ -252,95 +253,378 @@ public static class AgToolsService
         catch { }
     }
 
+    public const string CredTargetName = "gemini:antigravity";
+    public const string CredUserName = "antigravity";
+    private const string DefaultWriterId = "gWSXHqikCkBTlM3ukNgQF0j1KYZ7_i1CimRQJIFxY0A";
+
+    public sealed record SystemCredSnapshot(
+        string? Email,
+        string? AccessToken,
+        string? RefreshToken,
+        string? IdToken,
+        long? ExpiryUnixSec,
+        string? WriterId);
+
+    public static string BuildCredentialManagerJson(Profile profile, string? existingWriterId = null)
+    {
+        long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        long expSec = profile.ExpiryTimestamp.HasValue && profile.ExpiryTimestamp.Value > nowSec
+            ? profile.ExpiryTimestamp.Value
+            : nowSec + 3600;
+        long expiresIn = Math.Max(60L, expSec - nowSec);
+        var expiryIso = DateTimeOffset.FromUnixTimeSeconds(expSec)
+            .ToLocalTime()
+            .ToString("yyyy-MM-ddTHH:mm:ss.fffffffzzz");
+
+        var tokenNode = new JsonObject
+        {
+            ["access_token"] = profile.AccessToken ?? "",
+            ["token_type"] = "Bearer",
+            ["refresh_token"] = profile.RefreshToken ?? "",
+            ["expiry"] = expiryIso,
+            ["expires_in"] = expiresIn
+        };
+
+        var credManagerObj = new JsonObject
+        {
+            ["token"] = tokenNode,
+            ["auth_method"] = "consumer",
+            ["id_token_email"] = profile.Email ?? "",
+            ["writer_id"] = !string.IsNullOrWhiteSpace(existingWriterId) ? existingWriterId : DefaultWriterId
+        };
+
+        if (!string.IsNullOrEmpty(profile.IdToken))
+        {
+            credManagerObj["id_token"] = profile.IdToken;
+        }
+
+        return credManagerObj.ToJsonString();
+    }
+
+    public static SystemCredSnapshot? ParseCredentialManagerJson(string? json, string? fallbackEmail = null)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
+
+            string? accessToken = null;
+            string? refreshToken = null;
+            long? expiryUnixSec = null;
+
+            if (root.TryGetProperty("token", out var tokenElem) && tokenElem.ValueKind == JsonValueKind.Object)
+            {
+                if (tokenElem.TryGetProperty("access_token", out var at) && at.ValueKind == JsonValueKind.String)
+                    accessToken = at.GetString();
+                if (tokenElem.TryGetProperty("refresh_token", out var rt) && rt.ValueKind == JsonValueKind.String)
+                    refreshToken = rt.GetString();
+                if (tokenElem.TryGetProperty("expiry", out var exp) && exp.ValueKind == JsonValueKind.String)
+                {
+                    if (DateTimeOffset.TryParse(exp.GetString(), out var dto))
+                        expiryUnixSec = dto.ToUnixTimeSeconds();
+                }
+                if (!expiryUnixSec.HasValue && tokenElem.TryGetProperty("expires_in", out var expIn) && expIn.TryGetInt64(out var secs) && secs > 0)
+                {
+                    expiryUnixSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + secs;
+                }
+            }
+
+            if (string.IsNullOrEmpty(accessToken) && string.IsNullOrEmpty(refreshToken))
+                return null;
+
+            string? email = root.TryGetProperty("id_token_email", out var em) && em.ValueKind == JsonValueKind.String
+                ? em.GetString()
+                : null;
+            string? idToken = root.TryGetProperty("id_token", out var idt) && idt.ValueKind == JsonValueKind.String
+                ? idt.GetString()
+                : null;
+            string? writerId = root.TryGetProperty("writer_id", out var wid) && wid.ValueKind == JsonValueKind.String
+                ? wid.GetString()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(email) && !string.IsNullOrEmpty(idToken))
+            {
+                email = TryDecodeEmailFromJwt(idToken);
+            }
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                email = fallbackEmail;
+            }
+
+            return new SystemCredSnapshot(email, accessToken, refreshToken, idToken, expiryUnixSec, writerId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static string? TryDecodeEmailFromJwt(string jwt)
+    {
+        try
+        {
+            var parts = jwt.Split('.');
+            if (parts.Length < 2) return null;
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("email", out var em) && em.ValueKind == JsonValueKind.String)
+                return em.GetString();
+        }
+        catch { }
+        return null;
+    }
+
+    public static string? ReadHubLastLoginEmail()
+    {
+        try
+        {
+            var path = AgPaths.HubAppStoragePath;
+            if (!File.Exists(path)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("agy.onboarding.lastLoginUsername", out var val) &&
+                val.ValueKind == JsonValueKind.String)
+            {
+                var email = val.GetString();
+                return string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    public static void WriteHubLastLoginEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return;
+        try
+        {
+            var path = AgPaths.HubAppStoragePath;
+            var dir = Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(dir)) return;
+            if (!File.Exists(path) && !Directory.Exists(dir)) return;
+
+            JsonObject obj;
+            if (File.Exists(path))
+            {
+                var parsed = JsonNode.Parse(File.ReadAllText(path));
+                obj = parsed as JsonObject ?? new JsonObject();
+            }
+            else
+            {
+                obj = new JsonObject();
+            }
+
+            obj["agy.onboarding.lastLoginUsername"] = email.Trim();
+            var tmpPath = path + ".tmp";
+            File.WriteAllText(tmpPath, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(tmpPath, path, overwrite: true);
+        }
+        catch { }
+    }
+
+    public static string? CaptureCurrentActiveCredentialsToStore()
+    {
+        var hubEmail = ReadHubLastLoginEmail();
+        if (AgPaths.IsSandboxed)
+            return hubEmail;
+
+        var rawCred = CredentialManager.ReadCredential(CredTargetName);
+        var snap = ParseCredentialManagerJson(rawCred, hubEmail);
+        if (snap == null || string.IsNullOrWhiteSpace(snap.Email))
+            return hubEmail;
+
+        try
+        {
+            var email = snap.Email.Trim();
+            var profiles = ProfileStore.Load();
+            var existing = profiles.FirstOrDefault(p =>
+                !string.IsNullOrWhiteSpace(p.Email) &&
+                p.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+
+            bool isNew = existing == null;
+            var profile = existing ?? new Profile
+            {
+                Name = email,
+                Email = email,
+                CapturedAtUtc = DateTime.UtcNow
+            };
+
+            bool changed = isNew;
+            if (!string.IsNullOrEmpty(snap.RefreshToken) &&
+                !string.Equals(profile.RefreshToken, snap.RefreshToken, StringComparison.Ordinal))
+            {
+                profile.RefreshToken = snap.RefreshToken;
+                changed = true;
+            }
+
+            bool incomingAccessIsNewer = !string.IsNullOrEmpty(snap.AccessToken) &&
+                (!profile.ExpiryTimestamp.HasValue
+                 || (snap.ExpiryUnixSec.HasValue && snap.ExpiryUnixSec.Value > profile.ExpiryTimestamp.Value)
+                 || string.IsNullOrEmpty(profile.AccessToken)
+                 || changed);
+
+            if (incomingAccessIsNewer && !string.Equals(profile.AccessToken, snap.AccessToken, StringComparison.Ordinal))
+            {
+                profile.AccessToken = snap.AccessToken;
+                changed = true;
+            }
+
+            if (snap.ExpiryUnixSec.HasValue &&
+                (!profile.ExpiryTimestamp.HasValue || snap.ExpiryUnixSec.Value > profile.ExpiryTimestamp.Value || changed))
+            {
+                profile.ExpiryTimestamp = snap.ExpiryUnixSec.Value;
+                changed = true;
+            }
+
+            if (!string.IsNullOrEmpty(snap.IdToken) &&
+                !string.Equals(profile.IdToken, snap.IdToken, StringComparison.Ordinal))
+            {
+                profile.IdToken = snap.IdToken;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                profile.ActivationError = null;
+                profile.CapturedAtUtc = DateTime.UtcNow;
+                var authValues = AgAuthHelper.BuildAuthValues(profile);
+                if (authValues.TryGetValue(AgState.KeyOauthToken, out var otVal))
+                    profile.Values[AgState.KeyOauthToken] = otVal;
+                if (authValues.TryGetValue(AgState.KeyUserStatus, out var usVal))
+                    profile.Values[AgState.KeyUserStatus] = usVal;
+                ProfileStore.Save(profile);
+            }
+
+            return email;
+        }
+        catch
+        {
+            return snap.Email ?? hubEmail;
+        }
+    }
+
     public static async Task ApplySystemCredentialsAsync(Profile profile)
     {
-        // 1. Ensure access token is fresh if possible
-        if (!string.IsNullOrEmpty(profile.RefreshToken))
+        _ = await TryApplySystemCredentialsAsync(profile, forceTokenRefresh: false, syncIdeMeta: true);
+    }
+
+    public static async Task<(bool Ok, bool AuthExpired, string? Error)> TryApplySystemCredentialsAsync(
+        Profile profile, bool forceTokenRefresh = false, bool syncIdeMeta = true)
+    {
+        // 1. Ensure access token is fresh and verified before touching system credentials
+        if (!string.IsNullOrEmpty(profile.RefreshToken) || forceTokenRefresh)
         {
-            await AgQuotaService.EnsureFreshTokenAsync(profile);
+            var (ok, authExpired, err) = await AgQuotaService.EnsureFreshTokenDetailedAsync(
+                profile, forceRefresh: forceTokenRefresh, syncSystemCreds: false);
+            if (!ok || string.IsNullOrEmpty(profile.AccessToken))
+            {
+                return (false, authExpired, err ?? I18nService.T("AgQ.ErrTokenRefresh"));
+            }
+        }
+        else if (string.IsNullOrEmpty(profile.AccessToken))
+        {
+            return (false, true, I18nService.T("AgQ.ErrNoCredentials"));
         }
 
-        // 2. Write ~/.gemini/oauth_creds.json
-        try
+        var written = await WriteSystemCredentialFilesOnlyAsync(profile, syncIdeMeta);
+        return written
+            ? (true, false, null)
+            : (false, false, "Failed to write Windows Credential Manager entry");
+    }
+
+    public static async Task<bool> WriteSystemCredentialFilesOnlyAsync(Profile profile, bool syncIdeMeta = true)
+    {
+        bool credWritten = true;
+
+        // 2. Write ~/.gemini/oauth_creds.json and Windows Credential Manager: gemini:antigravity (skip real host state when sandboxed)
+        if (!AgPaths.IsSandboxed)
         {
-            var dir = Path.GetDirectoryName(GeminiCredsPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-
-            long expiryMs = profile.ExpiryTimestamp.HasValue
-                ? profile.ExpiryTimestamp.Value * 1000
-                : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3600_000;
-
-            var credsObj = new JsonObject
+            try
             {
-                ["access_token"] = profile.AccessToken ?? "",
-                ["refresh_token"] = profile.RefreshToken ?? "",
-                ["token_type"] = "Bearer",
-                ["expiry_date"] = expiryMs,
-                ["id_token"] = profile.IdToken ?? "",
-                ["scope"] = "https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.profile"
-            };
+                var dir = Path.GetDirectoryName(GeminiCredsPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
 
-            await File.WriteAllTextAsync(GeminiCredsPath, credsObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        }
-        catch { }
+                long expiryMs = profile.ExpiryTimestamp.HasValue
+                    ? profile.ExpiryTimestamp.Value * 1000
+                    : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 3600_000;
 
-        // 3. Write Windows Credential Manager: gemini:antigravity
-        try
-        {
-            var expiryIso = profile.ExpiryTimestamp.HasValue
-                ? DateTimeOffset.FromUnixTimeSeconds(profile.ExpiryTimestamp.Value).ToLocalTime().ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz")
-                : DateTimeOffset.UtcNow.AddHours(1).ToLocalTime().ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz");
-
-            var tokenNode = new JsonObject
-            {
-                ["access_token"] = profile.AccessToken ?? "",
-                ["token_type"] = "Bearer",
-                ["refresh_token"] = profile.RefreshToken ?? "",
-                ["expiry"] = expiryIso
-            };
-
-            var credManagerObj = new JsonObject
-            {
-                ["token"] = tokenNode,
-                ["auth_method"] = "consumer",
-                ["id_token"] = profile.IdToken ?? ""
-            };
-
-            CredentialManager.WriteCredential("gemini:antigravity", "antigravity", credManagerObj.ToJsonString());
-        }
-        catch { }
-
-        // 4. Update .antigravity_tools/accounts.json current_account_id if applicable
-        try
-        {
-            if (File.Exists(AccountsJsonPath))
-            {
-                var text = await File.ReadAllTextAsync(AccountsJsonPath);
-                var node = JsonNode.Parse(text);
-                if (node is JsonObject obj && obj.TryGetPropertyValue("accounts", out var accNode) && accNode is JsonArray arr)
+                var credsObj = new JsonObject
                 {
-                    foreach (var item in arr)
+                    ["access_token"] = profile.AccessToken ?? "",
+                    ["refresh_token"] = profile.RefreshToken ?? "",
+                    ["token_type"] = "Bearer",
+                    ["expiry_date"] = expiryMs,
+                    ["id_token"] = profile.IdToken ?? "",
+                    ["scope"] = AgAuthFlow.DefaultOAuthScopes
+                };
+
+                await File.WriteAllTextAsync(GeminiCredsPath, credsObj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch { }
+
+            try
+            {
+                var existingSnap = ParseCredentialManagerJson(CredentialManager.ReadCredential(CredTargetName));
+                var payload = BuildCredentialManagerJson(profile, existingSnap?.WriterId);
+                credWritten = CredentialManager.WriteCredential(CredTargetName, CredUserName, payload);
+            }
+            catch
+            {
+                credWritten = false;
+            }
+        }
+
+        if (syncIdeMeta)
+        {
+            // 3. Sync Hub onboarding lastLoginUsername in app_storage.json
+            WriteHubLastLoginEmail(profile.Email);
+
+            // 4. Update .antigravity_tools/accounts.json current_account_id if applicable
+            if (!AgPaths.IsSandboxed)
+            {
+                try
+                {
+                    if (File.Exists(AccountsJsonPath))
                     {
-                        if (item is JsonObject itemObj &&
-                            itemObj.TryGetPropertyValue("email", out var emailVal) &&
-                            profile.Email.Equals(emailVal?.ToString(), StringComparison.OrdinalIgnoreCase))
+                        var text = await File.ReadAllTextAsync(AccountsJsonPath);
+                        var node = JsonNode.Parse(text);
+                        if (node is JsonObject obj && obj.TryGetPropertyValue("accounts", out var accNode) && accNode is JsonArray arr)
                         {
-                            if (itemObj.TryGetPropertyValue("id", out var idVal) && idVal != null)
+                            foreach (var item in arr)
                             {
-                                obj["current_account_id"] = idVal.ToString();
-                                await File.WriteAllTextAsync(AccountsJsonPath, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-                                break;
+                                if (item is JsonObject itemObj &&
+                                    itemObj.TryGetPropertyValue("email", out var emailVal) &&
+                                    profile.Email.Equals(emailVal?.ToString(), StringComparison.OrdinalIgnoreCase))
+                                {
+                                    if (itemObj.TryGetPropertyValue("id", out var idVal) && idVal != null)
+                                    {
+                                        obj["current_account_id"] = idVal.ToString();
+                                        await File.WriteAllTextAsync(AccountsJsonPath, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
                 }
+                catch { }
             }
-        }
-        catch { }
 
-        // 5. Sync virtual device profile with storage.json
-        await SyncStorageDeviceProfileAsync(profile);
+            // 5. Sync virtual device profile with storage.json
+            await SyncStorageDeviceProfileAsync(profile);
+        }
+
+        return credWritten;
     }
 
     public static async Task SyncStorageDeviceProfileAsync(Profile profile)

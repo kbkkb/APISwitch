@@ -302,6 +302,10 @@ public partial class App : System.Windows.Application
         LogStartup("MainWindow instantiated. Calling Show()...");
         mainWindow.Show();
         LogStartup("mainWindow.Show() finished.");
+        if (e.Args.Contains("--minimized"))
+        {
+            mainWindow.MinimizeToTray();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

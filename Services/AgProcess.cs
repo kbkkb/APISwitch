@@ -53,6 +53,38 @@ public static class AgProcess
         }
         return result.ToArray();
     }
+    /// <summary>获取仍挂在 Antigravity 目录下的 language_server 子进程。</summary>
+    static Process[] GetAntigravityLanguageServers()
+    {
+        var all = Process.GetProcesses();
+        var result = new List<Process>();
+        foreach (var p in all)
+        {
+            try
+            {
+                if (!p.ProcessName.StartsWith("language_server", StringComparison.OrdinalIgnoreCase))
+                {
+                    p.Dispose();
+                    continue;
+                }
+
+                string? path = p.MainModule?.FileName;
+                if (!string.IsNullOrEmpty(path) &&
+                    path.Contains("antigravity", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add(p);
+                    continue;
+                }
+            }
+            catch
+            {
+                // 无法读取 MainModule 时跳过，不误杀其他工具（如 VSCode 其他插件）的进程
+            }
+            p.Dispose();
+        }
+        return result.ToArray();
+    }
+
     public static bool IsRunning() => GetIdeProcesses().Length > 0;
 
     /// <summary>
@@ -62,43 +94,95 @@ public static class AgProcess
     public static async Task<bool> StopIdeAsync(Action<string>? log = null)
     {
         var initial = GetIdeProcesses();
-        if (initial.Length == 0) return true;
+        var initialLs = GetAntigravityLanguageServers();
+        if (initial.Length == 0 && initialLs.Length == 0) return true;
+        DisposeAll(initialLs);
 
-        // 1. 优雅关闭：只对有窗口的进程发关闭消息（其余是渲染/GPU 子进程，发了也无意义）
-        foreach (var p in initial)
+        if (initial.Length > 0)
         {
-            try
+            // 1. 优雅关闭：只对有窗口的进程发关闭消息（其余是渲染/GPU 子进程，发了也无意义）
+            foreach (var p in initial)
             {
-                if (p.MainWindowHandle != IntPtr.Zero)
-                    p.CloseMainWindow();
+                try
+                {
+                    if (p.MainWindowHandle != IntPtr.Zero)
+                        p.CloseMainWindow();
+                }
+                catch { }
             }
-            catch { }
+            DisposeAll(initial);
+
+            var exited = await WaitAllGoneAsync(GracefulTimeout);
+            log?.Invoke($"ag-stop: graceful close, allGone={exited}");
+
+            // 2. 仍有残留才强杀进程树
+            if (!exited)
+            {
+                var kill = GetIdeProcesses();
+                foreach (var p in kill)
+                {
+                    try { p.Kill(entireProcessTree: true); } catch { }
+                }
+                DisposeAll(kill);
+                exited = await WaitAllGoneAsync(KillTimeout);
+                log?.Invoke($"ag-stop: force kill, allGone={exited}");
+            }
         }
-        DisposeAll(initial);
-
-        var exited = await WaitAllGoneAsync(GracefulTimeout);
-        log?.Invoke($"ag-stop: graceful close, allGone={exited}");
-
-        // 2. 仍有残留才强杀进程树
-        if (!exited)
+        else
         {
-            var kill = GetIdeProcesses();
-            foreach (var p in kill)
-            {
-                try { p.Kill(entireProcessTree: true); } catch { }
-            }
-            DisposeAll(kill);
-            exited = await WaitAllGoneAsync(KillTimeout);
-            log?.Invoke($"ag-stop: force kill, allGone={exited}");
+            DisposeAll(initial);
         }
+
+        // 2.5 清理残留的 Antigravity language_server 子进程，防止其回写旧凭据或占锁
+        await EnsureLanguageServersExitedAsync(log);
 
         // 3. 等状态库锁真正释放：最短沉淀 + 等 -wal/-shm 消失
         await WaitStateDbSettledAsync(log);
 
         var final = GetIdeProcesses();
-        var ok = final.Length == 0;
+        var finalLs = GetAntigravityLanguageServers();
+        var ok = final.Length == 0 && finalLs.Length == 0;
         DisposeAll(final);
+        DisposeAll(finalLs);
         return ok;
+    }
+
+    static async Task EnsureLanguageServersExitedAsync(Action<string>? log)
+    {
+        // 先给随父进程自然退出留出最多 2 秒
+        var graceDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+        while (DateTime.UtcNow < graceDeadline)
+        {
+            var ls = GetAntigravityLanguageServers();
+            int len = ls.Length;
+            DisposeAll(ls);
+            if (len == 0) return;
+            await Task.Delay(200);
+        }
+
+        var killLs = GetAntigravityLanguageServers();
+        if (killLs.Length == 0)
+        {
+            DisposeAll(killLs);
+            return;
+        }
+
+        foreach (var p in killLs)
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+        }
+        DisposeAll(killLs);
+
+        var killDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+        while (DateTime.UtcNow < killDeadline)
+        {
+            var ls = GetAntigravityLanguageServers();
+            int len = ls.Length;
+            DisposeAll(ls);
+            if (len == 0) break;
+            await Task.Delay(200);
+        }
+        log?.Invoke("ag-stop: cleaned lingering language_server");
     }
 
     /// <summary>启动 IDE，并验证新实例真的出现了主窗口（而不是被单例锁挡掉后静默退出）。</summary>

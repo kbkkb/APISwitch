@@ -2,6 +2,27 @@
 
 # APISwitch Release Notes
 
+## APISwitch v0.3.6 Release Notes
+
+### [Fixes · Antigravity 2.x (Hub) Account Switching & Credential Sync]
+• **Bidirectional `gemini:antigravity` Sync**: Fully adapted to Antigravity 2.x Hub session storage—automatically captures fresh logins and rotated tokens made inside the Antigravity IDE from Windows Credential Manager (`gemini:antigravity`) and `app_storage.json`, while writing back the exact native schema (`id_token_email`, `expires_in`, preserved `writer_id`, `agy.onboarding.lastLoginUsername`, and all `state.vscdb` copies).
+• **`auth/aicode` Scope & Pre-Switch Token Verification**: Added `https://www.googleapis.com/auth/aicode` to Google OAuth scopes to eliminate `ACCESS_TOKEN_SCOPE_INSUFFICIENT` warnings. Account switching now verifies and refreshes the target token before writing credentials (persisting rotated refresh tokens and breaking background write recursion), aborting with a clear re-login prompt instead of launching into `UNAVAILABLE (code 503)`.
+• **Clean Process Teardown & Isolation**: `StopIdeAsync` now cleans up lingering Antigravity `language_server` child processes before writing credentials; deferred post-restart quota polling avoids startup `get_auth_status` contention; `AgCliService` backs up and restores `gemini:antigravity` when activating non-active accounts.
+
+### [Performance & Quota Savings · Pool-Aware Skip & Deterministic Prompt]
+• **Smart Per-Pool Skip**: Added `EvaluatePoolActivationNeed` so already-counting `Gemini` or `Claude/GPT` quota pools are skipped automatically; accounts whose supported pools are all active bypass `agy.exe` invocation with zero cooldown delay.
+• **Free / Plus Weekly-Cycle Protection**: Non-Pro accounts (`Starter` / `Google AI Plus`) strictly anchor activation checks on the 7-day weekly cycle (including full-cycle locking when remaining quota still reads `100%`), preventing the auxiliary `3p-5h` bucket from triggering duplicate weekly quota consumption every 5 hours.
+• **Faster Pipeline & Minimal Output**: Removed redundant per-account CLI model probe subprocesses, parallelized `retrieveUserQuotaSummary` and `fetchAvailableModels` calls, prioritized `-low` effort candidates, added `--disable-slash-commands`, and tightened the activation prompt from `"hi"` to `"只回复1"` to minimize output/thinking token cost and latency.
+
+### [Security · Anti-Ban Polling & Dynamic Client Version Alignment]
+• **Dynamic IDE Version Header**: Reads the installed `Antigravity.exe` file version dynamically (`AgPaths.GetInstalledIdeVersion`) instead of sending a hardcoded legacy version string.
+• **Active-First Background Polling & Natural Jitter**: Silent background polling now focuses on the current active account while throttling idle accounts to 15-minute (foreground) / 30-minute (tray/minimized) intervals with staggered jitter; sequential CLI activations retain a natural 2–4s cooldown between accounts.
+
+### [Improvements · Floating Widget Zero-Drift Position Memory]
+• Persists immutable screen edge anchors (`FloatingWidgetAnchorX/Y/Right/Bottom`), ensuring the Antigravity Floating Widget reopens in the exact remembered spot across cold restarts and capsule expand/collapse transitions.
+
+---
+
 ## APISwitch v0.3.5 Release Notes
 
 ### [New · Desktop Floating Widget for Antigravity]

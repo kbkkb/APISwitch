@@ -26,7 +26,7 @@ if (-not (Test-Path $releaseDir)) {
 }
 
 if (Test-Path $publishDir) {
-    Remove-Item $publishDir -Recurse -Force
+    Get-ChildItem -Path $publishDir -Force | Remove-Item -Recurse -Force
 }
 
 Write-Host "`n🔨 正在编译生成多文件发布版本 (Framework-Dependent)..." -ForegroundColor Yellow

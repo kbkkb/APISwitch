@@ -116,7 +116,10 @@ public partial class MainWindow
         }
         _floatingWidget.UpdateProfiles(_profiles);
         if (!_floatingWidget.IsVisible)
+        {
             _floatingWidget.Show();
+            _floatingWidget.RestoreAfterShow();
+        }
     }
 
     void OnToggleFloatingWidgetClick(object sender, RoutedEventArgs e) => ToggleFloatingWidget();
@@ -138,6 +141,7 @@ public partial class MainWindow
         }
         else
         {
+            _floatingWidget?.PrepareForHide();
             _floatingWidget?.Hide();
             if (showToast && IsVisible)
                 ShowToast(I18nService.T("Widget.HiddenToast"), isInfo: true);

@@ -32,15 +32,27 @@ public static class AgQuotaService
         Timeout = TimeSpan.FromSeconds(15)
     };
 
-    public static async Task<bool> EnsureFreshTokenAsync(Profile profile)
+    public static async Task<bool> EnsureFreshTokenAsync(Profile profile) =>
+        (await EnsureFreshTokenDetailedAsync(profile, forceRefresh: false, syncSystemCreds: true)).Ok;
+
+    public static async Task<(bool Ok, bool AuthExpired, string? Error)> EnsureFreshTokenDetailedAsync(
+        Profile profile, bool forceRefresh = false, bool syncSystemCreds = true)
     {
-        if (string.IsNullOrEmpty(profile.RefreshToken)) return !string.IsNullOrEmpty(profile.AccessToken);
+        if (string.IsNullOrEmpty(profile.RefreshToken))
+        {
+            return !string.IsNullOrEmpty(profile.AccessToken)
+                ? (true, false, null)
+                : (false, true, I18nService.T("AgQ.ErrNoCredentials"));
+        }
 
         // Check if token is still valid (with 5 min buffer)
         var nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (!string.IsNullOrEmpty(profile.AccessToken) && profile.ExpiryTimestamp.HasValue && profile.ExpiryTimestamp.Value > nowSec + 300)
+        bool stillValid = !string.IsNullOrEmpty(profile.AccessToken)
+                          && profile.ExpiryTimestamp.HasValue
+                          && profile.ExpiryTimestamp.Value > nowSec + 300;
+        if (!forceRefresh && stillValid)
         {
-            return true;
+            return (true, false, null);
         }
 
         try
@@ -54,8 +66,23 @@ public static class AgQuotaService
                 ["grant_type"] = "refresh_token"
             });
 
-            var resp = await Http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode) return false;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            var resp = await Http.SendAsync(req, cts.Token);
+            if (!resp.IsSuccessStatusCode)
+            {
+                string respBody = "";
+                try { respBody = await resp.Content.ReadAsStringAsync(); } catch { }
+                bool authExpired = ((int)resp.StatusCode == 400 || (int)resp.StatusCode == 401)
+                    && (respBody.Contains("invalid_grant", StringComparison.OrdinalIgnoreCase)
+                        || respBody.Contains("expired or revoked", StringComparison.OrdinalIgnoreCase));
+
+                if (!authExpired && stillValid)
+                {
+                    return (true, false, null);
+                }
+
+                return (false, authExpired, authExpired ? I18nService.T("AgQ.ErrTokenRefresh") : $"HTTP {(int)resp.StatusCode}");
+            }
 
             var json = await resp.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
@@ -73,28 +100,45 @@ public static class AgQuotaService
 
             if (root.TryGetProperty("id_token", out var idElem))
             {
-                profile.IdToken = idElem.GetString();
+                var nextId = idElem.GetString();
+                if (!string.IsNullOrEmpty(nextId))
+                    profile.IdToken = nextId;
+            }
+
+            if (root.TryGetProperty("refresh_token", out var rtElem))
+            {
+                var nextRt = rtElem.GetString();
+                if (!string.IsNullOrEmpty(nextRt))
+                    profile.RefreshToken = nextRt;
             }
 
             if (!string.IsNullOrEmpty(profile.AccessToken))
             {
+                var authValues = AgAuthHelper.BuildAuthValues(profile);
+                if (authValues.TryGetValue(AgState.KeyOauthToken, out var otVal))
+                    profile.Values[AgState.KeyOauthToken] = otVal;
+                if (authValues.TryGetValue(AgState.KeyUserStatus, out var usVal))
+                    profile.Values[AgState.KeyUserStatus] = usVal;
+
                 ProfileStore.Save(profile);
-                if (profile.IsCurrent)
+                if (syncSystemCreds && profile.IsCurrent && !AgPaths.IsSandboxed)
                 {
                     _ = Task.Run(async () =>
                     {
-                        try { await AgToolsService.ApplySystemCredentialsAsync(profile); }
+                        try { await AgToolsService.WriteSystemCredentialFilesOnlyAsync(profile, syncIdeMeta: true); }
                         catch { }
                     });
                 }
-                return true;
+                return (true, false, null);
             }
 
-            return false;
+            return (false, false, I18nService.T("AgQ.ErrTokenRefresh"));
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            if (stillValid)
+                return (true, false, null);
+            return (false, false, ex.Message);
         }
     }
 
@@ -137,8 +181,7 @@ public static class AgQuotaService
             try
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post, url);
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                req.Headers.TryAddWithoutValidation("User-Agent", "antigravity/hub/2.23.1 (os_type=windows; arch=amd64; aidev_client)");
+                ApplyAntigravityHeaders(req, token, profile);
                 req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
                 var resp = await SendWithTimeoutAsync(req, CancellationToken.None);
@@ -241,10 +284,11 @@ public static class AgQuotaService
 
     private static void ApplyAntigravityHeaders(HttpRequestMessage req, string token, Profile profile)
     {
+        var ideVer = AgPaths.GetInstalledIdeVersion();
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        req.Headers.TryAddWithoutValidation("User-Agent", "antigravity/hub/2.23.1 (os_type=windows; arch=amd64; aidev_client)");
+        req.Headers.TryAddWithoutValidation("User-Agent", $"antigravity/hub/{ideVer} (os_type=windows; arch=amd64; aidev_client)");
         req.Headers.TryAddWithoutValidation("x-client-name", "antigravity");
-        req.Headers.TryAddWithoutValidation("x-client-version", "2.23.1");
+        req.Headers.TryAddWithoutValidation("x-client-version", ideVer);
         req.Headers.TryAddWithoutValidation("x-machine-id", GetMachineId(profile));
     }
 
@@ -272,7 +316,6 @@ public static class AgQuotaService
     {
         var modelUrls = new[]
         {
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
             "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
             "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels"
         };
@@ -504,13 +547,93 @@ public static class AgQuotaService
         return 999.0;
     }
 
+    static int ApiModelEffortRank(string id)
+    {
+        if (id.EndsWith("-low", StringComparison.OrdinalIgnoreCase) ||
+            id.Contains("flash-lite", StringComparison.OrdinalIgnoreCase))
+            return 0;
+        if (!id.EndsWith("-medium", StringComparison.OrdinalIgnoreCase) &&
+            !id.EndsWith("-high", StringComparison.OrdinalIgnoreCase) &&
+            !id.EndsWith("-xhigh", StringComparison.OrdinalIgnoreCase) &&
+            !id.EndsWith("-thinking", StringComparison.OrdinalIgnoreCase))
+            return 1;
+        if (id.EndsWith("-medium", StringComparison.OrdinalIgnoreCase))
+            return 2;
+        if (id.EndsWith("-high", StringComparison.OrdinalIgnoreCase) ||
+            id.EndsWith("-thinking", StringComparison.OrdinalIgnoreCase))
+            return 3;
+        if (id.EndsWith("-xhigh", StringComparison.OrdinalIgnoreCase))
+            return 4;
+        return 5;
+    }
+
+    public static List<string> PickCliGeminiCandidates(Profile profile)
+    {
+        if (profile.ModelQuotas == null || profile.ModelQuotas.Count == 0)
+            return new List<string>();
+
+        return profile.ModelQuotas
+            .Where(m => !m.Disabled &&
+                        !string.IsNullOrWhiteSpace(m.ModelId) &&
+                        m.ModelId.Contains("gemini", StringComparison.OrdinalIgnoreCase) &&
+                        !m.ModelId.Contains("argon", StringComparison.OrdinalIgnoreCase) &&
+                        !m.ModelId.StartsWith("tab_", StringComparison.OrdinalIgnoreCase) &&
+                        !m.ModelId.StartsWith("chat_", StringComparison.OrdinalIgnoreCase) &&
+                        !m.ModelId.Contains("image", StringComparison.OrdinalIgnoreCase) &&
+                        !m.ModelId.Contains("sonar", StringComparison.OrdinalIgnoreCase) &&
+                        !m.ModelId.Contains("orchestrator", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(m => m.IsPickerVisible ? 0 : 1)
+            .ThenBy(m => m.ModelId.Contains("flash", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(m => ApiModelEffortRank(m.ModelId))
+            .ThenByDescending(m => ExtractModelVersion(m.ModelId))
+            .ThenBy(m => m.ModelId, StringComparer.OrdinalIgnoreCase)
+            .Select(m => m.ModelId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public static List<string> PickCliThirdPartyCandidates(Profile profile)
+    {
+        if (profile.ModelQuotas == null || profile.ModelQuotas.Count == 0)
+            return new List<string>();
+
+        static int FamilyRank(string id)
+        {
+            if (id.Contains("sonnet", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (id.Contains("gpt", StringComparison.OrdinalIgnoreCase)) return 1;
+            if (id.Contains("opus", StringComparison.OrdinalIgnoreCase)) return 2;
+            return 3;
+        }
+
+        return profile.ModelQuotas
+            .Where(m => !m.Disabled &&
+                        !string.IsNullOrWhiteSpace(m.ModelId) &&
+                        (m.ModelId.Contains("claude", StringComparison.OrdinalIgnoreCase) ||
+                         m.ModelId.Contains("gpt", StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(m => m.IsPickerVisible ? 0 : 1)
+            .ThenBy(m => FamilyRank(m.ModelId))
+            .ThenBy(m => ApiModelEffortRank(m.ModelId))
+            .ThenByDescending(m => ExtractClaudeVersion(m.ModelId))
+            .ThenBy(m => m.ModelId, StringComparer.OrdinalIgnoreCase)
+            .Select(m => m.ModelId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     /// <summary>
     /// 向 Google 官方端点发送真实轻量消息以激活该账号的限额周期，并自动拉取最新配额
     /// 遵循安全防风控原则：
-    /// 1. 动态拉取当前账号可用模型，使用最老/最低开销的 gemini flash-low 模型（向后兼容 + 极低消耗）。
-    /// 2. Starter账号仅测Gemini；Pro账号依次激活Gemini与GPT/Claude并采用拟人化延迟。
+    /// 1. 动态拉取当前账号可用模型，使用低功耗模型触发限额计时；
+    /// 2. 自动跳过已在计时中的配额池，避免重复激活。
     /// </summary>
     public static async Task<(bool ok, long latencyMs, string message, bool rateLimited)> ActivateAccountQuotaAsync(Profile profile, CancellationToken ct = default)
+    {
+        var r = await ActivateAccountQuotaDetailedAsync(profile, ct, forcePreRefresh: true);
+        return (r.ok, r.latencyMs, r.message, r.rateLimited);
+    }
+
+    public static async Task<(bool ok, long latencyMs, string message, bool rateLimited, bool skippedAll)> ActivateAccountQuotaDetailedAsync(
+        Profile profile, CancellationToken ct = default, bool forcePreRefresh = true)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -519,7 +642,7 @@ public static class AgQuotaService
             profile.IsActivated = false;
             profile.ActivationError = I18nService.T("AgQ.ErrNoCredentials");
             ProfileStore.Save(profile);
-            return (false, 0, profile.ActivationError, false);
+            return (false, 0, profile.ActivationError, false, false);
         }
 
         // 1. 确保 Token 处于最新状态
@@ -529,7 +652,26 @@ public static class AgQuotaService
             profile.IsActivated = false;
             profile.ActivationError = I18nService.T("AgQ.ErrTokenRefresh");
             ProfileStore.Save(profile);
-            return (false, 0, profile.ActivationError, false);
+            return (false, 0, profile.ActivationError, false, false);
+        }
+
+        // 1.2 先确保当前配额池与模型目录是最新的，以便精准跳过已在计时的池
+        if (forcePreRefresh || !profile.QuotaUpdatedAt.HasValue || (DateTime.UtcNow - profile.QuotaUpdatedAt.Value).TotalSeconds > 45)
+        {
+            ct.ThrowIfCancellationRequested();
+            await RefreshQuotaAsync(profile);
+        }
+
+        var plan = profile.EvaluatePoolActivationNeed();
+        if (!plan.NeedsAnyCliCall)
+        {
+            sw.Stop();
+            profile.IsActivated = true;
+            profile.ActivationError = null;
+            profile.QuotaExhausted = false;
+            profile.QuotaExhaustedResetAt = null;
+            ProfileStore.Save(profile);
+            return (true, sw.ElapsedMilliseconds, I18nService.T("AgQ.AlreadyActiveSkip"), false, true);
         }
 
         // 1.5 激活依赖本地真实的 Antigravity CLI（agy.exe）。
@@ -542,11 +684,15 @@ public static class AgQuotaService
             profile.IsActivated = false;
             profile.ActivationError = I18nService.T("AgQ.CliNotFound");
             ProfileStore.Save(profile);
-            return (false, sw.ElapsedMilliseconds, profile.ActivationError, false);
+            return (false, sw.ElapsedMilliseconds, profile.ActivationError, false, false);
         }
 
         ct.ThrowIfCancellationRequested();
-        var cliResult = await AgCliService.ActivateAsync(profile, ct);
+        var cliResult = await AgCliService.ActivateAsync(profile, plan, ct);
+        if (cliResult.GeminiOk) profile.GeminiActivatedAt = DateTime.UtcNow;
+        if (cliResult.ThirdPartyOk) profile.ThirdPartyActivatedAt = DateTime.UtcNow;
+        if (cliResult.ArgonOk) profile.ArgonActivatedAt = DateTime.UtcNow;
+
         // CLI 跑完无论成败都同步一次最新配额，保证徽章与剩余百分比是最新的
         await RefreshQuotaAsync(profile);
 
@@ -568,7 +714,7 @@ public static class AgQuotaService
         }
         ProfileStore.Save(profile);
         sw.Stop();
-        return (cliResult.Ok, cliResult.LatencyMs, cliResult.Message, cliResult.RateLimited);
+        return (cliResult.Ok, cliResult.LatencyMs, cliResult.Message, cliResult.RateLimited, false);
     }
 
     /// <summary>
@@ -877,7 +1023,7 @@ public static class AgQuotaService
                     new
                     {
                         role = "user",
-                        parts = new[] { new { text = "hi" } }
+                        parts = new[] { new { text = "只回复1" } }
                     }
                 }
             }
@@ -1075,54 +1221,20 @@ public static class AgQuotaService
         bool hasArgonGroupInSummary = false;
         string? summaryJson = null;
 
-        // 2. 仅请求与 Antigravity 客户端一致的 daily / sandbox 端点查询配额汇总，
-        // 避免偶发超时回退到 cloudcode-pa 拿到脱离的旧环境 100% 虚假额度。
-        var quotaUrls = new[]
-        {
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary"
-        };
+        // 2. 并行拉取配额汇总（retrieveUserQuotaSummary）与逐模型明细（fetchAvailableModels），
+        //    再统一回填状态（完全单线程写 Profile，耗时减半）。
+        var summaryTask = FetchQuotaSummaryJsonAsync(profile, token, projectPayload);
+        var modelsTask = FetchAvailableModelsDetailAsync(profile, token);
+        await Task.WhenAll(summaryTask, modelsTask);
 
-        foreach (var url in quotaUrls)
+        summaryJson = summaryTask.Result;
+        if (!string.IsNullOrEmpty(summaryJson))
         {
-            try
-            {
-                using var req = new HttpRequestMessage(HttpMethod.Post, url);
-                ApplyAntigravityHeaders(req, token, profile);
-                req.Content = new StringContent(projectPayload, Encoding.UTF8, "application/json");
-
-                var resp = await SendWithTimeoutAsync(req, CancellationToken.None);
-                if (resp.IsSuccessStatusCode)
-                {
-                    summaryJson = await resp.Content.ReadAsStringAsync();
-                    App.LogStartup($"AgQuota: {profile.Email} url={url}");
-                    ParseQuotaSummary(profile, summaryJson, out hasArgonGroupInSummary);
-                    quotaGot = true;
-                    break;
-                }
-                else
-                {
-                    // 兜底尝试不带 project 的空 body
-                    using var reqEmpty = new HttpRequestMessage(HttpMethod.Post, url);
-                    ApplyAntigravityHeaders(reqEmpty, token, profile);
-                    reqEmpty.Content = new StringContent("{}", Encoding.UTF8, "application/json");
-                    var respEmpty = await SendWithTimeoutAsync(reqEmpty, CancellationToken.None);
-                    if (respEmpty.IsSuccessStatusCode)
-                    {
-                        summaryJson = await respEmpty.Content.ReadAsStringAsync();
-                        App.LogStartup($"AgQuota: {profile.Email} url={url}");
-                        ParseQuotaSummary(profile, summaryJson, out hasArgonGroupInSummary);
-                        quotaGot = true;
-                        break;
-                    }
-                }
-            }
-            catch { }
+            ParseQuotaSummary(profile, summaryJson, out hasArgonGroupInSummary);
+            quotaGot = true;
         }
 
-        // 2.5 同步拉取逐模型明细（fetchAvailableModels），补全单模型剩余百分比与重置时间，对齐同重置窗口实时额度，并回写 .antigravity_tools
-        var (modelQuotas, modelsJson) = await FetchAvailableModelsDetailAsync(profile, token);
+        var (modelQuotas, modelsJson) = modelsTask.Result;
         if (modelQuotas.Count > 0)
         {
             profile.ModelQuotas = modelQuotas;
@@ -1168,6 +1280,47 @@ public static class AgQuotaService
         }
 
         return false;
+    }
+
+    static async Task<string?> FetchQuotaSummaryJsonAsync(Profile profile, string token, string projectPayload)
+    {
+        var quotaUrls = new[]
+        {
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+            "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary"
+        };
+
+        foreach (var url in quotaUrls)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post, url);
+                ApplyAntigravityHeaders(req, token, profile);
+                req.Content = new StringContent(projectPayload, Encoding.UTF8, "application/json");
+
+                var resp = await SendWithTimeoutAsync(req, CancellationToken.None);
+                if (resp.IsSuccessStatusCode)
+                {
+                    var summaryJson = await resp.Content.ReadAsStringAsync();
+                    App.LogStartup($"AgQuota: {profile.Email} url={url}");
+                    return summaryJson;
+                }
+
+                using var reqEmpty = new HttpRequestMessage(HttpMethod.Post, url);
+                ApplyAntigravityHeaders(reqEmpty, token, profile);
+                reqEmpty.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+                var respEmpty = await SendWithTimeoutAsync(reqEmpty, CancellationToken.None);
+                if (respEmpty.IsSuccessStatusCode)
+                {
+                    var summaryJson = await respEmpty.Content.ReadAsStringAsync();
+                    App.LogStartup($"AgQuota: {profile.Email} url={url}");
+                    return summaryJson;
+                }
+            }
+            catch { }
+        }
+
+        return null;
     }
 
     static DateTime? ParseResetUtc(string? raw)

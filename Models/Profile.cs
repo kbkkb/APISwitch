@@ -110,6 +110,9 @@ public class Profile : INotifyPropertyChanged
         ModelQuotas = src.ModelQuotas;
         IsActivated = src.IsActivated;
         ActivatedAt = src.ActivatedAt;
+        GeminiActivatedAt = src.GeminiActivatedAt;
+        ThirdPartyActivatedAt = src.ThirdPartyActivatedAt;
+        ArgonActivatedAt = src.ArgonActivatedAt;
         ActivationLatencyMs = src.ActivationLatencyMs;
         ActivationError = src.ActivationError;
         QuotaExhaustedResetAt = src.QuotaExhaustedResetAt;
@@ -122,6 +125,9 @@ public class Profile : INotifyPropertyChanged
     // Activation Status (Mode A: Google Cloud Code official handshake)
     public bool? IsActivated { get; set; }
     public DateTime? ActivatedAt { get; set; }
+    public DateTime? GeminiActivatedAt { get; set; }
+    public DateTime? ThirdPartyActivatedAt { get; set; }
+    public DateTime? ArgonActivatedAt { get; set; }
     public long? ActivationLatencyMs { get; set; }
     public string? ActivationError { get; set; }
 
@@ -275,6 +281,177 @@ public class Profile : INotifyPropertyChanged
                 System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var dt))
             return dt;
         return null;
+    }
+
+    public readonly record struct PoolActivationPlan(
+        bool NeedGemini,
+        bool NeedThirdParty,
+        bool NeedArgon,
+        bool GeminiAlreadyActive,
+        bool ThirdPartyAlreadyActive,
+        bool ArgonAlreadyActive)
+    {
+        public bool NeedsAnyCliCall => NeedGemini || NeedThirdParty || NeedArgon;
+        public bool AllSupportedAlreadyActive => !NeedsAnyCliCall && (GeminiAlreadyActive || ThirdPartyAlreadyActive || ArgonAlreadyActive);
+
+        public string DescribePendingPools()
+        {
+            var parts = new List<string>(3);
+            if (NeedGemini) parts.Add("Gemini");
+            if (NeedArgon) parts.Add("Argon");
+            if (NeedThirdParty) parts.Add("Claude/GPT");
+            return string.Join(" + ", parts);
+        }
+    }
+
+    bool IsCycleStarted(double? fraction, string? resetRaw, TimeSpan window, DateTime? poolActivatedAt, DateTime nowUtc)
+    {
+        if (!fraction.HasValue) return false;
+        var resetUtc = ParseResetUtc(resetRaw);
+        if (!resetUtc.HasValue || resetUtc.Value <= nowUtc) return false;
+
+        var refUtc = QuotaUpdatedAt.HasValue && QuotaUpdatedAt.Value <= nowUtc
+            ? QuotaUpdatedAt.Value
+            : nowUtc;
+
+        if (!IsTimerStandby(fraction, resetRaw, refUtc, window))
+            return true;
+
+        if (poolActivatedAt.HasValue)
+        {
+            var actUtc = poolActivatedAt.Value.ToUniversalTime();
+            var cycleStartUtc = resetUtc.Value.ToUniversalTime() - window - TimeSpan.FromSeconds(45);
+            if (actUtc >= cycleStartUtc && actUtc <= nowUtc + TimeSpan.FromMinutes(1))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 按配额池评估当前账号哪些池尚未开始计时（需要发消息激活），哪些池已在计时或已耗尽等待重置（直接跳过）。
+    /// 非 Pro 账号（Starter 免费版 / Plus）一律以 7 天周限额周期为准，避免因附加的 3p-5h 到期而误触发周限额重复激活。
+    /// </summary>
+    public PoolActivationPlan EvaluatePoolActivationNeed(DateTime? nowUtcOverride = null)
+    {
+        var nowUtc = nowUtcOverride ?? DateTime.UtcNow;
+        bool track5hWindow = IsProTier;
+
+        // 1. Gemini 池
+        bool geminiActive;
+        bool needGemini;
+        if (QuotaWeeklyFraction.HasValue && QuotaWeeklyFraction.Value <= 0.02 &&
+            ParseResetUtc(QuotaWeeklyResetTime) is { } gw && gw > nowUtc)
+        {
+            geminiActive = true;
+            needGemini = false;
+        }
+        else if (track5hWindow && Quota5hFraction.HasValue)
+        {
+            geminiActive = IsCycleStarted(Quota5hFraction, Quota5hResetTime, TimeSpan.FromHours(5), GeminiActivatedAt, nowUtc);
+            needGemini = !geminiActive;
+        }
+        else if (QuotaWeeklyFraction.HasValue)
+        {
+            geminiActive = IsCycleStarted(QuotaWeeklyFraction, QuotaWeeklyResetTime, TimeSpan.FromDays(7), GeminiActivatedAt, nowUtc);
+            needGemini = !geminiActive;
+        }
+        else if (Quota5hFraction.HasValue)
+        {
+            geminiActive = IsCycleStarted(Quota5hFraction, Quota5hResetTime, TimeSpan.FromHours(5), GeminiActivatedAt, nowUtc);
+            needGemini = !geminiActive;
+        }
+        else
+        {
+            geminiActive = false;
+            needGemini = true;
+        }
+
+        // 2. Claude/GPT (3P) 池
+        bool supports3p = _modelQuotas != null && _modelQuotas.Count > 0
+            ? _modelQuotas.Any(m => !m.Disabled &&
+                (m.ModelId.Contains("claude", StringComparison.OrdinalIgnoreCase) ||
+                 m.ModelId.Contains("gpt", StringComparison.OrdinalIgnoreCase)))
+            : (Has3pQuota || !QuotaUpdatedAt.HasValue);
+
+        bool thirdPartyActive = false;
+        bool needThirdParty = false;
+        if (supports3p)
+        {
+            if ((Quota3pWeeklyFraction.HasValue && Quota3pWeeklyFraction.Value <= 0.02 &&
+                 ParseResetUtc(Quota3pWeeklyResetTime) is { } p3w && p3w > nowUtc) ||
+                (!track5hWindow && Quota3p5hFraction.HasValue && Quota3p5hFraction.Value <= 0.02 &&
+                 ParseResetUtc(Quota3p5hResetTime) is { } p3h && p3h > nowUtc))
+            {
+                thirdPartyActive = true;
+                needThirdParty = false;
+            }
+            else if (track5hWindow && Quota3p5hFraction.HasValue)
+            {
+                thirdPartyActive = IsCycleStarted(Quota3p5hFraction, Quota3p5hResetTime, TimeSpan.FromHours(5), ThirdPartyActivatedAt, nowUtc);
+                needThirdParty = !thirdPartyActive;
+            }
+            else if (Quota3pWeeklyFraction.HasValue)
+            {
+                thirdPartyActive = IsCycleStarted(Quota3pWeeklyFraction, Quota3pWeeklyResetTime, TimeSpan.FromDays(7), ThirdPartyActivatedAt, nowUtc);
+                needThirdParty = !thirdPartyActive;
+            }
+            else if (Quota3p5hFraction.HasValue)
+            {
+                thirdPartyActive = IsCycleStarted(Quota3p5hFraction, Quota3p5hResetTime, TimeSpan.FromHours(5), ThirdPartyActivatedAt, nowUtc);
+                needThirdParty = !thirdPartyActive;
+            }
+            else if (ThirdPartyActivatedAt.HasValue &&
+                     (nowUtc - ThirdPartyActivatedAt.Value.ToUniversalTime()) < (track5hWindow ? TimeSpan.FromHours(5) : TimeSpan.FromDays(7)))
+            {
+                thirdPartyActive = true;
+                needThirdParty = false;
+            }
+            else
+            {
+                var m3p = _modelQuotas?.FirstOrDefault(m =>
+                    !m.Disabled && m.RemainingFraction.HasValue &&
+                    (m.ModelId.Contains("claude", StringComparison.OrdinalIgnoreCase) ||
+                     m.ModelId.Contains("gpt", StringComparison.OrdinalIgnoreCase)));
+                if (m3p != null && ParseResetUtc(m3p.ResetTime) is { } mr && mr > nowUtc)
+                {
+                    var win = (mr - nowUtc).TotalHours <= 6 ? TimeSpan.FromHours(5) : TimeSpan.FromDays(7);
+                    thirdPartyActive = IsCycleStarted(m3p.RemainingFraction, m3p.ResetTime, win, ThirdPartyActivatedAt, nowUtc);
+                    needThirdParty = !thirdPartyActive;
+                }
+                else
+                {
+                    thirdPartyActive = false;
+                    needThirdParty = true;
+                }
+            }
+        }
+
+        // 3. 独立 Argon 池（仅当存在不与 Gemini 共用周期的独立 Argon 桶且开关开启时）
+        bool argonActive = false;
+        bool needArgon = false;
+        if (ShowArgonQuotaColumn && HasArgonQuota &&
+            !string.Equals(QuotaArgon5hResetTime ?? QuotaArgonWeeklyResetTime, Quota5hResetTime ?? QuotaWeeklyResetTime, StringComparison.Ordinal))
+        {
+            if (QuotaArgonWeeklyFraction.HasValue && QuotaArgonWeeklyFraction.Value <= 0.02 &&
+                ParseResetUtc(QuotaArgonWeeklyResetTime) is { } aw && aw > nowUtc)
+            {
+                argonActive = true;
+                needArgon = false;
+            }
+            else if (track5hWindow && QuotaArgon5hFraction.HasValue)
+            {
+                argonActive = IsCycleStarted(QuotaArgon5hFraction, QuotaArgon5hResetTime, TimeSpan.FromHours(5), ArgonActivatedAt, nowUtc);
+                needArgon = !argonActive;
+            }
+            else if (QuotaArgonWeeklyFraction.HasValue)
+            {
+                argonActive = IsCycleStarted(QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, TimeSpan.FromDays(7), ArgonActivatedAt, nowUtc);
+                needArgon = !argonActive;
+            }
+        }
+
+        return new PoolActivationPlan(needGemini, needThirdParty, needArgon, geminiActive, thirdPartyActive, argonActive);
     }
 
     [JsonIgnore]
@@ -439,7 +616,7 @@ public class Profile : INotifyPropertyChanged
         System.Windows.Media.Brush Bg,
         string? Tooltip);
 
-    QuotaBadgeState EvaluateQuotaBadge(bool isSupported, double? fraction, string? resetTimeRaw, bool is5h, bool isArgon = false)
+    QuotaBadgeState EvaluateQuotaBadge(bool isSupported, double? fraction, string? resetTimeRaw, bool is5h, bool isArgon = false, DateTime? poolActivatedAt = null)
     {
         if (is5h)
         {
@@ -447,7 +624,8 @@ public class Profile : INotifyPropertyChanged
                 return new QuotaBadgeState(I18nService.T("Ag.No5hLimit"), MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
             if (!fraction.HasValue)
                 return new QuotaBadgeState(I18nService.T("Ag.NotActivatedShort"), MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
-            if (IsTimerStandby(fraction, resetTimeRaw, QuotaUpdatedAt, TimeSpan.FromHours(5)))
+            if (!IsCycleStarted(fraction, resetTimeRaw, TimeSpan.FromHours(5), poolActivatedAt, DateTime.UtcNow) &&
+                IsTimerStandby(fraction, resetTimeRaw, QuotaUpdatedAt, TimeSpan.FromHours(5)))
                 return new QuotaBadgeState(
                     I18nService.T("Ag.TimerNotStarted"),
                     IdleBadgeFg,
@@ -467,7 +645,8 @@ public class Profile : INotifyPropertyChanged
                 }
                 return new QuotaBadgeState("", MutedBadgeFg, System.Windows.Media.Brushes.Transparent, null);
             }
-            if (IsTimerStandby(fraction, resetTimeRaw, QuotaUpdatedAt, TimeSpan.FromDays(7)))
+            if (!IsCycleStarted(fraction, resetTimeRaw, TimeSpan.FromDays(7), poolActivatedAt, DateTime.UtcNow) &&
+                IsTimerStandby(fraction, resetTimeRaw, QuotaUpdatedAt, TimeSpan.FromDays(7)))
                 return new QuotaBadgeState(
                     I18nService.T("Ag.TimerNotStarted"),
                     IdleBadgeFg,
@@ -525,13 +704,13 @@ public class Profile : INotifyPropertyChanged
     public string Quota5hPercentText => (HasGemini5hSupport && Quota5hFraction.HasValue) ? $"{Math.Round(Quota5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
-    public string Quota5hCountdown => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Text;
+    public string Quota5hCountdown => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true, poolActivatedAt: GeminiActivatedAt).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota5hCountdownFg => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Fg;
+    public System.Windows.Media.Brush Quota5hCountdownFg => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true, poolActivatedAt: GeminiActivatedAt).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota5hCountdownBg => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Bg;
+    public System.Windows.Media.Brush Quota5hCountdownBg => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true, poolActivatedAt: GeminiActivatedAt).Bg;
     [JsonIgnore]
-    public string? Quota5hCountdownTooltip => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Tooltip;
+    public string? Quota5hCountdownTooltip => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true, poolActivatedAt: GeminiActivatedAt).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility Quota5hCountdownVisibility =>
         string.IsNullOrEmpty(Quota5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
@@ -547,13 +726,13 @@ public class Profile : INotifyPropertyChanged
     public string QuotaWeeklyPercentText => QuotaWeeklyFraction.HasValue ? $"{Math.Round(QuotaWeeklyFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string QuotaWeeklyCountdown => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Text;
+    public string QuotaWeeklyCountdown => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false, poolActivatedAt: GeminiActivatedAt).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush QuotaWeeklyCountdownFg => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Fg;
+    public System.Windows.Media.Brush QuotaWeeklyCountdownFg => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false, poolActivatedAt: GeminiActivatedAt).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush QuotaWeeklyCountdownBg => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Bg;
+    public System.Windows.Media.Brush QuotaWeeklyCountdownBg => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false, poolActivatedAt: GeminiActivatedAt).Bg;
     [JsonIgnore]
-    public string? QuotaWeeklyCountdownTooltip => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false).Tooltip;
+    public string? QuotaWeeklyCountdownTooltip => EvaluateQuotaBadge(true, QuotaWeeklyFraction, QuotaWeeklyResetTime, is5h: false, poolActivatedAt: GeminiActivatedAt).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility QuotaWeeklyCountdownVisibility =>
         string.IsNullOrEmpty(QuotaWeeklyCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
@@ -572,13 +751,13 @@ public class Profile : INotifyPropertyChanged
     public string Quota3p5hPercentText => (Has3p5hSupport && Quota3p5hFraction.HasValue) ? $"{Math.Round(Quota3p5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
-    public string Quota3p5hCountdown => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Text;
+    public string Quota3p5hCountdown => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true, poolActivatedAt: ThirdPartyActivatedAt).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota3p5hCountdownFg => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Fg;
+    public System.Windows.Media.Brush Quota3p5hCountdownFg => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true, poolActivatedAt: ThirdPartyActivatedAt).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota3p5hCountdownBg => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Bg;
+    public System.Windows.Media.Brush Quota3p5hCountdownBg => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true, poolActivatedAt: ThirdPartyActivatedAt).Bg;
     [JsonIgnore]
-    public string? Quota3p5hCountdownTooltip => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Tooltip;
+    public string? Quota3p5hCountdownTooltip => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true, poolActivatedAt: ThirdPartyActivatedAt).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility Quota3p5hCountdownVisibility =>
         string.IsNullOrEmpty(Quota3p5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
@@ -594,13 +773,13 @@ public class Profile : INotifyPropertyChanged
     public string Quota3pWeeklyPercentText => Quota3pWeeklyFraction.HasValue ? $"{Math.Round(Quota3pWeeklyFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string Quota3pWeeklyCountdown => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Text;
+    public string Quota3pWeeklyCountdown => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false, poolActivatedAt: ThirdPartyActivatedAt).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota3pWeeklyCountdownFg => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Fg;
+    public System.Windows.Media.Brush Quota3pWeeklyCountdownFg => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false, poolActivatedAt: ThirdPartyActivatedAt).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota3pWeeklyCountdownBg => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Bg;
+    public System.Windows.Media.Brush Quota3pWeeklyCountdownBg => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false, poolActivatedAt: ThirdPartyActivatedAt).Bg;
     [JsonIgnore]
-    public string? Quota3pWeeklyCountdownTooltip => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false).Tooltip;
+    public string? Quota3pWeeklyCountdownTooltip => EvaluateQuotaBadge(true, Quota3pWeeklyFraction, Quota3pWeeklyResetTime, is5h: false, poolActivatedAt: ThirdPartyActivatedAt).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility Quota3pWeeklyCountdownVisibility =>
         string.IsNullOrEmpty(Quota3pWeeklyCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
@@ -619,13 +798,13 @@ public class Profile : INotifyPropertyChanged
     public string QuotaArgon5hPercentText => (IsProTier && QuotaArgon5hFraction.HasValue) ? $"{Math.Round(QuotaArgon5hFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string QuotaArgon5hCountdown => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Text;
+    public string QuotaArgon5hCountdown => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true, poolActivatedAt: ArgonActivatedAt).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush QuotaArgon5hCountdownFg => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Fg;
+    public System.Windows.Media.Brush QuotaArgon5hCountdownFg => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true, poolActivatedAt: ArgonActivatedAt).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush QuotaArgon5hCountdownBg => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Bg;
+    public System.Windows.Media.Brush QuotaArgon5hCountdownBg => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true, poolActivatedAt: ArgonActivatedAt).Bg;
     [JsonIgnore]
-    public string? QuotaArgon5hCountdownTooltip => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true).Tooltip;
+    public string? QuotaArgon5hCountdownTooltip => EvaluateQuotaBadge(IsProTier, QuotaArgon5hFraction, QuotaArgon5hResetTime, is5h: true, isArgon: true, poolActivatedAt: ArgonActivatedAt).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility QuotaArgon5hCountdownVisibility =>
         string.IsNullOrEmpty(QuotaArgon5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
@@ -641,13 +820,13 @@ public class Profile : INotifyPropertyChanged
     public string QuotaArgonWeeklyPercentText => QuotaArgonWeeklyFraction.HasValue ? $"{Math.Round(QuotaArgonWeeklyFraction.Value * 100.0)}%" : "—";
 
     [JsonIgnore]
-    public string QuotaArgonWeeklyCountdown => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Text;
+    public string QuotaArgonWeeklyCountdown => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true, poolActivatedAt: ArgonActivatedAt).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush QuotaArgonWeeklyCountdownFg => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Fg;
+    public System.Windows.Media.Brush QuotaArgonWeeklyCountdownFg => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true, poolActivatedAt: ArgonActivatedAt).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush QuotaArgonWeeklyCountdownBg => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Bg;
+    public System.Windows.Media.Brush QuotaArgonWeeklyCountdownBg => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true, poolActivatedAt: ArgonActivatedAt).Bg;
     [JsonIgnore]
-    public string? QuotaArgonWeeklyCountdownTooltip => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true).Tooltip;
+    public string? QuotaArgonWeeklyCountdownTooltip => EvaluateQuotaBadge(true, QuotaArgonWeeklyFraction, QuotaArgonWeeklyResetTime, is5h: false, isArgon: true, poolActivatedAt: ArgonActivatedAt).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility QuotaArgonWeeklyCountdownVisibility =>
         string.IsNullOrEmpty(QuotaArgonWeeklyCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;

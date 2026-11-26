@@ -286,13 +286,17 @@
     <sys:String x:Key="Msg.AgLoginFailFmt">Login failed: {0}</sys:String>
     <sys:String x:Key="Msg.AgActivatingFmt">Sending activation message to Google and refreshing {0}'s quota…</sys:String>
     <sys:String x:Key="Msg.AgActivatedFmt">⚡ {0} quota activated ＆ refreshed ({1} ms)</sys:String>
+    <sys:String x:Key="Msg.AgAlreadyActiveFmt">⚡ {0} quota pools are already active — skipped</sys:String>
     <sys:String x:Key="Msg.AgQuotaExhaustedFmt">⚡ {0} quota exhausted, resets at {1} (latest quota state synced)</sys:String>
     <sys:String x:Key="Msg.AgActivateFailFmt">Quota activation failed: {0}</sys:String>
     <sys:String x:Key="Msg.AgActivateErrorFmt">Quota activation error: {0}</sys:String>
     <sys:String x:Key="Msg.AgBatchEmpty">No archived accounts to activate</sys:String>
+    <sys:String x:Key="Msg.AgBatchPrecheckFmt">Checking quota pool status across {0} accounts in parallel…</sys:String>
     <sys:String x:Key="Msg.AgBatchProgressFmt">Batch activating quotas ({0}/{1}): {2}…</sys:String>
+    <sys:String x:Key="Msg.AgBatchProgressPoolsFmt">Activating ({0}/{1}): {2} [{3}]…</sys:String>
     <sys:String x:Key="Msg.AgBatchCooldownFmt">Done ({0}/{1}), safety cooldown {2:F1}s…</sys:String>
     <sys:String x:Key="Msg.AgBatchDoneFmt">⚡ Batch quota activation done! {0} succeeded, {1} failed</sys:String>
+    <sys:String x:Key="Msg.AgBatchDoneSkipFmt">⚡ Batch quota activation done! {0} activated, {1} already active (skipped), {2} failed</sys:String>
     <sys:String x:Key="Msg.AgBatchCanceledFmt">Batch activation canceled: {0} succeeded, {1} failed, {2} skipped</sys:String>
     <sys:String x:Key="Msg.AgBatchCanceling">Canceling...</sys:String>
     <sys:String x:Key="Msg.AgBatchCancelRequested">Cancellation requested; waiting for the current account to finish</sys:String>
@@ -307,6 +311,7 @@
     <sys:String x:Key="Msg.AgSwitchedRestartFmt">Switched to account {0} (IDE restarted)</sys:String>
     <sys:String x:Key="Msg.AgSwitchIdeCloseFail">Could not close Antigravity automatically; quit it manually and retry</sys:String>
     <sys:String x:Key="Msg.AgSwitchFailFmt">Switch failed: {0}</sys:String>
+    <sys:String x:Key="Msg.AgSwitchTokenExpiredFmt">Switch aborted: credentials for {0} expired or were revoked ({1}). Please sign in again.</sys:String>
     <sys:String x:Key="Msg.AgIdeRestartFailFmt">Credentials activated, but IDE restart failed: {0}</sys:String>
     <sys:String x:Key="Msg.AgIdeStartVerifyFail">Antigravity launch was sent but no main window was detected (may be blocked by the single-instance lock). Please start it manually to confirm.</sys:String>
     <sys:String x:Key="Msg.ToggleCodexOnFmt">Codex router enabled (port :{0}); Codex requests taken over</sys:String>
@@ -616,6 +621,9 @@
     <sys:String x:Key="AgQ.CliOkGemini">Gemini quota pool</sys:String>
     <sys:String x:Key="AgQ.CliOkThirdParty">Claude/GPT quota pool</sys:String>
     <sys:String x:Key="AgQ.CliOkBoth">Gemini + Claude/GPT quota pools</sys:String>
+    <sys:String x:Key="AgQ.CliOkGeminiSkipped3p">Gemini pool (Claude/GPT already active, skipped)</sys:String>
+    <sys:String x:Key="AgQ.CliOk3pSkippedGemini">Claude/GPT pool (Gemini already active, skipped)</sys:String>
+    <sys:String x:Key="AgQ.AlreadyActiveSkip">All available quota pools are already active; skipped duplicate activation</sys:String>
     <sys:String x:Key="AgQ.CliMissingHint">Antigravity command line tool (agy.exe) was not detected, so real activation cannot run.&#10;&#10;Please install it and try again:&#10;1. Install the Antigravity IDE (the CLI usually ships with it);&#10;2. or install the Antigravity CLI standalone;&#10;3. make sure the folder containing agy.exe is on your system PATH (default: %LOCALAPPDATA%\agy\bin\).&#10;&#10;No restart of APISwitch is needed — just click Activate again.</sys:String>
     <sys:String x:Key="AgQ.ErrNoValidStream">No valid stream response (all candidate models unavailable or network error)</sys:String>
     <sys:String x:Key="AgQ.ErrNoModelList">Could not fetch the account's available model list (fetchAvailableModels failed); activation aborted to avoid requesting non-existent models</sys:String>

@@ -24,11 +24,14 @@ public partial class FloatingWidgetWindow : Window
     private bool _forceClosing;
     private bool _isTransitioningExpand;
 
-    // 权威胶囊基准位置与尺寸（展开时绝对不被改写，确保收起时零位移还原）
-    private double _capsuleLeft;
-    private double _capsuleTop;
-    private double _capsuleWidth;
-    private double _capsuleHeight;
+    // 不可变边缘锚点（仅在首次初始化、用户拖拽松手或手动重置时更新，任何自动布局/冷启动宽度变化均只读使用）
+    private double _anchorX;
+    private double _anchorY;
+    private bool _anchorRight = true;
+    private bool _anchorBottom = true;
+    private bool _anchorInitialized;
+    private double _lastCapsuleWidth = 280;
+    private double _lastCapsuleHeight = 58;
 
     // 胶囊拖拽手势状态
     private bool _capsuleMouseDown;
@@ -86,35 +89,42 @@ public partial class FloatingWidgetWindow : Window
         return bsh;
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        EnsureAnchorLoaded();
+        RootGrid.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
+        ApplyAnchorPosition();
+    }
+
     void OnWidgetLoaded(object sender, RoutedEventArgs e)
     {
+        EnsureAnchorLoaded();
         RenderAll();
         RootGrid.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
         UpdateLayout();
-        RestoreOrPlaceDefaultPosition();
+        ApplyAnchorPosition();
     }
 
     void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!IsLoaded || _isTransitioningExpand || _capsuleDragging || _expandedDragging) return;
-        var wa = GetWorkAreaForAnchor(_capsuleLeft, _capsuleTop, _capsuleWidth, _capsuleHeight);
+        if (!IsLoaded || _isTransitioningExpand || _capsuleDragging || _expandedDragging || !_anchorInitialized)
+            return;
+        ApplyAnchorPosition();
+    }
+
+    public void PrepareForHide()
+    {
         if (_isExpanded)
-        {
-            PositionExpandedFromCapsuleAnchor(wa);
-        }
-        else
-        {
-            // 胶囊宽度随数值微调时，保持其原有的左右锚定边不漂移
-            double prevRight = _capsuleLeft + _capsuleWidth;
-            bool anchorRight = (_capsuleLeft + _capsuleWidth / 2.0) >= (wa.Left + wa.Width / 2.0);
-            _capsuleWidth = ActualWidth > 0 ? ActualWidth : _capsuleWidth;
-            _capsuleHeight = ActualHeight > 0 ? ActualHeight : _capsuleHeight;
-            if (anchorRight && _capsuleWidth > 0 && prevRight > 0)
-                _capsuleLeft = prevRight - _capsuleWidth;
-            ClampCapsuleToWorkArea(wa);
-            Left = _capsuleLeft;
-            Top = _capsuleTop;
-        }
+            SetExpanded(false);
+    }
+
+    public void RestoreAfterShow()
+    {
+        EnsureAnchorLoaded();
+        RootGrid.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
+        UpdateLayout();
+        ApplyAnchorPosition();
     }
 
     public void ForceClose()
@@ -458,7 +468,22 @@ public partial class FloatingWidgetWindow : Window
             part.Length == 0 ? part : char.ToUpperInvariant(part[0]) + part[1..];
     }
 
-    // ==================== 零偏移折叠/展开与右下角默认停靠 ====================
+    // ==================== 不可变边缘锚点定位与拖拽记忆 ====================
+
+    public static (double Left, double Top) ComputeAnchoredPlacement(
+        double anchorX, double anchorY, bool anchorRight, bool anchorBottom,
+        double width, double height, Rect workArea)
+    {
+        double rawLeft = anchorRight ? (anchorX - width) : anchorX;
+        double rawTop = anchorBottom ? (anchorY - height) : anchorY;
+
+        double minLeft = workArea.Left - 4;
+        double maxLeft = Math.Max(minLeft, workArea.Right - width + 4);
+        double minTop = workArea.Top - 4;
+        double maxTop = Math.Max(minTop, workArea.Bottom - height + 4);
+
+        return (Math.Clamp(rawLeft, minLeft, maxLeft), Math.Clamp(rawTop, minTop, maxTop));
+    }
 
     public void SetExpanded(bool expanded)
     {
@@ -466,38 +491,28 @@ public partial class FloatingWidgetWindow : Window
         _isTransitioningExpand = true;
         try
         {
+            EnsureAnchorLoaded();
             if (expanded)
             {
-                // 锁定胶囊当前基准几何，展开过程绝不改写 _capsuleLeft / _capsuleTop
-                _capsuleLeft = Left;
-                _capsuleTop = Top;
-                if (ActualWidth > 0) _capsuleWidth = ActualWidth;
-                if (ActualHeight > 0) _capsuleHeight = ActualHeight;
-
+                if (ActualWidth > 20 && ActualHeight > 20)
+                {
+                    _lastCapsuleWidth = ActualWidth;
+                    _lastCapsuleHeight = ActualHeight;
+                }
                 _isExpanded = true;
                 CapsuleView.Visibility = Visibility.Collapsed;
                 ExpandedView.Visibility = Visibility.Visible;
-                RootGrid.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
-                UpdateLayout();
-
-                var wa = GetWorkAreaForAnchor(_capsuleLeft, _capsuleTop, _capsuleWidth, _capsuleHeight);
-                PositionExpandedFromCapsuleAnchor(wa);
             }
             else
             {
                 _isExpanded = false;
                 ExpandedView.Visibility = Visibility.Collapsed;
                 CapsuleView.Visibility = Visibility.Visible;
-                RootGrid.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
-                UpdateLayout();
-
-                _capsuleWidth = ActualWidth > 0 ? ActualWidth : RootGrid.DesiredSize.Width;
-                _capsuleHeight = ActualHeight > 0 ? ActualHeight : RootGrid.DesiredSize.Height;
-                var wa = GetWorkAreaForAnchor(_capsuleLeft, _capsuleTop, _capsuleWidth, _capsuleHeight);
-                ClampCapsuleToWorkArea(wa);
-                Left = _capsuleLeft;
-                Top = _capsuleTop;
             }
+
+            RootGrid.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
+            UpdateLayout();
+            ApplyAnchorPosition();
         }
         finally
         {
@@ -505,32 +520,113 @@ public partial class FloatingWidgetWindow : Window
         }
     }
 
-    void PositionExpandedFromCapsuleAnchor(Rect wa)
+    void EnsureAnchorLoaded()
     {
-        double expW = ActualWidth > 0 ? ActualWidth : RootGrid.DesiredSize.Width;
-        double expH = ActualHeight > 0 ? ActualHeight : RootGrid.DesiredSize.Height;
-        if (expW <= 0 || expH <= 0) return;
+        if (_anchorInitialized) return;
+        var s = AppSettingsService.Current;
+        if (s.FloatingWidgetAnchorX.HasValue && s.FloatingWidgetAnchorY.HasValue)
+        {
+            _anchorX = s.FloatingWidgetAnchorX.Value;
+            _anchorY = s.FloatingWidgetAnchorY.Value;
+            _anchorRight = s.FloatingWidgetAnchorRight ?? true;
+            _anchorBottom = s.FloatingWidgetAnchorBottom ?? true;
+            _anchorInitialized = true;
+        }
+        else if (s.FloatingWidgetCapsuleLeft.HasValue && s.FloatingWidgetCapsuleTop.HasValue)
+        {
+            _anchorX = s.FloatingWidgetCapsuleLeft.Value;
+            _anchorY = s.FloatingWidgetCapsuleTop.Value;
+            _anchorRight = false;
+            _anchorBottom = false;
+            _anchorInitialized = true;
+            PersistAnchor();
+        }
+        else
+        {
+            var wa = SystemParameters.WorkArea;
+            _anchorRight = true;
+            _anchorBottom = true;
+            _anchorX = wa.Right - 16;
+            _anchorY = wa.Bottom - 16;
+            _anchorInitialized = true;
+            PersistAnchor();
+        }
+    }
 
-        bool anchorRight = (_capsuleLeft + _capsuleWidth / 2.0) >= (wa.Left + wa.Width / 2.0);
-        bool anchorBottom = (_capsuleTop + _capsuleHeight / 2.0) >= (wa.Top + wa.Height / 2.0);
+    void ApplyAnchorPosition()
+    {
+        if (!_anchorInitialized) return;
+        double w = ActualWidth > 0 ? ActualWidth : RootGrid.DesiredSize.Width;
+        double h = ActualHeight > 0 ? ActualHeight : RootGrid.DesiredSize.Height;
+        if (w <= 0 || h <= 0) return;
 
-        double targetLeft = anchorRight ? (_capsuleLeft + _capsuleWidth - expW) : _capsuleLeft;
-        double targetTop = anchorBottom ? (_capsuleTop + _capsuleHeight - expH) : _capsuleTop;
+        if (!_isExpanded && w > 20 && h > 20)
+        {
+            _lastCapsuleWidth = w;
+            _lastCapsuleHeight = h;
+        }
+
+        double approxLeft = _anchorRight ? (_anchorX - w) : _anchorX;
+        double approxTop = _anchorBottom ? (_anchorY - h) : _anchorY;
+        var wa = GetWorkAreaForAnchor(approxLeft, approxTop, w, h);
+
+        var (targetLeft, targetTop) = ComputeAnchoredPlacement(_anchorX, _anchorY, _anchorRight, _anchorBottom, w, h, wa);
+        Left = targetLeft;
+        Top = targetTop;
+    }
+
+    void CommitUserDragPosition(double rawLeft, double rawTop, double currentW, double currentH)
+    {
+        if (currentW <= 0 || currentH <= 0) return;
+        var wa = GetWorkAreaForAnchor(rawLeft, rawTop, currentW, currentH);
 
         double minLeft = wa.Left - 4;
-        double maxLeft = Math.Max(minLeft, wa.Right - expW + 4);
+        double maxLeft = Math.Max(minLeft, wa.Right - currentW + 4);
         double minTop = wa.Top - 4;
-        double maxTop = Math.Max(minTop, wa.Bottom - expH + 4);
+        double maxTop = Math.Max(minTop, wa.Bottom - currentH + 4);
+        double clampedLeft = Math.Clamp(rawLeft, minLeft, maxLeft);
+        double clampedTop = Math.Clamp(rawTop, minTop, maxTop);
 
-        Left = Math.Clamp(targetLeft, minLeft, maxLeft);
-        Top = Math.Clamp(targetTop, minTop, maxTop);
+        _anchorRight = (clampedLeft + currentW / 2.0) >= (wa.Left + wa.Width / 2.0);
+        _anchorBottom = (clampedTop + currentH / 2.0) >= (wa.Top + wa.Height / 2.0);
+        _anchorX = _anchorRight ? (clampedLeft + currentW) : clampedLeft;
+        _anchorY = _anchorBottom ? (clampedTop + currentH) : clampedTop;
+        _anchorInitialized = true;
+
+        PersistAnchor();
+        ApplyAnchorPosition();
+    }
+
+    void PersistAnchor()
+    {
+        var s = AppSettingsService.Current;
+        s.FloatingWidgetAnchorX = Math.Round(_anchorX, 1);
+        s.FloatingWidgetAnchorY = Math.Round(_anchorY, 1);
+        s.FloatingWidgetAnchorRight = _anchorRight;
+        s.FloatingWidgetAnchorBottom = _anchorBottom;
+
+        double capW = _lastCapsuleWidth > 20 ? _lastCapsuleWidth : 280;
+        double capH = _lastCapsuleHeight > 20 ? _lastCapsuleHeight : 58;
+        s.FloatingWidgetCapsuleLeft = Math.Round(_anchorRight ? (_anchorX - capW) : _anchorX, 1);
+        s.FloatingWidgetCapsuleTop = Math.Round(_anchorBottom ? (_anchorY - capH) : _anchorY, 1);
+        AppSettingsService.Save();
+    }
+
+    (double ScaleX, double ScaleY) GetDpiScales()
+    {
+        var source = PresentationSource.FromVisual(this);
+        if (source?.CompositionTarget != null)
+        {
+            var m = source.CompositionTarget.TransformToDevice;
+            if (m.M11 > 0 && m.M22 > 0) return (m.M11, m.M22);
+        }
+        var dpi = VisualTreeHelper.GetDpi(this);
+        return (dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0, dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1.0);
     }
 
     Rect GetWorkAreaForAnchor(double left, double top, double width, double height)
     {
-        var dpi = VisualTreeHelper.GetDpi(this);
-        double scaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
-        double scaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1.0;
+        var (scaleX, scaleY) = GetDpiScales();
         double cx = double.IsNaN(left) ? 0 : left + Math.Max(width, 40) / 2.0;
         double cy = double.IsNaN(top) ? 0 : top + Math.Max(height, 40) / 2.0;
 
@@ -539,66 +635,16 @@ public partial class FloatingWidgetWindow : Window
         return new Rect(waPx.Left / scaleX, waPx.Top / scaleY, waPx.Width / scaleX, waPx.Height / scaleY);
     }
 
-    void RestoreOrPlaceDefaultPosition()
-    {
-        _capsuleWidth = ActualWidth > 0 ? ActualWidth : RootGrid.DesiredSize.Width;
-        _capsuleHeight = ActualHeight > 0 ? ActualHeight : RootGrid.DesiredSize.Height;
-
-        var settings = AppSettingsService.Current;
-        if (settings.FloatingWidgetCapsuleLeft.HasValue && settings.FloatingWidgetCapsuleTop.HasValue)
-        {
-            _capsuleLeft = settings.FloatingWidgetCapsuleLeft.Value;
-            _capsuleTop = settings.FloatingWidgetCapsuleTop.Value;
-            ClampCapsuleToWorkArea(GetWorkAreaForAnchor(_capsuleLeft, _capsuleTop, _capsuleWidth, _capsuleHeight));
-            Left = _capsuleLeft;
-            Top = _capsuleTop;
-        }
-        else
-        {
-            ResetToBottomRight();
-        }
-    }
-
     public void ResetToBottomRight()
     {
         var wa = SystemParameters.WorkArea;
-        if (!_isExpanded)
-        {
-            _capsuleWidth = ActualWidth > 0 ? ActualWidth : RootGrid.DesiredSize.Width;
-            _capsuleHeight = ActualHeight > 0 ? ActualHeight : RootGrid.DesiredSize.Height;
-        }
-        _capsuleLeft = Math.Max(wa.Left + 8, wa.Right - _capsuleWidth - 16);
-        _capsuleTop = Math.Max(wa.Top + 8, wa.Bottom - _capsuleHeight - 16);
-        SaveCapsulePosition();
-
-        if (_isExpanded)
-            PositionExpandedFromCapsuleAnchor(wa);
-        else
-        {
-            Left = _capsuleLeft;
-            Top = _capsuleTop;
-        }
-    }
-
-    void ClampCapsuleToWorkArea(Rect wa)
-    {
-        if (_capsuleWidth <= 0 || _capsuleHeight <= 0) return;
-        double minLeft = wa.Left - 4;
-        double maxLeft = Math.Max(minLeft, wa.Right - _capsuleWidth + 4);
-        double minTop = wa.Top - 4;
-        double maxTop = Math.Max(minTop, wa.Bottom - _capsuleHeight + 4);
-
-        _capsuleLeft = Math.Clamp(_capsuleLeft, minLeft, maxLeft);
-        _capsuleTop = Math.Clamp(_capsuleTop, minTop, maxTop);
-    }
-
-    void SaveCapsulePosition()
-    {
-        var wa = GetWorkAreaForAnchor(_capsuleLeft, _capsuleTop, _capsuleWidth, _capsuleHeight);
-        ClampCapsuleToWorkArea(wa);
-        AppSettingsService.Current.FloatingWidgetCapsuleLeft = _capsuleLeft;
-        AppSettingsService.Current.FloatingWidgetCapsuleTop = _capsuleTop;
-        AppSettingsService.Save();
+        _anchorRight = true;
+        _anchorBottom = true;
+        _anchorX = wa.Right - 16;
+        _anchorY = wa.Bottom - 16;
+        _anchorInitialized = true;
+        PersistAnchor();
+        ApplyAnchorPosition();
     }
 
     // ==================== 鼠标拖拽与交互事件 ====================
@@ -640,13 +686,9 @@ public partial class FloatingWidgetWindow : Window
         if (_capsuleDragging)
         {
             _capsuleDragging = false;
-            _capsuleLeft = Left;
-            _capsuleTop = Top;
-            _capsuleWidth = ActualWidth > 0 ? ActualWidth : _capsuleWidth;
-            _capsuleHeight = ActualHeight > 0 ? ActualHeight : _capsuleHeight;
-            SaveCapsulePosition();
-            Left = _capsuleLeft;
-            Top = _capsuleTop;
+            double w = ActualWidth > 0 ? ActualWidth : RootGrid.DesiredSize.Width;
+            double h = ActualHeight > 0 ? ActualHeight : RootGrid.DesiredSize.Height;
+            CommitUserDragPosition(Left, Top, w, h);
         }
         else
         {
@@ -697,14 +739,7 @@ public partial class FloatingWidgetWindow : Window
             _expandedDragging = false;
             double expW = ActualWidth > 0 ? ActualWidth : RootGrid.DesiredSize.Width;
             double expH = ActualHeight > 0 ? ActualHeight : RootGrid.DesiredSize.Height;
-            var wa = GetWorkAreaForAnchor(Left, Top, expW, expH);
-            bool anchorRight = (Left + expW / 2.0) >= (wa.Left + wa.Width / 2.0);
-            bool anchorBottom = (Top + expH / 2.0) >= (wa.Top + wa.Height / 2.0);
-
-            _capsuleLeft = anchorRight ? (Left + expW - _capsuleWidth) : Left;
-            _capsuleTop = anchorBottom ? (Top + expH - _capsuleHeight) : Top;
-            SaveCapsulePosition();
-            PositionExpandedFromCapsuleAnchor(wa);
+            CommitUserDragPosition(Left, Top, expW, expH);
         }
         e.Handled = true;
     }
@@ -712,9 +747,7 @@ public partial class FloatingWidgetWindow : Window
     WpfPoint ToDipScreenPoint(WpfPoint windowRelDip)
     {
         var px = PointToScreen(windowRelDip);
-        var dpi = VisualTreeHelper.GetDpi(this);
-        double sx = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
-        double sy = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1.0;
+        var (sx, sy) = GetDpiScales();
         return new WpfPoint(px.X / sx, px.Y / sy);
     }
 

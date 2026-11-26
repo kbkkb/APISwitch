@@ -29,8 +29,8 @@ namespace APISwitch.Services;
 /// </summary>
 public static class AgCliService
 {
-     /// <summary>激活提示词：极短，单轮即可触发真实配额注册。</summary>
-     public const string ActivationPrompt = "hi";
+     /// <summary>激活提示词：封闭式单字符回复指令（无空格），避免开放式问候触发长段自我介绍与多余思考消耗。</summary>
+     public const string ActivationPrompt = "只回复1";
  
      /// <summary>每个配额池最多尝试多少个候选模型（全部来自账号实时可用列表）。</summary>
      private const int MaxModelAttempts = 3;
@@ -50,6 +50,9 @@ public static class AgCliService
      /// <summary>当前优先使用的参数组（供日志/诊断）。</summary>
      internal static int PreferredArgSetIndex => PreferredArgSet;
 
+     private static readonly SemaphoreSlim CliModelsCacheLock = new(1, 1);
+     private static (string CliPath, DateTime LastWriteUtc, List<string> Models)? CachedCliModels;
+
     public sealed record Result(
         bool Ok,
         bool RateLimited,
@@ -57,7 +60,8 @@ public static class AgCliService
         string? Model,
         long LatencyMs,
         bool GeminiOk,
-        bool ThirdPartyOk);
+        bool ThirdPartyOk,
+        bool ArgonOk = false);
 
     /// <summary>CLI 数据目录（~/.gemini/antigravity-cli）。</summary>
     static string CliHome() => Path.Combine(
@@ -94,9 +98,25 @@ public static class AgCliService
 
     // ---------- 激活主流程 ----------
 
-    public static async Task<Result> ActivateAsync(Profile profile, CancellationToken ct = default)
+    public static Task<Result> ActivateAsync(Profile profile, CancellationToken ct = default) =>
+        ActivateAsync(profile, profile.EvaluatePoolActivationNeed(), ct);
+
+    public static async Task<Result> ActivateAsync(Profile profile, Profile.PoolActivationPlan plan, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
+
+        if (!plan.NeedsAnyCliCall)
+        {
+            return new Result(
+                true,
+                false,
+                I18nService.T("AgQ.AlreadyActiveSkip"),
+                null,
+                0,
+                plan.GeminiAlreadyActive,
+                plan.ThirdPartyAlreadyActive,
+                plan.ArgonAlreadyActive);
+        }
 
         var cli = FindCliPath();
         if (cli == null)
@@ -108,80 +128,116 @@ public static class AgCliService
         if (string.IsNullOrEmpty(profile.AccessToken))
             return new Result(false, false, I18nService.T("AgQ.ErrTokenRefresh"), null, 0, false, false);
 
-        // 2. 备份当前 CLI 登录态，结束后原样恢复（不影响用户正在使用的账号）
+        // 2. 备份当前 CLI 与系统登录态，结束后原样恢复（不影响用户正在使用的账号）
         var credsPath = AgToolsService.GeminiCredsPath;
         byte[]? credsBackup = null;
         try { if (File.Exists(credsPath)) credsBackup = await File.ReadAllBytesAsync(credsPath, ct); }
         catch { }
+        bool restoreSysCred = !profile.IsCurrent && !AgPaths.IsSandboxed;
+        string? credMgrBackup = null;
+        if (restoreSysCred)
+        {
+            try { credMgrBackup = CredentialManager.ReadCredential(AgToolsService.CredTargetName); }
+            catch { }
+        }
 
         // 3. 快照对话状态，用于事后精准清理
         var snap = SnapshotConversations();
 
-        bool geminiOk = false, thirdPartyOk = false, rateLimited = false;
+        bool geminiOk = false, thirdPartyOk = false, argonOk = false, rateLimited = false;
         string? usedModel = null;
         string message = "";
+        bool ranPreviousPool = false;
 
          try
          {
              ct.ThrowIfCancellationRequested();
-            // 4. 把目标账号凭据写到 CLI 读取的位置
-            await AgToolsService.ApplySystemCredentialsAsync(profile);
+            // 4. 把目标账号凭据写到 CLI 读取的位置（非当前账号不覆盖 IDE 的 Hub 元数据）
+            var (credOk, _, credErr) = await AgToolsService.TryApplySystemCredentialsAsync(
+                profile, forceTokenRefresh: false, syncIdeMeta: profile.IsCurrent);
+            if (!credOk)
+                return new Result(false, false, credErr ?? I18nService.T("AgQ.ErrTokenRefresh"), null, sw.ElapsedMilliseconds, false, false);
 
-             // 5. 模型来源（按可靠性排序）：
-             //    a) CLI 自报的可用模型——这是唯一能直接被 --model 接受的命名体系
-             //       （形如 "Gemini 3.8 Flash (Low)"，思考档位写在名字里，所以没有 --effort 参数）；
-             //    b) Google API 返回的可用模型（命名体系不同，仅作兜底）。
-             var cliModels = await ProbeCliModelsAsync(cli, ct);
-             var available = await AgQuotaService.FetchAvailableModelNamesAsync(profile, profile.AccessToken!);
-             var geminiModels = PickCheapest(cliModels, geminiPool: true);
-             var claudeModels = PickCheapest(cliModels, geminiPool: false);
-             var argonModels = PickArgonModels(cliModels, available);
-             if (geminiModels.Count == 0)
-                 geminiModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveGeminiModels(available));
-             if (claudeModels.Count == 0)
-                 claudeModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveClaudeModels(available));
-             App.LogStartup($"AgCli: {profile.Email} cliModels={cliModels.Count} apiModels={available.Count} " +
-                            $"gemini=[{string.Join(" | ", geminiModels.Take(4))}] argon=[{string.Join(" | ", argonModels.Take(3))}] claude=[{string.Join(" | ", claudeModels.Take(4))}] " +
+             // 5. 模型来源：优先使用内存/API 已有的 fetchAvailableModels（带 -low 低思考档优先），
+             //    零子进程探测开销；仅当两边均无模型时兜底调用带进程级缓存的 `agy models`。
+             if (profile.ModelQuotas == null || profile.ModelQuotas.Count == 0)
+             {
+                 var (fetchedModels, _) = await AgQuotaService.FetchAvailableModelsDetailAsync(profile, profile.AccessToken!);
+                 if (fetchedModels.Count > 0) profile.ModelQuotas = fetchedModels;
+             }
+
+             var geminiModels = plan.NeedGemini ? AgQuotaService.PickCliGeminiCandidates(profile) : new List<string>();
+             var claudeModels = plan.NeedThirdParty ? AgQuotaService.PickCliThirdPartyCandidates(profile) : new List<string>();
+             var available = profile.ModelQuotas?.Where(m => !m.Disabled).Select(m => m.ModelId).ToList() ?? new List<string>();
+             var argonModels = plan.NeedArgon ? PickArgonModels(new List<string>(), available) : new List<string>();
+
+             if ((plan.NeedGemini && geminiModels.Count == 0) || (plan.NeedThirdParty && claudeModels.Count == 0))
+             {
+                 var cachedCliModels = await GetCachedCliModelsAsync(cli, ct);
+                 if (plan.NeedGemini && geminiModels.Count == 0)
+                 {
+                     geminiModels = cachedCliModels
+                         .Where(m => m.Contains("gemini", StringComparison.OrdinalIgnoreCase) && !m.Contains("argon", StringComparison.OrdinalIgnoreCase))
+                         .ToList();
+                     if (geminiModels.Count == 0 && available.Count > 0)
+                         geminiModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveGeminiModels(available));
+                 }
+                 if (plan.NeedThirdParty && claudeModels.Count == 0)
+                 {
+                     claudeModels = cachedCliModels
+                         .Where(m => m.Contains("claude", StringComparison.OrdinalIgnoreCase) || m.Contains("gpt", StringComparison.OrdinalIgnoreCase))
+                         .ToList();
+                     if (claudeModels.Count == 0 && available.Count > 0)
+                         claudeModels = AgQuotaService.OrderByVersionDescending(AgQuotaService.ResolveClaudeModels(available));
+                 }
+             }
+
+             App.LogStartup($"AgCli: {profile.Email} plan=[G:{plan.NeedGemini},3P:{plan.NeedThirdParty},A:{plan.NeedArgon}] " +
+                            $"apiModels={available.Count} gemini=[{string.Join(" | ", geminiModels.Take(3))}] " +
+                            $"argon=[{string.Join(" | ", argonModels.Take(2))}] claude=[{string.Join(" | ", claudeModels.Take(3))}] " +
                             $"preferredArgSet={PreferredArgSet}");
- 
-             // 6. Gemini 池：依次尝试实时可用列表里的候选模型（最新优先），
-             //    某个模型 CLI 不接受就换下一个；总时长有上限，绝不无限卡住。
-             if (geminiModels.Count > 0)
+
+             // 6. Gemini 池：仅当尚未进入倒计时且存在候选时执行
+             if (plan.NeedGemini && geminiModels.Count > 0)
              {
                  foreach (var m in geminiModels.Take(MaxModelAttempts))
                  {
                      if (sw.Elapsed > TotalBudget) { message = I18nService.T("AgQ.CliTimeout"); break; }
                      App.LogStartup($"AgCli: {profile.Email} gemini try model={m}");
                      var r = await RunOnceAsync(cli, m, ct);
+                     ranPreviousPool = true;
                      geminiOk = r.Ok;
                      if (r.Ok) { usedModel = m; break; }
                      rateLimited |= r.RateLimited;
                      if (!string.IsNullOrEmpty(r.Message)) message = r.Message;
-                     // 配额用尽 / 鉴权网络类硬失败：换模型没有意义，立刻停
                      if (r.RateLimited || (!r.ModelInvalid && !r.UsageError)) break;
-                     await Task.Delay(Random.Shared.Next(200, 500), ct);
+                     await Task.Delay(Random.Shared.Next(150, 300), ct);
                  }
              }
 
-             // 6.5 Gemini 4 Argon 独立配额池（仅当该账号在 API 侧支持非 disabled 的 Argon 模型时一并激活）
-             if (argonModels.Count > 0 && sw.Elapsed <= TotalBudget)
+             // 6.5 独立 Argon 池（仅当存在不与 Gemini 共用周期的独立 Argon 池时）
+             if (plan.NeedArgon && argonModels.Count > 0 && sw.Elapsed <= TotalBudget)
              {
-                 await Task.Delay(Random.Shared.Next(300, 600), ct);
+                 if (ranPreviousPool)
+                     await Task.Delay(Random.Shared.Next(150, 300), ct);
                  foreach (var m in argonModels.Take(2))
                  {
                      if (sw.Elapsed > TotalBudget) break;
                      App.LogStartup($"AgCli: {profile.Email} argon try model={m}");
                      var r = await RunOnceAsync(cli, m, ct);
+                     ranPreviousPool = true;
+                     argonOk = r.Ok;
                      if (r.Ok) { if (usedModel == null) usedModel = m; break; }
                      if (r.RateLimited || (!r.ModelInvalid && !r.UsageError)) break;
-                     await Task.Delay(Random.Shared.Next(200, 400), ct);
+                     await Task.Delay(Random.Shared.Next(150, 300), ct);
                  }
              }
- 
-             // 7. 3P 池与 Gemini 池独立，尽量一并激活；同样最新优先依次尝试
-             if (claudeModels.Count > 0 && sw.Elapsed <= TotalBudget)
+
+             // 7. 3P (Claude/GPT) 池：仅当尚未激活且支持 3P 模型时执行
+             if (plan.NeedThirdParty && claudeModels.Count > 0 && sw.Elapsed <= TotalBudget)
              {
-                 await Task.Delay(Random.Shared.Next(400, 800), ct);
+                 if (ranPreviousPool)
+                     await Task.Delay(Random.Shared.Next(150, 300), ct);
                  foreach (var m in claudeModels.Take(MaxModelAttempts))
                  {
                      if (sw.Elapsed > TotalBudget) { message = I18nService.T("AgQ.CliTimeout"); break; }
@@ -192,7 +248,7 @@ public static class AgCliService
                      rateLimited |= r.RateLimited;
                      if (!r.Ok && string.IsNullOrEmpty(message) && !string.IsNullOrEmpty(r.Message)) message = r.Message;
                      if (r.RateLimited || (!r.ModelInvalid && !r.UsageError)) break;
-                     await Task.Delay(Random.Shared.Next(200, 500), ct);
+                     await Task.Delay(Random.Shared.Next(150, 300), ct);
                  }
              }
         }
@@ -208,22 +264,35 @@ public static class AgCliService
         {
             // 8. 恢复原登录态（字节级还原；原本没有该文件则删除）
             RestoreCreds(credsPath, credsBackup);
+            if (restoreSysCred)
+            {
+                try
+                {
+                    if (credMgrBackup != null)
+                        CredentialManager.WriteCredential(AgToolsService.CredTargetName, AgToolsService.CredUserName, credMgrBackup);
+                    else
+                        CredentialManager.DeleteCredential(AgToolsService.CredTargetName);
+                }
+                catch { }
+            }
             // 9. 删除本次新增的对话，避免污染用户会话列表
             CleanupConversations(snap);
         }
 
         sw.Stop();
-        bool ok = geminiOk || thirdPartyOk;
+        bool ok = geminiOk || thirdPartyOk || argonOk;
 
         if (ok)
         {
-            var desc = (geminiOk, thirdPartyOk) switch
-            {
-                (true, true) => I18nService.T("AgQ.CliOkBoth"),
-                (true, false) => I18nService.T("AgQ.CliOkGemini"),
-                (false, true) => I18nService.T("AgQ.CliOkThirdParty"),
-                _ => "",
-            };
+            string desc;
+            if (geminiOk && thirdPartyOk)
+                desc = I18nService.T("AgQ.CliOkBoth");
+            else if (geminiOk)
+                desc = plan.ThirdPartyAlreadyActive ? I18nService.T("AgQ.CliOkGeminiSkipped3p") : I18nService.T("AgQ.CliOkGemini");
+            else if (thirdPartyOk)
+                desc = plan.GeminiAlreadyActive ? I18nService.T("AgQ.CliOk3pSkippedGemini") : I18nService.T("AgQ.CliOkThirdParty");
+            else
+                desc = "Argon";
             message = I18nService.F("AgQ.CliOkFmt", usedModel ?? "", sw.ElapsedMilliseconds, desc);
         }
         else if (string.IsNullOrEmpty(message))
@@ -231,25 +300,24 @@ public static class AgCliService
             message = rateLimited ? I18nService.T("AgQ.ErrRateLimited") : I18nService.T("AgQ.CliFailed");
         }
 
-        return new Result(ok, rateLimited && !ok, message, usedModel, sw.ElapsedMilliseconds, geminiOk, thirdPartyOk);
+        return new Result(ok, rateLimited && !ok, message, usedModel, sw.ElapsedMilliseconds, geminiOk, thirdPartyOk, argonOk);
     }
 
      // ---------- 单轮执行 ----------
- 
-     /// <summary>
-     /// 参数组合：从"最可能被支持"到"最简"。
-     /// 已知事实（实测）：--effort / --disable-slash-commands / --print-timeout 不被支持
-     /// （思考档位写在模型名里，如 "Gemini 3.8 Flash (Low)"），所以绝不放进来的——
-     /// 放进来只会让每次尝试都先失败一次，白白卡很久。
-     /// model 为 null 时表示"不指定模型"，让 CLI 用它自己的默认模型（最后兜底）。
-     /// 注意：提示词必须紧贴 --print（--print=&lt;prompt&gt;），
-     /// 否则 CLI 会把后一个 flag 误当作提示词而报错退出（实测 exit=2）。
-     /// </summary>
+
      static List<List<string>> BuildArgSets(string? model)
      {
          var sets = new List<List<string>>();
          if (!string.IsNullOrEmpty(model))
          {
+             sets.Add(new()
+             {
+                 $"--print={ActivationPrompt}",
+                 "--output-format", "json",
+                 "--model", model,
+                 "--dangerously-skip-permissions",
+                 "--disable-slash-commands",
+             });
              sets.Add(new()
              {
                  $"--print={ActivationPrompt}",
@@ -278,42 +346,83 @@ public static class AgCliService
          });
          return sets;
      }
- 
+
      /// <summary>
-     /// 探测 CLI 自己认哪些模型：用一个不存在的模型名触发它的参数校验，
-     /// 错误信息里会带 "Available models:" 全列表。不发出任何真实请求，不耗额度。
+     /// 兜底获取 CLI 模型 ID 列表（仅当 fetchAvailableModels 失败且无本地模型缓存时调用），
+     /// 并按 agy.exe 路径与修改时间在内存中持久化缓存。
      /// </summary>
-     static async Task<List<string>> ProbeCliModelsAsync(string cli, CancellationToken ct)
+     static async Task<List<string>> GetCachedCliModelsAsync(string cli, CancellationToken ct)
      {
-         var workDir = Path.Combine(Path.GetTempPath(), "apiswitch-ag-probe-" + Guid.NewGuid().ToString("N")[..8]);
-         Directory.CreateDirectory(workDir);
+         DateTime mtime = DateTime.MinValue;
+         try { mtime = File.GetLastWriteTimeUtc(cli); } catch { }
+
+         await CliModelsCacheLock.WaitAsync(ct);
          try
          {
-             const string bogus = "__apiswitch_probe__";
-             var args = new List<string>
+             if (CachedCliModels is { } cached &&
+                 string.Equals(cached.CliPath, cli, StringComparison.OrdinalIgnoreCase) &&
+                 cached.LastWriteUtc == mtime &&
+                 cached.Models.Count > 0)
              {
-                 $"--print={ActivationPrompt}",
-                 "--output-format", "json",
-                 "--model", bogus,
-                 "--dangerously-skip-permissions",
-             };
-             var r = await RunAttemptAsync(cli, workDir, args, bogus, ct);
-             var models = ParseAvailableModels(r.Raw);
-             App.LogStartup($"AgCli: probe exit-model-list count={models.Count} [{string.Join(" | ", models)}]");
-             return models;
-         }
-         catch (OperationCanceledException)
-         {
-             throw;
-         }
-         catch (Exception ex)
-         {
-             App.LogStartup($"AgCli: probe failed: {ex.Message}");
-             return new List<string>();
+                 return cached.Models;
+             }
+
+             var workDir = Path.Combine(Path.GetTempPath(), "apiswitch-ag-models-" + Guid.NewGuid().ToString("N")[..8]);
+             Directory.CreateDirectory(workDir);
+             try
+             {
+                 var psi = new ProcessStartInfo
+                 {
+                     FileName = cli,
+                     WorkingDirectory = workDir,
+                     RedirectStandardOutput = true,
+                     RedirectStandardError = true,
+                     UseShellExecute = false,
+                     CreateNoWindow = true,
+                     WindowStyle = ProcessWindowStyle.Hidden,
+                     StandardOutputEncoding = Encoding.UTF8,
+                     StandardErrorEncoding = Encoding.UTF8,
+                 };
+                 psi.ArgumentList.Add("models");
+                 using var proc = Process.Start(psi);
+                 if (proc == null) return new List<string>();
+
+                 var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
+                 var stderrTask = proc.StandardError.ReadToEndAsync(ct);
+                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                 cts.CancelAfter(TimeSpan.FromSeconds(15));
+                 try { await proc.WaitForExitAsync(cts.Token); }
+                 catch { try { proc.Kill(entireProcessTree: true); } catch { } }
+
+                 var stdout = await stdoutTask;
+                 _ = await stderrTask;
+                 var list = new List<string>();
+                 foreach (var raw in stdout.Replace("\r\n", "\n").Split('\n'))
+                 {
+                     var line = raw.Trim();
+                     if (line.Length == 0) continue;
+                     var tabIdx = line.IndexOf('\t');
+                     var id = tabIdx > 0 ? line[..tabIdx].Trim() : line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+                     if (id.Contains('-') && !list.Contains(id, StringComparer.OrdinalIgnoreCase))
+                         list.Add(id);
+                 }
+                 if (list.Count > 0)
+                     CachedCliModels = (cli, mtime, list);
+                 App.LogStartup($"AgCli: fallback `agy models` cached count={list.Count}");
+                 return list;
+             }
+             catch
+             {
+                 return new List<string>();
+             }
+             finally
+             {
+                 try { Directory.Delete(workDir, true); } catch { }
+             }
          }
          finally
          {
-             try { Directory.Delete(workDir, true); } catch { }
+             CliModelsCacheLock.Release();
          }
      }
  

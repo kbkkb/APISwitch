@@ -11,16 +11,21 @@ public class AppSettings
     /// <summary>界面语言：auto（跟随系统）/ zh-CN / en-US</summary>
     public string Language { get; set; } = "auto";
     public bool FloatingWidgetEnabled { get; set; } = true;
+    public double? FloatingWidgetAnchorX { get; set; }
+    public double? FloatingWidgetAnchorY { get; set; }
+    public bool? FloatingWidgetAnchorRight { get; set; }
+    public bool? FloatingWidgetAnchorBottom { get; set; }
     public double? FloatingWidgetCapsuleLeft { get; set; }
     public double? FloatingWidgetCapsuleTop { get; set; }
 }
 
 public static class AppSettingsService
 {
-    private static readonly string SettingsFile = Path.Combine(AgPaths.AppData, "APISwitch", "settings.json");
+    private static string SettingsFile => Path.Combine(AgPaths.AppData, "APISwitch", "settings.json");
     private static AppSettings? _current;
 
     public static AppSettings Current => _current ??= Load();
+    public static void Reload() => _current = Load();
 
     public static AppSettings Load()
     {
