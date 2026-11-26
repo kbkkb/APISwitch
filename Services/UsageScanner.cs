@@ -145,6 +145,30 @@ public static class UsageScanner
         }
     }
 
+    /// <summary>仅对 Antigravity 本地会话日志执行高频轻量化增量扫描，供桌面悬浮窗实时更新。</summary>
+    public static int ScanAntigravityQuick()
+    {
+        lock (_scanLock)
+        {
+            EnsureStateLoaded();
+
+            if (_scannerVersion < CurrentScannerVersion)
+            {
+                return BackfillCore(backupIfExists: true).Written;
+            }
+
+            int added = 0;
+            var ctx = new UsageScanContext(_offsets, _scanLock, _fileModels);
+            foreach (var src in _sources)
+            {
+                if (string.Equals(src.AgentId, UsageStorage.AgentAntigravity, StringComparison.Ordinal))
+                    added += src.Scan(ctx);
+            }
+            if (added > 0) SaveState();
+            return added;
+        }
+    }
+
     static int ScanIncrementalCore()
     {
         int added = 0;
@@ -154,7 +178,7 @@ public static class UsageScanner
         added += ScanPi();
         added += ScanOpenCode();
 
-        var ctx = new UsageScanContext(_offsets, _scanLock);
+        var ctx = new UsageScanContext(_offsets, _scanLock, _fileModels);
         foreach (var src in _sources)
             added += src.Scan(ctx);
 
@@ -215,12 +239,21 @@ public static class UsageScanner
         var scannedThreads = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var coveredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        bool needCodexModelFix = !_offsets.TryGetValue("codex:model_fix_v1", out var cmf) || cmf == 0;
+        if (needCodexModelFix)
+        {
+            foreach (var f in jsonlFiles) _offsets.Remove(f);
+        }
+
         int added = 0;
         foreach (var f in jsonlFiles)
         {
             coveredFiles.Add(f);
             added += ScanCodexJsonlFile(f, scannedThreads);
         }
+
+        if (needCodexModelFix)
+            _offsets["codex:model_fix_v1"] = 1;
 
         foreach (var zf in zstFiles)
         {
@@ -261,6 +294,10 @@ public static class UsageScanner
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (start > 0 && (!_fileModels.TryGetValue(file, out var cachedMod) || string.IsNullOrEmpty(cachedMod)))
+            {
+                WarmupCodexModelHeader(fs, file);
+            }
             if (start > 0) fs.Seek(start, SeekOrigin.Begin);
             using var reader = new StreamReader(fs);
 
@@ -273,6 +310,38 @@ public static class UsageScanner
         }
         catch { }
         return 0;
+    }
+
+    static void WarmupCodexModelHeader(FileStream fs, string file)
+    {
+        try
+        {
+            fs.Seek(0, SeekOrigin.Begin);
+            using var headReader = new StreamReader(fs, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+            for (int i = 0; i < 80; i++)
+            {
+                var hl = headReader.ReadLine();
+                if (hl == null) break;
+                if (!hl.Contains("\"model\"", StringComparison.Ordinal)) continue;
+                try
+                {
+                    var node = JsonNode.Parse(hl);
+                    var payload = node?["payload"];
+                    var m = payload?["model"]?.GetValue<string>()
+                            ?? payload?["thread_settings"]?["model"]?.GetValue<string>();
+                    var p = payload?["model_provider"]?.GetValue<string>()
+                            ?? payload?["thread_settings"]?["model_provider_id"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(p)) _fileProviders[file] = p;
+                    if (!string.IsNullOrEmpty(m))
+                    {
+                        _fileModels[file] = m;
+                        break;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
     }
 
     static int ScanCodexZstFile(string file, HashSet<string> scannedThreads)
@@ -996,6 +1065,27 @@ public static class UsageScanner
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (start > 0 && (!_fileModels.TryGetValue(file, out var cachedPiMod) || string.IsNullOrEmpty(cachedPiMod)))
+            {
+                using var headReader = new StreamReader(fs, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
+                for (int i = 0; i < 60; i++)
+                {
+                    var hl = headReader.ReadLine();
+                    if (hl == null) break;
+                    if (!hl.Contains("\"model_change\"", StringComparison.Ordinal)) continue;
+                    try
+                    {
+                        var mc = JsonNode.Parse(hl);
+                        if (mc?["provider"]?.GetValue<string>() is { Length: > 0 } p) _fileProviders[file] = p;
+                        if (mc?["modelId"]?.GetValue<string>() is { Length: > 0 } m)
+                        {
+                            _fileModels[file] = m;
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
             if (start > 0) fs.Seek(start, SeekOrigin.Begin);
             using var reader = new StreamReader(fs);
 

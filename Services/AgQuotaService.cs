@@ -293,10 +293,58 @@ public static class AgQuotaService
                     using var doc = JsonDocument.Parse(json);
                     if (doc.RootElement.TryGetProperty("models", out var modelsElem))
                     {
+                        var pickerOrderMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                        if (doc.RootElement.TryGetProperty("agentModelSorts", out var sortsElem) && sortsElem.ValueKind == JsonValueKind.Array)
+                        {
+                            int ordIdx = 0;
+                            foreach (var sortObj in sortsElem.EnumerateArray())
+                            {
+                                if (sortObj.TryGetProperty("groups", out var grps) && grps.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var grp in grps.EnumerateArray())
+                                    {
+                                        if (grp.TryGetProperty("modelIds", out var mIds) && mIds.ValueKind == JsonValueKind.Array)
+                                        {
+                                            foreach (var mid in mIds.EnumerateArray())
+                                            {
+                                                var idStr = mid.GetString();
+                                                if (!string.IsNullOrWhiteSpace(idStr) && !pickerOrderMap.ContainsKey(idStr))
+                                                    pickerOrderMap[idStr] = ordIdx++;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        var groupMetaMap = new Dictionary<string, (string GroupKey, string GroupName, string ThinkingName)>(StringComparer.OrdinalIgnoreCase);
+                        if (doc.RootElement.TryGetProperty("groupedModels", out var gmElem) && gmElem.ValueKind == JsonValueKind.Object)
+                        {
+                            foreach (var gProp in gmElem.EnumerateObject())
+                            {
+                                var gKey = gProp.Name;
+                                var gDisplay = gProp.Value.TryGetProperty("displayName", out var gdn) ? gdn.GetString() ?? gKey : gKey;
+                                if (gProp.Value.TryGetProperty("supportedThinkingLevels", out var lvls) && lvls.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var lvl in lvls.EnumerateArray())
+                                    {
+                                        var sfx = lvl.TryGetProperty("thinkingSuffix", out var tsfx) ? tsfx.GetString() : null;
+                                        var tdn = lvl.TryGetProperty("thinkingDisplayName", out var tdnEl) ? tdnEl.GetString() ?? "" : "";
+                                        if (!string.IsNullOrWhiteSpace(sfx))
+                                        {
+                                            groupMetaMap[$"{gKey}-{sfx}"] = (gKey, gDisplay, tdn);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         var list = new List<AgModelQuotaInfo>();
                         var quotaSummary = new List<string>();
                         bool hasActiveArgon = false;
                         bool hasDisabledArgon = false;
+                        bool hasActiveProExclusive = false;
+                        bool hasDisabledProExclusive = false;
                         foreach (var prop in modelsElem.EnumerateObject())
                         {
                             var val = prop.Value;
@@ -305,6 +353,13 @@ public static class AgQuotaService
                             {
                                 if (disabled) hasDisabledArgon = true;
                                 else hasActiveArgon = true;
+                            }
+                            if (prop.Name.Contains("argon", StringComparison.OrdinalIgnoreCase) ||
+                                prop.Name.Contains("gemini-4-neon", StringComparison.OrdinalIgnoreCase) ||
+                                prop.Name.Contains("gemini-4-carbon", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (disabled) hasDisabledProExclusive = true;
+                                else hasActiveProExclusive = true;
                             }
 
                             double? remaining = null;
@@ -320,6 +375,10 @@ public static class AgQuotaService
                                     resetTime = rt.GetString();
                             }
 
+                            int pOrder = pickerOrderMap.TryGetValue(prop.Name, out var ord) ? ord : -1;
+                            bool pVisible = pOrder >= 0 && !disabled;
+                            groupMetaMap.TryGetValue(prop.Name, out var gm);
+
                             list.Add(new AgModelQuotaInfo
                             {
                                 ModelId = prop.Name,
@@ -333,13 +392,18 @@ public static class AgQuotaService
                                 SupportsImages = val.TryGetProperty("supportsImages", out var si) && si.ValueKind == JsonValueKind.True,
                                 MaxTokens = val.TryGetProperty("maxTokens", out var mt) && mt.TryGetInt32(out var mti) ? mti : 0,
                                 MaxOutputTokens = val.TryGetProperty("maxOutputTokens", out var mot) && mot.TryGetInt32(out var moti) ? moti : 0,
+                                IsPickerVisible = pVisible,
+                                PickerOrder = pOrder,
+                                GroupKey = gm.GroupKey,
+                                GroupDisplayName = gm.GroupName,
+                                ThinkingDisplayName = gm.ThinkingName,
                             });
                         }
-                        if (hasActiveArgon)
+                        if (hasActiveArgon || (profile.IsProTier && hasActiveProExclusive))
                         {
                             profile.IsPaidSubscription = true;
                         }
-                        else if (hasDisabledArgon && profile.IsProTier && !profile.IsUltra)
+                        else if ((hasDisabledArgon || hasDisabledProExclusive) && !hasActiveProExclusive && profile.IsProTier && !profile.IsUltra)
                         {
                             profile.IsPaidSubscription = false;
                         }
@@ -1140,6 +1204,7 @@ public static class AgQuotaService
         }
 
         AgModelQuotaInfo? gemFallback = null;
+        bool gemFallbackIsWeekly = false;
         AgModelQuotaInfo? argonFallback = null;
         AgModelQuotaInfo? p3Fallback = null;
 
@@ -1158,6 +1223,7 @@ public static class AgQuotaService
 
             double rem = m.RemainingFraction.Value;
             var mResetUtc = ParseResetUtc(m.ResetTime);
+            bool isWeeklyReset = mResetUtc.HasValue && (mResetUtc.Value - DateTime.UtcNow).TotalHours > 24;
 
             if (quotaGot)
             {
@@ -1177,19 +1243,23 @@ public static class AgQuotaService
                     profile.QuotaWeeklyFraction = AlignIfMatchingWindow(profile.QuotaWeeklyFraction, profile.QuotaWeeklyResetTime, mResetUtc, rem);
                 }
             }
+
+            if (isArgon)
+            {
+                if (argonFallback == null || rem < argonFallback.RemainingFraction!.Value) argonFallback = m;
+            }
+            else if (is3p)
+            {
+                if (p3Fallback == null || rem < p3Fallback.RemainingFraction!.Value) p3Fallback = m;
+            }
             else
             {
-                if (isArgon)
+                if (gemFallback == null ||
+                    (isWeeklyReset && !gemFallbackIsWeekly) ||
+                    (isWeeklyReset == gemFallbackIsWeekly && rem < gemFallback.RemainingFraction!.Value))
                 {
-                    if (argonFallback == null || rem < argonFallback.RemainingFraction!.Value) argonFallback = m;
-                }
-                else if (is3p)
-                {
-                    if (p3Fallback == null || rem < p3Fallback.RemainingFraction!.Value) p3Fallback = m;
-                }
-                else
-                {
-                    if (gemFallback == null || rem < gemFallback.RemainingFraction!.Value) gemFallback = m;
+                    gemFallback = m;
+                    gemFallbackIsWeekly = isWeeklyReset;
                 }
             }
         }
@@ -1214,6 +1284,11 @@ public static class AgQuotaService
                 profile.Quota3pWeeklyResetTime = p3Fallback.ResetTime;
                 quotaGot = true;
             }
+        }
+        else if (!profile.QuotaWeeklyFraction.HasValue && gemFallback != null)
+        {
+            profile.QuotaWeeklyFraction = gemFallback.RemainingFraction;
+            profile.QuotaWeeklyResetTime = gemFallback.ResetTime;
         }
 
         return quotaGot;
@@ -1358,11 +1433,10 @@ public static class AgQuotaService
             // 2) 若 ParseTier 已确认为 Plus (g1-plus-tier) 或 Starter，且仅有 weekly 桶（无任何 5H/Argon），
             //    同样保持对应档位并清理 5H/Argon 残留，保留 weekly 配额（Gemini + 3P weekly）；
             // 3) 只有实际返回了 5H 或 Argon 池，或原非 Starter/Plus 且含 3P/5H/Argon 时才认定为 Pro。
-            bool has5hBucket = newQuota5hFraction.HasValue || newQuota3p5hFraction.HasValue || newQuotaArgon5hFraction.HasValue;
-            bool isStarter = !has3pGroupFound && !newQuota5hFraction.HasValue && !hasArgonGroupFound;
+            bool isStarterOnlyGemini = !has3pGroupFound && !newQuota5hFraction.HasValue && !hasArgonGroupFound;
             bool currentlyStarter = profile.SubscriptionTier?.Contains("Starter", StringComparison.OrdinalIgnoreCase) == true;
             bool currentlyPlus = profile.SubscriptionTier?.Contains("Plus", StringComparison.OrdinalIgnoreCase) == true;
-            if (hasGeminiGroup && isStarter && !profile.IsUltra)
+            if (hasGeminiGroup && isStarterOnlyGemini && !profile.IsUltra)
             {
                 var keptTier = currentlyPlus ? "Google AI Plus" : "Starter";
                 profile.SubscriptionTier = keptTier;
@@ -1383,7 +1457,9 @@ public static class AgQuotaService
             {
                 if (currentlyPlus || currentlyStarter)
                 {
-                    if (has5hBucket || hasArgonGroupFound)
+                    // 仅当真正出现付费专属的 Argon 组时才允许从 Starter/Plus 升格为 Pro；
+                    // Google 现已对免费版（free-tier）开放 3p-5h 限流池，绝不可凭 has5hBucket 误判为 Pro。
+                    if (hasArgonGroupFound)
                     {
                         profile.SubscriptionTier = "Google AI Pro";
                         profile.Plan = "Google AI Pro";
@@ -1394,10 +1470,16 @@ public static class AgQuotaService
                         profile.SubscriptionTier = keptTier;
                         profile.Plan = keptTier;
                         profile.IsPaidSubscription = false;
-                        profile.Quota5hFraction = null;
-                        profile.Quota5hResetTime = null;
-                        profile.Quota3p5hFraction = null;
-                        profile.Quota3p5hResetTime = null;
+                        if (!newQuota5hFraction.HasValue)
+                        {
+                            profile.Quota5hFraction = null;
+                            profile.Quota5hResetTime = null;
+                        }
+                        if (!newQuota3p5hFraction.HasValue)
+                        {
+                            profile.Quota3p5hFraction = null;
+                            profile.Quota3p5hResetTime = null;
+                        }
                         profile.QuotaArgon5hFraction = null;
                         profile.QuotaArgon5hResetTime = null;
                         profile.QuotaArgonWeeklyFraction = null;
@@ -1406,8 +1488,10 @@ public static class AgQuotaService
                 }
                 else if (string.IsNullOrEmpty(profile.SubscriptionTier))
                 {
-                    profile.SubscriptionTier = "Google AI Pro";
-                    profile.Plan = "Google AI Pro";
+                    // 仅在 loadCodeAssist 失败导致档位完全未知时，若同时有 Gemini 5H 或 Argon 才暂判为 Pro，否则归为 Starter
+                    var inferredTier = (newQuota5hFraction.HasValue || hasArgonGroupFound) ? "Google AI Pro" : "Starter";
+                    profile.SubscriptionTier = inferredTier;
+                    profile.Plan = inferredTier;
                 }
             }
         }
@@ -1433,10 +1517,12 @@ public static class AgQuotaService
                 var paidName = paidTier.TryGetProperty("name", out var pn) ? pn.GetString() : null;
                 var paidDesc = paidTier.TryGetProperty("description", out var pd) ? pd.GetString() : null;
 
-                if (!string.IsNullOrWhiteSpace(paidName) && paidName.Contains("Ultra", StringComparison.OrdinalIgnoreCase))
+                if ((!string.IsNullOrWhiteSpace(paidName) && paidName.Contains("Ultra", StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrWhiteSpace(paidId) && paidId.Contains("ultra", StringComparison.OrdinalIgnoreCase)))
                 {
-                    profile.SubscriptionTier = paidName;
-                    profile.Plan = paidName;
+                    var ultraTier = !string.IsNullOrWhiteSpace(paidName) ? paidName : "Google AI Ultra";
+                    profile.SubscriptionTier = ultraTier;
+                    profile.Plan = ultraTier;
                     return;
                 }
 
@@ -1449,12 +1535,21 @@ public static class AgQuotaService
                     return;
                 }
 
-                if ((paidName?.Contains("Starter", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                if (string.Equals(paidId, "free-tier", StringComparison.OrdinalIgnoreCase) ||
+                    (paidName?.Contains("Starter", StringComparison.OrdinalIgnoreCase) ?? false) ||
                     (paidDesc?.Contains("Starter", StringComparison.OrdinalIgnoreCase) ?? false))
                 {
                     profile.SubscriptionTier = "Starter";
                     profile.Plan = "Starter";
                     profile.IsPaidSubscription = false;
+                    return;
+                }
+
+                if (string.Equals(paidId, "g1-pro-tier", StringComparison.OrdinalIgnoreCase))
+                {
+                    var proTier = !string.IsNullOrWhiteSpace(paidName) ? paidName : "Google AI Pro";
+                    profile.SubscriptionTier = proTier;
+                    profile.Plan = proTier;
                     return;
                 }
             }

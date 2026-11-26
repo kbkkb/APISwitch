@@ -321,6 +321,121 @@ VALUES ($ts, $acct, $bucket, $frac, $reset);";
 
     public record UsageSummary(long TotalIn, long TotalOut, long Requests, int ActiveDays);
 
+    /// <summary>Antigravity 桌面悬浮窗专属单端统计快照（今日用量 + 最近一步真实速率/首字/模型）。</summary>
+    public sealed record AntigravityWidgetStats(
+        long TodayInTokens,
+        long TodayOutTokens,
+        long TodayCacheReadTokens,
+        long TodayRequests,
+        double LastSpeedTokPerSec,
+        long LastTtftMs,
+        string LastModel,
+        DateTime? LastCallLocalTime,
+        double TodayAvgSpeedTokPerSec)
+    {
+        public long TodayTotalTokens => TodayInTokens + TodayOutTokens;
+    }
+
+    /// <summary>查询 Antigravity 单端的今日统计与最新一步速率/首字耗时。</summary>
+    public static AntigravityWidgetStats GetAntigravityWidgetStats(DateTime? localNow = null)
+    {
+        try
+        {
+            EnsureInit();
+            var now = localNow ?? DateTime.Now;
+            var dayStartLocal = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Local);
+            long fromTs = new DateTimeOffset(dayStartLocal.ToUniversalTime()).ToUnixTimeSeconds();
+            long toTs = new DateTimeOffset(now.ToUniversalTime().AddMinutes(2)).ToUnixTimeSeconds();
+
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+
+            long todayIn = 0, todayOut = 0, todayCache = 0, todayReqs = 0;
+            double todayAvgSpeed = 0;
+
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"SELECT
+  COALESCE(SUM(in_tokens),0),
+  COALESCE(SUM(out_tokens),0),
+  COALESCE(SUM(cache_read_tokens),0),
+  COALESCE(SUM(requests),0),
+  COALESCE(SUM(CASE WHEN duration_ms > 0 THEN out_tokens ELSE 0 END),0),
+  COALESCE(SUM(CASE WHEN duration_ms > 0 THEN duration_ms ELSE 0 END),0)
+FROM usage_events WHERE agent = $ag AND ts >= $from AND ts <= $to;";
+                cmd.Parameters.AddWithValue("$ag", AgentAntigravity);
+                cmd.Parameters.AddWithValue("$from", fromTs);
+                cmd.Parameters.AddWithValue("$to", toTs);
+                using var r = cmd.ExecuteReader();
+                if (r.Read())
+                {
+                    todayIn = r.GetInt64(0);
+                    todayOut = r.GetInt64(1);
+                    todayCache = r.GetInt64(2);
+                    todayReqs = r.GetInt64(3);
+                    long timedOut = r.GetInt64(4);
+                    long timedDurMs = r.GetInt64(5);
+                    if (timedDurMs > 0) todayAvgSpeed = timedOut * 1000.0 / timedDurMs;
+                }
+            }
+
+            double lastSpeed = 0;
+            long lastTtft = 0;
+            string lastModel = "";
+            DateTime? lastCallLocalTime = null;
+
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"SELECT ts, model, out_tokens, duration_ms, ttft_ms
+FROM usage_events WHERE agent = $ag AND ts >= $from AND ts <= $to
+ORDER BY ts DESC, id DESC LIMIT 30;";
+                cmd.Parameters.AddWithValue("$ag", AgentAntigravity);
+                cmd.Parameters.AddWithValue("$from", fromTs);
+                cmd.Parameters.AddWithValue("$to", toTs);
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    if (!lastCallLocalTime.HasValue)
+                        lastCallLocalTime = DateTimeOffset.FromUnixTimeSeconds(r.GetInt64(0)).LocalDateTime;
+                    if (string.IsNullOrEmpty(lastModel))
+                    {
+                        var m = r.IsDBNull(1) ? "" : r.GetString(1);
+                        if (!string.IsNullOrWhiteSpace(m)) lastModel = m.Trim();
+                    }
+                    if (lastSpeed <= 0)
+                    {
+                        long ot = r.GetInt64(2);
+                        long dur = r.GetInt64(3);
+                        if (dur > 0 && ot > 0) lastSpeed = ot * 1000.0 / dur;
+                    }
+                    if (lastTtft <= 0)
+                    {
+                        long ttft = r.GetInt64(4);
+                        if (ttft > 0) lastTtft = ttft;
+                    }
+                    if (lastCallLocalTime.HasValue && !string.IsNullOrEmpty(lastModel) && lastSpeed > 0 && lastTtft > 0)
+                        break;
+                }
+            }
+
+            if (string.IsNullOrEmpty(lastModel))
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"SELECT model FROM usage_events WHERE agent = $ag AND model <> '' ORDER BY ts DESC, id DESC LIMIT 1;";
+                cmd.Parameters.AddWithValue("$ag", AgentAntigravity);
+                var obj = cmd.ExecuteScalar();
+                if (obj is string s && !string.IsNullOrWhiteSpace(s))
+                    lastModel = s.Trim();
+            }
+
+            return new AntigravityWidgetStats(todayIn, todayOut, todayCache, todayReqs, lastSpeed, lastTtft, lastModel, lastCallLocalTime, todayAvgSpeed);
+        }
+        catch
+        {
+            return new AntigravityWidgetStats(0, 0, 0, 0, 0, 0, "", null, 0);
+        }
+    }
+
     /// <summary>汇总指定时间范围（UTC 起止秒）的用量。</summary>
     public static UsageSummary GetSummary(long fromTs, long toTs, string? agentFilter = null)
     {

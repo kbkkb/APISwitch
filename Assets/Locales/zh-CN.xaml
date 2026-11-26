@@ -564,9 +564,9 @@
     <sys:String x:Key="Ag.TierProPromo">Google AI Pro 体验版</sys:String>
     <sys:String x:Key="Ag.TierUltra">Google AI Ultra</sys:String>
     <sys:String x:Key="Ag.TierStarterTooltip">Starter 基础免费额度</sys:String>
-    <sys:String x:Key="Ag.TierPlusTooltip">Google AI Plus 订阅档位：在 Antigravity 享有基础周限额度（无 5H 限制与独立 Argon 额度池）</sys:String>
-    <sys:String x:Key="Ag.TierProPaidTooltip">官方付费订阅版：享有独立 Gemini 4 Argon 额度池及高阶模型全量权益</sys:String>
-    <sys:String x:Key="Ag.TierProPromoTooltip">体验/活动渠道权益：支持 Gemini 3.8 与 Claude 3.7，无独立 Argon 额度池</sys:String>
+    <sys:String x:Key="Ag.TierPlusTooltip">Google AI Plus 订阅档位：在 Antigravity 享有基础周限额度</sys:String>
+    <sys:String x:Key="Ag.TierProPaidTooltip">官方付费订阅版：享有 Gemini 4 全系高阶模型与 5H / 周限高配额权益</sys:String>
+    <sys:String x:Key="Ag.TierProPromoTooltip">体验/活动渠道权益：支持主流模型调用，受限于体验档可用模型范围</sys:String>
     <sys:String x:Key="Ag.TierProTooltip">Google AI Pro 订阅档位</sys:String>
     <sys:String x:Key="Ag.TierUltraTooltip">Google AI Ultra 尊享版：最高速率限制与模型全量权益</sys:String>
     <sys:String x:Key="Ag.ArgonQuotaTooltip">Gemini 4 Argon 独立周限额度池（官方订阅版专属）</sys:String>
@@ -710,7 +710,7 @@
     <sys:String x:Key="Usage.RefreshBtn">刷新</sys:String>
     <sys:String x:Key="Usage.RefreshTip">立即重扫本地会话日志并刷新全部数据</sys:String>
     <sys:String x:Key="Usage.ExportCsvBtn">导出</sys:String>
-    <sys:String x:Key="Usage.ExportCsvTip">导出当前时间范围与筛选条件下的调用明细为 CSV</sys:String>
+    <sys:String x:Key="Usage.ExportCsvTip">导出当前时间范围与筛选条件下的调用明细（支持 CSV / JSON）</sys:String>
     <sys:String x:Key="Usage.ExportCsvDoneFmt">已导出 {0} 条明细至 {1}</sys:String>
     <sys:String x:Key="Usage.FilterAllAgents">全部客户端</sys:String>
     <sys:String x:Key="Usage.ClientAllPill">全部</sys:String>
@@ -728,7 +728,55 @@
     <sys:String x:Key="Usage.ClientMixLabel">客户端占比</sys:String>
     <sys:String x:Key="Usage.ChartDayCallsFmt">{0} 次请求</sys:String>
     <sys:String x:Key="Usage.FocusedDayFmt">已聚焦 {0}（点击趋势柱取消）</sys:String>
-    <sys:String x:Key="Usage.FooterHint">数据源覆盖 Codex / Claude Code / OpenCode / Pi / Antigravity / Gemini CLI / dsh 等本地记录（保留 1 年）</sys:String>
+    <sys:String x:Key="Usage.FooterHint">数据源覆盖 Antigravity / Codex / Claude Code / OpenCode / Pi / Gemini CLI / StepCode / zcode / dsh 等本地记录（保留 1 年）</sys:String>
     <sys:String x:Key="Usage.FooterSummary">{0} 次请求 · {1} 活跃天</sys:String>
     <sys:String x:Key="Usage.MaxTip">最大化 / 还原窗口</sys:String>
+
+    <!-- ==================== Antigravity Models Drawer & Tray ==================== -->
+    <sys:String x:Key="Ag.AvailableModelsFmt">可用模型 · {0} 款</sys:String>
+    <sys:String x:Key="Ag.RestrictedModelsFmt">当前档位不可用 ({0})</sys:String>
+    <sys:String x:Key="Ag.ModelsToggleTip">展开或收起该账号当前开放的模型列表</sys:String>
+    <sys:String x:Key="Ag.ModelCapThinking">思考</sys:String>
+    <sys:String x:Key="Ag.ModelCapImages">视觉</sys:String>
+    <sys:String x:Key="Ag.ModelContextFmt">上下文 {0}K</sys:String>
+    <sys:String x:Key="Ag.ModelRestrictedTip">该模型在当前账号订阅档位下不可用</sys:String>
+    <sys:String x:Key="Ag.AccountCountFmt">已纳管 {0} 个账号</sys:String>
+    <sys:String x:Key="Tray.AccountsHeader">切换账号（实时余量）</sys:String>
+    <sys:String x:Key="Tray.UsageMonitor">用量监控</sys:String>
+
+    <!-- ==================== Desktop Floating Widget ==================== -->
+    <sys:String x:Key="Main.WidgetShortTitle">悬浮窗</sys:String>
+    <sys:String x:Key="Main.WidgetTip">显示或隐藏桌面 Antigravity 实时悬浮胶囊</sys:String>
+    <sys:String x:Key="Tray.ShowWidget">开启桌面悬浮窗</sys:String>
+    <sys:String x:Key="Tray.HideWidget">隐藏桌面悬浮窗</sys:String>
+    <sys:String x:Key="General.WidgetTitle">桌面实时悬浮组件</sys:String>
+    <sys:String x:Key="General.WidgetDesc">在桌面置顶显示极简胶囊，实时展示当前 Antigravity 额度、今日单端用量与最新输出速率，点击可展开快捷切号。</sys:String>
+    <sys:String x:Key="General.WidgetEnableCheck">启用桌面常驻悬浮窗（仅统计与切换 Antigravity）</sys:String>
+    <sys:String x:Key="Widget.NoAccount">未登录 Antigravity</sys:String>
+    <sys:String x:Key="Widget.TodayLabel">今日用量</sys:String>
+    <sys:String x:Key="Widget.SpeedLabel">最新速率</sys:String>
+    <sys:String x:Key="Widget.ModelLabel">最近模型</sys:String>
+    <sys:String x:Key="Widget.TodaySubFmt">{0} 次 · 入 {1} / 出 {2}</sys:String>
+    <sys:String x:Key="Widget.AvgSpeedFmt">均速 {0} tok/s</sys:String>
+    <sys:String x:Key="Widget.TtftFmt">首字 {0}</sys:String>
+    <sys:String x:Key="Widget.NoCallsToday">今日暂无调用</sys:String>
+    <sys:String x:Key="Widget.ModelsHeaderFmt">可用模型 · {0} 款</sys:String>
+    <sys:String x:Key="Widget.SwitchHeaderFmt">快捷切换账号 ({0})</sys:String>
+    <sys:String x:Key="Widget.CurrentBadge">当前</sys:String>
+    <sys:String x:Key="Widget.SwitchBtn">切换</sys:String>
+    <sys:String x:Key="Widget.OpenMainTip">打开主窗口</sys:String>
+    <sys:String x:Key="Widget.OpenUsageTip">打开用量监控</sys:String>
+    <sys:String x:Key="Widget.RefreshTip">立即刷新额度与用量</sys:String>
+    <sys:String x:Key="Widget.CollapseTip">收起为胶囊</sys:String>
+    <sys:String x:Key="Widget.HideTip">隐藏悬浮窗（可在主窗口顶栏或托盘重新开启）</sys:String>
+    <sys:String x:Key="Widget.CapsuleTip">左键点击展开详情与切号 · 按住拖动位置 · 右键快捷菜单</sys:String>
+    <sys:String x:Key="Widget.HiddenToast">桌面悬浮窗已隐藏，可在 Antigravity 主界面工具栏或托盘菜单重新开启</sys:String>
+    <sys:String x:Key="Ag.WidgetBtnOn">桌面悬浮窗：已开启</sys:String>
+    <sys:String x:Key="Ag.WidgetBtnOff">开启桌面悬浮窗</sys:String>
+    <sys:String x:Key="Widget.ShortWeekFmt">周{0}</sys:String>
+    <sys:String x:Key="Widget.CollapseBtn">收起 ▾</sys:String>
+    <sys:String x:Key="Widget.RightClickHint">右键菜单可隐藏或重置位置</sys:String>
+    <sys:String x:Key="Widget.ResetPosition">重置到屏幕右下角</sys:String>
+    <sys:String x:Key="Widget.MainBtn">主界面</sys:String>
+    <sys:String x:Key="Widget.UsageBtn">用量监控</sys:String>
 </ResourceDictionary>

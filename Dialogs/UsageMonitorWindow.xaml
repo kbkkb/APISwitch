@@ -176,10 +176,22 @@
         <!-- KPI 统一白卡 -->
         <Style x:Key="KpiCardBorder" TargetType="Border">
             <Setter Property="Background" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#E4E9F2"/>
+            <Setter Property="BorderBrush" Value="#E2E8F0"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Padding" Value="13,9"/>
+        </Style>
+
+        <!-- 列表行柔和悬停容器 -->
+        <Style x:Key="FlatRowBorder" TargetType="Border">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#F1F5F9"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F8FAFC"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -244,172 +256,187 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- 顶部两行合一控制条（视图页签 + 筛选检索 / 时间区间） -->
-                <StackPanel Grid.Row="0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                <!-- 整合控制台卡片：页签切换 + 时间区间 + 检索 + 受支持客户端快捷筛选 -->
+                <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="11" Padding="12,10">
+                    <StackPanel>
+                        <!-- Row 0: 页签胶囊 + 快捷范围 + 精确起止日期 + 搜索框 -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        <!-- 4 页签胶囊切换 -->
-                        <Border Grid.Column="0" Background="#E6ECF7" CornerRadius="9" Padding="3" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal">
-                                <RadioButton x:Name="TabProvidersRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabProviders}" Checked="OnTabProvidersChecked" IsChecked="True"/>
-                                <RadioButton x:Name="TabAgentsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabAgents}" Checked="OnTabAgentsChecked" Margin="2,0,0,0"/>
-                                <RadioButton x:Name="TabModelsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabModels}" Checked="OnTabModelsChecked" Margin="2,0,0,0"/>
-                                <RadioButton x:Name="TabCallsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabCalls}" Checked="OnTabCallsChecked" Margin="2,0,0,0"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- 搜索过滤 + 重置筛选 -->
-                        <StackPanel x:Name="TokenFilterStrip" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBox x:Name="SearchBox" Width="220" Height="30" Padding="9,3" FontSize="12"
-                                     Tag="{DynamicResource Usage.SearchPlaceholder}" TextChanged="OnSearchTextChanged"/>
-                            <Button x:Name="ClearFilterBtn" Style="{StaticResource ToolbarMiniBtn}" Height="30" Margin="6,0,0,0"
-                                    Content="{DynamicResource Usage.ClearFilterBtn}" Click="OnClearFiltersClick" Visibility="Collapsed"/>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- 时间区间条 -->
-                    <Grid Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border Background="#E6ECF7" CornerRadius="8" Padding="3">
+                            <!-- 4 页签胶囊切换 -->
+                            <Border Grid.Column="0" Background="#EFF3FA" CornerRadius="8.5" Padding="3" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
-                                    <RadioButton x:Name="Quick1DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1D}" Checked="OnQuickRangeChecked" Tag="1"/>
-                                    <RadioButton x:Name="Quick7DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1W}" Checked="OnQuickRangeChecked" Tag="7" Margin="2,0,0,0"/>
-                                    <RadioButton x:Name="Quick30DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick30D}" Checked="OnQuickRangeChecked" Tag="30" Margin="2,0,0,0"/>
-                                    <RadioButton x:Name="Quick180DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick180D}" Checked="OnQuickRangeChecked" Tag="180" Margin="2,0,0,0"/>
-                                    <RadioButton x:Name="Quick365DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1Y}" Checked="OnQuickRangeChecked" Tag="365" Margin="2,0,0,0"/>
+                                    <RadioButton x:Name="TabProvidersRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabProviders}" Checked="OnTabProvidersChecked" IsChecked="True" Padding="11,4"/>
+                                    <RadioButton x:Name="TabAgentsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabAgents}" Checked="OnTabAgentsChecked" Margin="2,0,0,0" Padding="11,4"/>
+                                    <RadioButton x:Name="TabModelsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabModels}" Checked="OnTabModelsChecked" Margin="2,0,0,0" Padding="11,4"/>
+                                    <RadioButton x:Name="TabCallsRadio" Style="{StaticResource SegRadio}" GroupName="UsageViews" Content="{DynamicResource Usage.TabCalls}" Checked="OnTabCallsChecked" Margin="2,0,0,0" Padding="11,4"/>
                                 </StackPanel>
                             </Border>
 
-                            <Button x:Name="FocusedDayChip" Style="{StaticResource ToolbarMiniBtn}" Height="26" Margin="8,0,0,0"
-                                    Click="OnClearFocusedDayClick" Visibility="Collapsed"
-                                    Background="#EEF2FF" BorderBrush="#C7D2FE" Foreground="{StaticResource AccentBrush}"/>
-                        </StackPanel>
+                            <!-- 搜索过滤 + 重置筛选 -->
+                            <StackPanel x:Name="TokenFilterStrip" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBox x:Name="SearchBox" Width="220" Height="30" Padding="10,3" FontSize="12"
+                                         Tag="{DynamicResource Usage.SearchPlaceholder}" TextChanged="OnSearchTextChanged"/>
+                                <Button x:Name="ClearFilterBtn" Style="{StaticResource ToolbarMiniBtn}" Height="30" Margin="6,0,0,0"
+                                        Content="{DynamicResource Usage.ClearFilterBtn}" Click="OnClearFiltersClick" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </Grid>
 
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Usage.From}" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"/>
-                            <local:DateTimePickerBox x:Name="StartPicker" Width="148" ValueChanged="OnRangeFieldEdited"/>
-                            <TextBlock Text="{DynamicResource Usage.To}" VerticalAlignment="Center" Margin="8,0,5,0" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"/>
-                            <local:DateTimePickerBox x:Name="EndPicker" Width="148" ValueChanged="OnRangeFieldEdited"/>
-                            <Button Content="{DynamicResource Usage.Apply}" Style="{StaticResource PrimaryButton}" Padding="14,5" FontSize="12" Margin="8,0,0,0" Click="OnApplyRange"/>
-                        </StackPanel>
-                    </Grid>
+                        <!-- Row 1: 快捷时间范围 + 聚焦单日胶囊 + 自定义日期时间 -->
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                    <!-- 受支持客户端快捷筛选按钮行（全部 + 10 个客户端） -->
-                    <ItemsControl x:Name="ClientFilterList" Margin="0,8,0,-4" Focusable="False">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Button Style="{StaticResource ClientFilterPill}"
-                                        Click="OnClientPillClick"
-                                        Opacity="{Binding PillOpacity}"
-                                        ToolTip="{Binding TooltipText}">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Image Source="{Binding ImageSource}" Width="13" Height="13"
-                                               RenderOptions.BitmapScalingMode="HighQuality"
-                                               Visibility="{Binding ImageVisibility}"
-                                               VerticalAlignment="Center"/>
-                                        <Path Data="{Binding IconGeometry}" Fill="{Binding IconBrush}"
-                                              Width="13" Height="13" Stretch="Uniform"
-                                              Visibility="{Binding PathVisibility}"
-                                              VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Label}" FontSize="11.5" Margin="5,0,0,0"
-                                                   VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#EFF3FA" CornerRadius="8" Padding="3">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="Quick1DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1D}" Checked="OnQuickRangeChecked" Tag="1"/>
+                                        <RadioButton x:Name="Quick7DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1W}" Checked="OnQuickRangeChecked" Tag="7" Margin="2,0,0,0"/>
+                                        <RadioButton x:Name="Quick30DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick30D}" Checked="OnQuickRangeChecked" Tag="30" Margin="2,0,0,0"/>
+                                        <RadioButton x:Name="Quick180DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick180D}" Checked="OnQuickRangeChecked" Tag="180" Margin="2,0,0,0"/>
+                                        <RadioButton x:Name="Quick365DRadio" Style="{StaticResource QuickPillRadio}" GroupName="QuickRange" Content="{DynamicResource Usage.Quick1Y}" Checked="OnQuickRangeChecked" Tag="365" Margin="2,0,0,0"/>
                                     </StackPanel>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
+                                </Border>
+
+                                <Button x:Name="FocusedDayChip" Style="{StaticResource ToolbarMiniBtn}" Height="26" Margin="8,0,0,0"
+                                        Click="OnClearFocusedDayClick" Visibility="Collapsed"
+                                        Background="#EEF2FF" BorderBrush="#C7D2FE" Foreground="{StaticResource AccentBrush}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{DynamicResource Usage.From}" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"/>
+                                <local:DateTimePickerBox x:Name="StartPicker" Width="148" ValueChanged="OnRangeFieldEdited"/>
+                                <TextBlock Text="{DynamicResource Usage.To}" VerticalAlignment="Center" Margin="8,0,5,0" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"/>
+                                <local:DateTimePickerBox x:Name="EndPicker" Width="148" ValueChanged="OnRangeFieldEdited"/>
+                                <Button Content="{DynamicResource Usage.Apply}" Style="{StaticResource PrimaryButton}" Padding="14,5" FontSize="12" Margin="8,0,0,0" Click="OnApplyRange"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Height="1" Background="#F1F5F9" Margin="0,9,0,8"/>
+
+                        <!-- Row 2: 受支持客户端图标快捷筛选按钮行（全部 + 10 客户端） -->
+                        <ItemsControl x:Name="ClientFilterList" Margin="0,0,0,-4" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource ClientFilterPill}"
+                                            Click="OnClientPillClick"
+                                            Opacity="{Binding PillOpacity}"
+                                            ToolTip="{Binding TooltipText}">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Image Source="{Binding ImageSource}" Width="13" Height="13"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                                   Visibility="{Binding ImageVisibility}"
+                                                   VerticalAlignment="Center"/>
+                                            <Path Data="{Binding IconGeometry}" Fill="{Binding IconBrush}"
+                                                  Width="13" Height="13" Stretch="Uniform"
+                                                  Visibility="{Binding PathVisibility}"
+                                                  VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Label}" FontSize="11.5" Margin="5,0,0,0"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
 
                 <!-- Token 核心摘要 + 趋势区 -->
-                <StackPanel x:Name="TokenSummarySection" Grid.Row="1" Margin="0,10,0,0">
-                    <!-- 5 张双行平衡 KPI 卡 -->
+                <StackPanel x:Name="TokenSummarySection" Grid.Row="1" Margin="0,9,0,0">
+                    <!-- 5 张平衡微徽章 KPI 卡 -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="9"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="9"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="9"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="9"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
                         <Border Grid.Column="0" Style="{StaticResource KpiCardBorder}">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="7" Height="7" Fill="#4F46E5" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Usage.TotalTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="TotalTokensText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#0F172A" Margin="0,4,0,0"/>
+                                <Grid>
+                                    <TextBlock Text="{DynamicResource Usage.TotalTokens}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <Border Width="18" Height="18" CornerRadius="5" Background="#EEF2FF" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Ellipse Width="7" Height="7" Fill="#4F46E5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="TotalTokensText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#0F172A" Margin="0,4,0,0"/>
                                 <TextBlock x:Name="TotalSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </Border>
 
                         <Border Grid.Column="2" Style="{StaticResource KpiCardBorder}">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="7" Height="7" Fill="#0284C7" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Usage.InputTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="InTokensText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#0369A1" Margin="0,4,0,0"/>
+                                <Grid>
+                                    <TextBlock Text="{DynamicResource Usage.InputTokens}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <Border Width="18" Height="18" CornerRadius="5" Background="#E0F2FE" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Ellipse Width="7" Height="7" Fill="#0284C7" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="InTokensText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#0369A1" Margin="0,4,0,0"/>
                                 <TextBlock x:Name="InSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </Border>
 
                         <Border Grid.Column="4" Style="{StaticResource KpiCardBorder}">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="7" Height="7" Fill="#059669" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Usage.OutputTokens}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="OutTokensText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#059669" Margin="0,4,0,0"/>
+                                <Grid>
+                                    <TextBlock Text="{DynamicResource Usage.OutputTokens}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <Border Width="18" Height="18" CornerRadius="5" Background="#DCFCE7" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Ellipse Width="7" Height="7" Fill="#059669" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="OutTokensText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#059669" Margin="0,4,0,0"/>
                                 <TextBlock x:Name="OutSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </Border>
 
                         <Border Grid.Column="6" Style="{StaticResource KpiCardBorder}">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="7" Height="7" Fill="#D97706" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Usage.Requests}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="RequestsText" Text="0" FontSize="20" FontWeight="Bold" Foreground="#D97706" Margin="0,4,0,0"/>
+                                <Grid>
+                                    <TextBlock Text="{DynamicResource Usage.Requests}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <Border Width="18" Height="18" CornerRadius="5" Background="#FEF3C7" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Ellipse Width="7" Height="7" Fill="#D97706" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="RequestsText" Text="0" FontSize="21" FontWeight="Bold" Foreground="#D97706" Margin="0,4,0,0"/>
                                 <TextBlock x:Name="ReqSubText" Text="—" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </Border>
 
                         <Border Grid.Column="8" Style="{StaticResource KpiCardBorder}">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="7" Height="7" Fill="#7C3AED" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{DynamicResource Usage.CacheHitRate}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock x:Name="CacheHitText" Text="—" FontSize="20" FontWeight="Bold" Foreground="#7C3AED" Margin="0,4,0,0"/>
+                                <Grid>
+                                    <TextBlock Text="{DynamicResource Usage.CacheHitRate}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                    <Border Width="18" Height="18" CornerRadius="5" Background="#F3E8FF" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Ellipse Width="7" Height="7" Fill="#7C3AED" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="CacheHitText" Text="—" FontSize="21" FontWeight="Bold" Foreground="#7C3AED" Margin="0,4,0,0"/>
                                 <TextBlock x:Name="CacheHitDetailText" Text="" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </Border>
                     </Grid>
 
                     <!-- 趋势图 + 客户端多色占比条 -->
-                    <Border Margin="0,8,0,0" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Padding="14,9,14,7">
+                    <Border Margin="0,9,0,0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="11" Padding="14,10,14,8">
                         <StackPanel>
                             <Grid>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -460,10 +487,10 @@
                 <Grid Grid.Row="2" Margin="0,8,0,0">
 
                     <!-- 面板 1：供应商明细 -->
-                    <Border x:Name="ProvidersPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
+                    <Border x:Name="ProvidersPanel" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="11" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="35"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
@@ -492,7 +519,7 @@
                                         <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="8,2">
                                             <StackPanel>
                                                 <Button Style="{StaticResource RowHeaderBtn}" Click="OnToggleProviderExpand" ToolTip="{DynamicResource Usage.ExpandTip}">
-                                                    <Grid Height="34">
+                                                    <Grid Height="38">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="20"/>
                                                             <ColumnDefinition Width="*"/>
@@ -556,10 +583,10 @@
                     </Border>
 
                     <!-- 面板 2：客户端汇总 -->
-                    <Border x:Name="AgentsPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Visibility="Collapsed" ClipToBounds="True">
+                    <Border x:Name="AgentsPanel" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="11" Visibility="Collapsed" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="35"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
@@ -586,8 +613,8 @@
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Button Style="{StaticResource RowHeaderBtn}" Click="OnAgentRowFilterClick">
-                                            <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="8,0">
-                                                <Grid Height="36">
+                                            <Border Style="{StaticResource FlatRowBorder}" Padding="8,0">
+                                                <Grid Height="38">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="20"/>
                                                         <ColumnDefinition Width="*"/>
@@ -618,10 +645,10 @@
                     </Border>
 
                     <!-- 面板 3：模型汇总 -->
-                    <Border x:Name="ModelsPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Visibility="Collapsed" ClipToBounds="True">
+                    <Border x:Name="ModelsPanel" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="11" Visibility="Collapsed" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="35"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
@@ -650,7 +677,7 @@
                                         <Border BorderBrush="#F1F5F9" BorderThickness="0,0,0,1" Padding="8,2">
                                             <StackPanel>
                                                 <Button Style="{StaticResource RowHeaderBtn}" Click="OnToggleModelExpand" ToolTip="{DynamicResource Usage.ExpandTip}">
-                                                    <Grid Height="34">
+                                                    <Grid Height="38">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="20"/>
                                                             <ColumnDefinition Width="*"/>
@@ -717,10 +744,10 @@
                     </Border>
 
                     <!-- 面板 4：调用明细 -->
-                    <Border x:Name="CallsPanel" Background="#FFFFFF" BorderBrush="#E4E9F2" BorderThickness="1" CornerRadius="10" Visibility="Collapsed" ClipToBounds="True">
+                    <Border x:Name="CallsPanel" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="11" Visibility="Collapsed" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="35"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E4E9F2" BorderThickness="0,0,0,1" Padding="14,0,22,0">
@@ -752,8 +779,8 @@
                             <ListBox x:Name="CallsList" Grid.Row="1" Style="{StaticResource VListBox}" Padding="6,2">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderBrush="#F8FAFC" BorderThickness="0,0,0,1" Padding="8,0">
-                                            <Grid Height="30">
+                                        <Border Style="{StaticResource FlatRowBorder}" Padding="8,0">
+                                            <Grid Height="33">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="120"/>
                                                     <ColumnDefinition Width="106"/>

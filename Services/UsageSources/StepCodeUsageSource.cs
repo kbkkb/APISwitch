@@ -27,9 +27,20 @@ public sealed class StepCodeUsageSource : UsageSourceBase
         var root = Path.Combine(ClaudeCli.HomeDir, ".stepcode", "agent", "sessions");
         if (!Directory.Exists(root)) return 0;   // 用户没装 StepCode：静默跳过
 
+        var files = new List<string>(EnumerateRecentJsonl(root, maxAgeDays: 400));
+        bool needRepair = GetWatermark("stepcode:model_fix_v1") == 0;
+        if (needRepair)
+        {
+            foreach (var f in files) SetFileOffset(f, 0);
+        }
+
         int added = 0;
-        foreach (var file in EnumerateRecentJsonl(root, maxAgeDays: 400))
+        foreach (var file in files)
             added += ScanFile(file);
+
+        if (needRepair)
+            SetWatermark("stepcode:model_fix_v1", 1);
+
         return added;
     }
 
@@ -44,10 +55,26 @@ public sealed class StepCodeUsageSource : UsageSourceBase
         try
         {
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            string? currentModel = GetFileModel(file);
+
+            // 若增量扫描且尚未缓存文件模型，先从文件头预扫最多 50 行提取 model_change / model
+            if (start > 0 && string.IsNullOrEmpty(currentModel))
+            {
+                using (var headReader = new StreamReader(fs, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true))
+                {
+                    for (int i = 0; i < 50; i++)
+                    {
+                        var hl = headReader.ReadLine();
+                        if (hl == null) break;
+                        TryExtractModelHint(hl, ref currentModel);
+                        if (!string.IsNullOrEmpty(currentModel)) break;
+                    }
+                }
+            }
+
             if (start > 0) fs.Seek(start, SeekOrigin.Begin);
             using var reader = new StreamReader(fs);
 
-            string? currentModel = "";
             string? line;
             while ((line = reader.ReadLine()) != null)
             {
@@ -55,6 +82,9 @@ public sealed class StepCodeUsageSource : UsageSourceBase
                 var rec = ParseLine(line, ref currentModel);
                 if (rec != null) batch.Add(rec);
             }
+
+            if (!string.IsNullOrEmpty(currentModel))
+                SetFileModel(file, currentModel);
 
             if (batch.Count == 0 || RecordBatch(batch))
             {
@@ -69,6 +99,20 @@ public sealed class StepCodeUsageSource : UsageSourceBase
         return added;
     }
 
+    static void TryExtractModelHint(string line, ref string? currentModel)
+    {
+        try
+        {
+            var node = JsonNode.Parse(line);
+            var m = node?["modelId"]?.GetValue<string>()
+                    ?? node?["model"]?.GetValue<string>()
+                    ?? node?["message"]?["model"]?.GetValue<string>()
+                    ?? node?["message"]?["modelId"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(m)) currentModel = m;
+        }
+        catch { }
+    }
+
     UsageStorage.UsageRecord? ParseLine(string line, ref string? currentModel)
     {
         try
@@ -76,10 +120,10 @@ public sealed class StepCodeUsageSource : UsageSourceBase
             var node = JsonNode.Parse(line);
             var type = node?["type"]?.GetValue<string>();
 
-            // 模型切换事件：更新当前模型
+            // 模型切换事件：更新当前模型（兼容 modelId 与 model）
             if (type == "model_change")
             {
-                var m = node?["modelId"]?.GetValue<string>();
+                var m = node?["modelId"]?.GetValue<string>() ?? node?["model"]?.GetValue<string>();
                 if (!string.IsNullOrEmpty(m)) currentModel = m;
                 return null;
             }
@@ -107,9 +151,16 @@ public sealed class StepCodeUsageSource : UsageSourceBase
 
             if (totalInTok == 0 && outTok == 0) return null;
 
-            // 模型优先取消息自带的 modelId，缺失时用会话内跟踪值
-            string model = msg["modelId"]?.GetValue<string>() ?? "";
-            if (string.IsNullOrEmpty(model)) model = currentModel ?? "";
+            // 模型优先取消息自带的 model / modelId，缺失时用会话内跟踪值
+            string model = msg["model"]?.GetValue<string>()
+                           ?? msg["modelId"]?.GetValue<string>()
+                           ?? node?["model"]?.GetValue<string>()
+                           ?? node?["modelId"]?.GetValue<string>()
+                           ?? "";
+            if (!string.IsNullOrEmpty(model))
+                currentModel = model;
+            else
+                model = currentModel ?? "";
 
             DateTime ts = DateTime.Now;
             if (DateTime.TryParse(node?["timestamp"]?.GetValue<string>(),

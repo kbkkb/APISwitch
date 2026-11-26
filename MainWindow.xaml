@@ -231,7 +231,7 @@
         <Border Grid.Row="0" Background="{DynamicResource TitleBarBgBrush}" BorderBrush="{DynamicResource TitleBarBorderBrush}" BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="236"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
@@ -292,99 +292,125 @@
                 </StackPanel>
             </TabItem.Header>
 
-            <Grid Margin="28,14,28,24">
+            <Grid Margin="28,14,28,22">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Hero Status Card -->
+                <!-- Hero Status Banner (Refactored Modern Layout) -->
                 <Border Grid.Row="0" Background="{DynamicResource HeroCardBgBrush}" BorderBrush="{DynamicResource HeroCardBorderBrush}"
-                        BorderThickness="1" CornerRadius="12" Padding="20,16">
+                        BorderThickness="1" CornerRadius="14" Padding="20,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="{DynamicResource AccentGradient}" VerticalAlignment="Center">
-                            <TextBlock Text="G" FontSize="20" FontWeight="Bold" Foreground="White"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <!-- Brand Emblem -->
+                        <Border Width="48" Height="48" CornerRadius="13" Background="#FFFFFF" BorderBrush="#E0E7FF" BorderThickness="1" VerticalAlignment="Center">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#6366F1" BlurRadius="12" ShadowDepth="0" Opacity="0.12"/>
+                            </Border.Effect>
+                            <Image Source="pack://application:,,,/Assets/antigravity.png" Width="28" Height="28"
+                                   RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Google Antigravity" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                        <!-- Account & IDE Telemetry -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Google Antigravity" FontSize="16.5" FontWeight="Bold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
                                 <Border x:Name="CurrentAgBadge" Background="{StaticResource GreenDimBrush}" BorderBrush="{StaticResource GreenBorderBrush}"
                                         BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{DynamicResource Ag.HeroBadgeReady}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource GreenBrush}"/>
+                                    <TextBlock Text="{DynamicResource Ag.HeroBadgeReady}" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}"/>
+                                </Border>
+                                <Border Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="6,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="AccountCountChipText" Text="—" FontSize="10.5" FontWeight="Medium" Foreground="{StaticResource AccentBrush}"/>
                                 </Border>
                             </StackPanel>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
+                            <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{DynamicResource Ag.CurrentAccountLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="CurrentAccountText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="{DynamicResource Ag.CurrentAccountLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="CurrentAccountText" Text="{DynamicResource Ag.Detecting}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Border>
-                                <Border Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
                                     <TextBlock x:Name="StateChip" Text="—" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextBrush}"/>
                                 </Border>
-                                <Border Style="{StaticResource Chip}" Margin="8,0,0,0">
-                                    <TextBlock x:Name="PlanChip" Text="—" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextBrush}"/>
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
+                                    <TextBlock x:Name="PlanChip" Text="—" FontSize="11" FontWeight="Medium" Foreground="{StaticResource AccentBrush}"/>
                                 </Border>
-                                <Border Style="{StaticResource Chip}" Margin="8,0,0,0">
-                                    <TextBlock x:Name="IdeChip" Text="—" FontSize="11" FontWeight="Medium"/>
+                                <Border Style="{StaticResource Chip}" Margin="0,0,0,2">
+                                    <TextBlock x:Name="IdeChip" Text="—" FontSize="11" FontWeight="SemiBold"/>
                                 </Border>
-                            </StackPanel>
-                            <TextBlock x:Name="DbPathText" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="2,6,0,0"
+                            </WrapPanel>
+                            <TextBlock x:Name="DbPathText" FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="2,4,0,0"
                                        TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+                        </StackPanel>
+
+                        <!-- Primary Quick Actions -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource GhostButton}" Padding="12,7" Margin="0,0,8,0" Click="OnLaunchIde">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconRocket}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Ag.LaunchIdeBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource PrimaryButton}" Padding="14,7" Click="OnNewAccountLogin" ToolTip="{DynamicResource Ag.LoginTip}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconUserPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Ag.LoginBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <!-- Action Toolbar -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnNewAccountLogin" ToolTip="{DynamicResource Ag.LoginTip}">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconUserPlus}" Fill="White" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Ag.LoginBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="BatchActivateBtn" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnBatchActivateAntigravity" ToolTip="{DynamicResource Ag.BatchActivateTip}">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Ag.BatchActivateBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnLaunchIde">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconRocket}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Ag.LaunchIdeBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnImportFromAgTools" ToolTip="{DynamicResource Ag.ImportToolsTip}">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconImport}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Ag.ImportToolsBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefresh" ToolTip="{DynamicResource Ag.RefreshTip}">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="13" Height="13" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <CheckBox x:Name="AutoRestartCheck" Content="{DynamicResource Ag.AutoRestartCheck}" IsChecked="True" VerticalAlignment="Center" Margin="20,0,0,0" FontSize="12"/>
-                </StackPanel>
+                <!-- Secondary Action Bar -->
+                <Grid Grid.Row="1" Margin="0,12,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="BatchActivateBtn" Style="{StaticResource GhostButton}" Padding="11,6" Click="OnBatchActivateAntigravity" ToolTip="{DynamicResource Ag.BatchActivateTip}">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Ag.BatchActivateBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnImportFromAgTools" ToolTip="{DynamicResource Ag.ImportToolsTip}">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconImport}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Ag.ImportToolsBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnRefresh" ToolTip="{DynamicResource Ag.RefreshTip}">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Common.Refresh}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="AgFloatingWidgetBtn" Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0"
+                                Click="OnToggleFloatingWidgetClick" ToolTip="{DynamicResource Main.WidgetTip}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse x:Name="AgFloatingWidgetDot" Width="7" Height="7" Fill="#16A34A" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                <TextBlock x:Name="AgFloatingWidgetBtnText" Text="{DynamicResource Ag.WidgetBtnOn}" VerticalAlignment="Center" FontWeight="Medium"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" x:Name="AutoRestartCheck" Content="{DynamicResource Ag.AutoRestartCheck}" IsChecked="True" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource TextDimBrush}"/>
+                </Grid>
 
                 <!-- Account Cards List -->
                 <Grid Grid.Row="2">
                     <ScrollViewer x:Name="AgScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
-                        <ListBox x:Name="ProfileList" Margin="0,4,0,0"
+                        <ListBox x:Name="ProfileList" Margin="0,2,0,0"
                                 Background="Transparent" BorderThickness="0"
                                 VirtualizingPanel.IsVirtualizing="False"
                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
@@ -395,71 +421,64 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
-                                            BorderThickness="1" CornerRadius="12" Padding="18,15" Margin="0,5" HorizontalAlignment="Stretch">
+                                            BorderThickness="1" CornerRadius="12" Padding="16,13" Margin="0,4" HorizontalAlignment="Stretch">
                                         <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
 
-                                            <!-- Row 0: Avatar, Info, Badges & Actions -->
-                                            <Grid Grid.Row="0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
+                                            <!-- Left Active Accent Indicator -->
+                                            <Border x:Name="ActiveBar" Grid.Column="0" Width="3.5" CornerRadius="2"
+                                                    Background="{DynamicResource AccentGradient}" Margin="-8,-1,10,-1" Visibility="Collapsed"/>
 
-                                                <!-- Drag Handle Grip -->
-                                                <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
-                                                    <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                          Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
-                                                          Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
-                                                </Border>
+                                            <Grid Grid.Column="1">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
 
-                                                <!-- Avatar Initial -->
-                                                <Border Grid.Column="1" Width="42" Height="42" CornerRadius="21" Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Initial}" FontSize="16" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
+                                                <!-- Row 0: Avatar, Identity, Tier/Sync & Compact Actions -->
+                                                <Grid Grid.Row="0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
 
-                                                <!-- Email, Name & Tier -->
-                                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Email}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                                                        <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
-                                                            <TextBlock Text="{DynamicResource Ag.CurrentBadge}" Style="{StaticResource BadgeGreenText}"/>
-                                                        </Border>
-                                                        <!-- Tier Badge -->
-                                                        <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                                ToolTip="{Binding TierTooltip}">
-                                                            <TextBlock Text="{Binding TierDisplay}" FontSize="10" FontWeight="SemiBold">
-                                                                <TextBlock.Style>
-                                                                    <Style TargetType="TextBlock">
-                                                                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsPaidPro}" Value="True">
-                                                                                <Setter Property="Foreground" Value="{DynamicResource TabAccentBrush}"/>
-                                                                            </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding IsPromoPro}" Value="True">
-                                                                                <Setter Property="Foreground" Value="#64748B"/>
-                                                                            </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding IsPlus}" Value="True">
-                                                                                <Setter Property="Foreground" Value="#0284C7"/>
-                                                                            </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding IsUltra}" Value="True">
-                                                                                <Setter Property="Foreground" Value="#D97706"/>
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
-                                                        </Border>
-                                                        <!-- Activation Badge -->
-                                                        <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                                ToolTip="{Binding ActivationTooltip}">
-                                                            <TextBlock Text="{Binding ActivationStatusText}" FontSize="10" FontWeight="SemiBold">
+                                                    <!-- Drag Handle Grip -->
+                                                    <Border Grid.Column="0" Width="18" Height="30" Background="Transparent" VerticalAlignment="Center" Margin="0,0,7,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
+                                                        <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
+                                                              Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
+                                                    </Border>
+
+                                                    <!-- Rounded Square Avatar -->
+                                                    <Border x:Name="AvatarBadge" Grid.Column="1" Width="38" Height="38" CornerRadius="10" Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+
+                                                    <!-- Identity & Status Meta -->
+                                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Email}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                                            <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
+                                                                <TextBlock Text="{DynamicResource Ag.CurrentBadge}" Style="{StaticResource BadgeGreenText}"/>
+                                                            </Border>
+                                                            <Border x:Name="TierBadgeBorder" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                                    ToolTip="{Binding TierTooltip}">
+                                                                <TextBlock x:Name="TierBadgeText" Text="{Binding TierDisplay}" FontSize="10" FontWeight="SemiBold" Foreground="#64748B"/>
+                                                            </Border>
+                                                        </WrapPanel>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontSize="11" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                            <TextBlock Text=" · " FontSize="11" Foreground="#CBD5E1" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding QuotaUpdatedText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                            <TextBlock Text=" · " FontSize="11" Foreground="#CBD5E1" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding ActivationStatusText}" FontSize="11" FontWeight="Medium" ToolTip="{Binding ActivationTooltip}" VerticalAlignment="Center">
                                                                 <TextBlock.Style>
                                                                     <Style TargetType="TextBlock">
                                                                         <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
@@ -474,190 +493,267 @@
                                                                     </Style>
                                                                 </TextBlock.Style>
                                                             </TextBlock>
-                                                        </Border>
-                                                    </StackPanel>
-                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding Name}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                                        <TextBlock Text="  ·  " FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                                                        <TextBlock Text="{Binding QuotaUpdatedText}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                                                    </StackPanel>
-                                                </StackPanel>
-
-                                                <!-- Action Buttons -->
-                                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                    <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowSwitchAntigravity" ToolTip="{DynamicResource Ag.SwitchTip}">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="{DynamicResource Ag.SwitchBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                    </Button>
-                                                    <Button Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardActivateQuota" ToolTip="{DynamicResource Ag.ActivateQuotaTip}">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Path x:Name="ActivateIcon" Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                                                <Path.RenderTransform>
-                                                                    <RotateTransform x:Name="ActivateIconRotate" Angle="0"/>
-                                                                </Path.RenderTransform>
-                                                            </Path>
-                                                            <TextBlock Text="{DynamicResource Ag.ActivateQuotaBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                    <Button x:Name="RefreshQuotaBtn" Style="{StaticResource GhostButton}" Padding="10,6" Margin="8,0,0,0" Click="OnCardRefreshQuota" ToolTip="{DynamicResource Ag.RefreshQuotaTip}">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Path x:Name="RefreshIcon" Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                                                <Path.RenderTransform>
-                                                                    <RotateTransform x:Name="RefreshIconRotate" Angle="0"/>
-                                                                </Path.RenderTransform>
-                                                            </Path>
-                                                            <TextBlock Text="{DynamicResource Ag.RefreshQuotaBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                    <Button Style="{StaticResource DangerButton}" Padding="8,6" Margin="8,0,0,0" Click="OnCardDeleteAntigravity" ToolTip="{DynamicResource Ag.DeleteTip}">
-                                                        <Path Data="{StaticResource IconTrash}" Fill="{StaticResource DangerBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                    </Button>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- Row 1: Triple Quota Metrics Panel (Gemini, Gemini 4 Argon & Claude/GPT) -->
-                                            <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,12,0,0">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="16"/>
-                                                        <ColumnDefinition Width="{x:Static models:Profile.ArgonQuotaColumnWidth}"/>
-                                                        <ColumnDefinition Width="{x:Static models:Profile.ArgonSeparatorColumnWidth}"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <!-- Left Column: Gemini Models -->
-                                                    <StackPanel Grid.Column="0">
-                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                            <Border Background="#EEF2FF" CornerRadius="4" Padding="6,2">
-                                                                <TextBlock Text="{DynamicResource Ag.GeminiModels}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
-                                                            </Border>
-                                                        </StackPanel>
-
-                                                        <!-- Gemini 5H -->
-                                                        <Grid Margin="0,0,0,3">
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
-                                                                <Border Background="{Binding Quota5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
-                                                                        VerticalAlignment="Center" Visibility="{Binding Quota5hCountdownVisibility}"
-                                                                        ToolTip="{Binding Quota5hCountdownTooltip}">
-                                                                    <TextBlock Text="{Binding Quota5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota5hCountdownFg}"/>
-                                                                </Border>
-                                                            </StackPanel>
-                                                            <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
-                                                                    Foreground="{StaticResource GreenBrush}"/>
-
-                                                        <!-- Gemini Weekly -->
-                                                        <Grid Margin="0,0,0,3">
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
-                                                                <Border Background="{Binding QuotaWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
-                                                                        VerticalAlignment="Center" Visibility="{Binding QuotaWeeklyCountdownVisibility}"
-                                                                        ToolTip="{Binding QuotaWeeklyCountdownTooltip}">
-                                                                    <TextBlock Text="{Binding QuotaWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaWeeklyCountdownFg}"/>
-                                                                </Border>
-                                                            </StackPanel>
-                                                            <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaWeeklyPercentValue, Mode=OneWay}"
-                                                                    Foreground="{StaticResource AccentBrush}"/>
                                                     </StackPanel>
 
-                                                    <Rectangle Grid.Column="1" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"/>
-
-                                                    <!-- Middle Column: Gemini 4 Argon -->
-                                                    <StackPanel Grid.Column="2" ToolTip="{Binding ArgonColumnTooltip}"
-                                                                Visibility="{x:Static models:Profile.ArgonQuotaColumnVisibility}">
-                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                            <Border Background="#ECFEFF" CornerRadius="4" Padding="6,2">
-                                                                <TextBlock Text="{DynamicResource Ag.GeminiArgonModels}" FontSize="11" FontWeight="SemiBold" Foreground="#0891B2"/>
-                                                            </Border>
-                                                        </StackPanel>
-
-                                                        <!-- Argon 5H -->
-                                                        <Grid Margin="0,0,0,3">
+                                                    <!-- Compact Uniform Height Action Buttons -->
+                                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                        <Button x:Name="SwitchBtnCard" Style="{StaticResource PrimaryButton}" Height="30" Padding="12,0" FontSize="12" Click="OnRowSwitchAntigravity" ToolTip="{DynamicResource Ag.SwitchTip}">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
-                                                                <Border Background="{Binding QuotaArgon5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
-                                                                        VerticalAlignment="Center" Visibility="{Binding QuotaArgon5hCountdownVisibility}"
-                                                                        ToolTip="{Binding QuotaArgon5hCountdownTooltip}">
-                                                                    <TextBlock Text="{Binding QuotaArgon5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaArgon5hCountdownFg}"/>
-                                                                </Border>
+                                                                <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="{DynamicResource Ag.SwitchBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding QuotaArgon5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#14B8A6" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgon5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
-                                                                    Foreground="#14B8A6"/>
-
-                                                        <!-- Argon Weekly -->
-                                                        <Grid Margin="0,0,0,3">
+                                                        </Button>
+                                                        <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardActivateQuota" ToolTip="{DynamicResource Ag.ActivateQuotaTip}">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
-                                                                <Border Background="{Binding QuotaArgonWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
-                                                                        VerticalAlignment="Center" Visibility="{Binding QuotaArgonWeeklyCountdownVisibility}"
-                                                                        ToolTip="{Binding QuotaArgonWeeklyCountdownTooltip}">
-                                                                    <TextBlock Text="{Binding QuotaArgonWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaArgonWeeklyCountdownFg}"/>
-                                                                </Border>
+                                                                <Path x:Name="ActivateIcon" Data="{StaticResource IconZap}" Fill="{StaticResource AccentBrush}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                                    <Path.RenderTransform>
+                                                                        <RotateTransform x:Name="ActivateIconRotate" Angle="0"/>
+                                                                    </Path.RenderTransform>
+                                                                </Path>
+                                                                <TextBlock Text="{DynamicResource Ag.ActivateQuotaBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding QuotaArgonWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#0891B2" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgonWeeklyPercentValue, Mode=OneWay}"
-                                                                    Foreground="#0891B2"/>
-                                                    </StackPanel>
-
-                                                    <Rectangle Grid.Column="3" Width="1" Fill="#E2E8F0" HorizontalAlignment="Center"
-                                                               Visibility="{x:Static models:Profile.ArgonQuotaColumnVisibility}"/>
-
-                                                    <!-- Right Column: Claude & GPT Models -->
-                                                    <StackPanel Grid.Column="4">
-                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                            <Border Background="#F5F3FF" CornerRadius="4" Padding="6,2">
-                                                                <TextBlock Text="{DynamicResource Ag.ClaudeGptModels}" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
-                                                            </Border>
-                                                        </StackPanel>
-
-                                                        <!-- Claude 5H -->
-                                                        <Grid Margin="0,0,0,3">
+                                                        </Button>
+                                                        <Button x:Name="RefreshQuotaBtn" Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardRefreshQuota" ToolTip="{DynamicResource Ag.RefreshQuotaTip}">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
-                                                                <Border Background="{Binding Quota3p5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
-                                                                        VerticalAlignment="Center" Visibility="{Binding Quota3p5hCountdownVisibility}"
-                                                                        ToolTip="{Binding Quota3p5hCountdownTooltip}">
-                                                                    <TextBlock Text="{Binding Quota3p5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3p5hCountdownFg}"/>
-                                                                </Border>
+                                                                <Path x:Name="RefreshIcon" Data="{StaticResource IconRefresh}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                                    <Path.RenderTransform>
+                                                                        <RotateTransform x:Name="RefreshIconRotate" Angle="0"/>
+                                                                    </Path.RenderTransform>
+                                                                </Path>
+                                                                <TextBlock Text="{DynamicResource Ag.RefreshQuotaBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                             </StackPanel>
-                                                            <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3p5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
-                                                                    Foreground="#10B981"/>
-
-                                                        <!-- Claude Weekly -->
-                                                        <Grid Margin="0,0,0,3">
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
-                                                                <Border Background="{Binding Quota3pWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
-                                                                        VerticalAlignment="Center" Visibility="{Binding Quota3pWeeklyCountdownVisibility}"
-                                                                        ToolTip="{Binding Quota3pWeeklyCountdownTooltip}">
-                                                                    <TextBlock Text="{Binding Quota3pWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3pWeeklyCountdownFg}"/>
-                                                                </Border>
-                                                            </StackPanel>
-                                                            <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                        <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3pWeeklyPercentValue, Mode=OneWay}"
-                                                                    Foreground="#8B5CF6"/>
+                                                        </Button>
+                                                        <Button Style="{StaticResource CardDangerIconBtn}" Margin="6,0,0,0" Click="OnCardDeleteAntigravity" ToolTip="{DynamicResource Ag.DeleteTip}">
+                                                            <Path Data="{StaticResource IconTrash}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        </Button>
                                                     </StackPanel>
                                                 </Grid>
-                                            </Border>
+
+                                                <!-- Row 1: Clean Divider & Dual Quota Columns -->
+                                                <Border Grid.Row="1" BorderBrush="#F1F5F9" BorderThickness="0,1,0,0" Padding="2,10,2,2" Margin="0,11,0,0">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="20"/>
+                                                            <ColumnDefinition Width="{x:Static models:Profile.ArgonQuotaColumnWidth}"/>
+                                                            <ColumnDefinition Width="{x:Static models:Profile.ArgonSeparatorColumnWidth}"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Left Column: Gemini Models -->
+                                                        <StackPanel Grid.Column="0">
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,7" VerticalAlignment="Center">
+                                                                <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.GeminiModels}" FontSize="11.5" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+
+                                                            <!-- Gemini 5H -->
+                                                            <Grid Margin="0,0,0,3">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                    <Border Background="{Binding Quota5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding Quota5hCountdownVisibility}"
+                                                                            ToolTip="{Binding Quota5hCountdownTooltip}">
+                                                                        <TextBlock Text="{Binding Quota5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota5hCountdownFg}"/>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
+                                                                        Foreground="{StaticResource GreenBrush}"/>
+
+                                                            <!-- Gemini Weekly -->
+                                                            <Grid Margin="0,0,0,3">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                    <Border Background="{Binding QuotaWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding QuotaWeeklyCountdownVisibility}"
+                                                                            ToolTip="{Binding QuotaWeeklyCountdownTooltip}">
+                                                                        <TextBlock Text="{Binding QuotaWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaWeeklyCountdownFg}"/>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaWeeklyPercentValue, Mode=OneWay}"
+                                                                        Foreground="{StaticResource AccentBrush}"/>
+                                                        </StackPanel>
+
+                                                        <Rectangle Grid.Column="1" Width="1" Fill="#E8EEF6" HorizontalAlignment="Center"/>
+
+                                                        <!-- Middle Column: Gemini 4 Argon (Gated behind Profile.ShowArgonQuotaColumn) -->
+                                                        <StackPanel Grid.Column="2" ToolTip="{Binding ArgonColumnTooltip}"
+                                                                    Visibility="{x:Static models:Profile.ArgonQuotaColumnVisibility}">
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,7" VerticalAlignment="Center">
+                                                                <Ellipse Width="6" Height="6" Fill="#0891B2" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.GeminiArgonModels}" FontSize="11.5" FontWeight="SemiBold" Foreground="#0891B2" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+
+                                                            <!-- Argon 5H -->
+                                                            <Grid Margin="0,0,0,3">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                    <Border Background="{Binding QuotaArgon5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding QuotaArgon5hCountdownVisibility}"
+                                                                            ToolTip="{Binding QuotaArgon5hCountdownTooltip}">
+                                                                        <TextBlock Text="{Binding QuotaArgon5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaArgon5hCountdownFg}"/>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding QuotaArgon5hPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#14B8A6" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgon5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
+                                                                        Foreground="#14B8A6"/>
+
+                                                            <!-- Argon Weekly -->
+                                                            <Grid Margin="0,0,0,3">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                    <Border Background="{Binding QuotaArgonWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding QuotaArgonWeeklyCountdownVisibility}"
+                                                                            ToolTip="{Binding QuotaArgonWeeklyCountdownTooltip}">
+                                                                        <TextBlock Text="{Binding QuotaArgonWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaArgonWeeklyCountdownFg}"/>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding QuotaArgonWeeklyPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#0891B2" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaArgonWeeklyPercentValue, Mode=OneWay}"
+                                                                        Foreground="#0891B2"/>
+                                                        </StackPanel>
+
+                                                        <Rectangle Grid.Column="3" Width="1" Fill="#E8EEF6" HorizontalAlignment="Center"
+                                                                   Visibility="{x:Static models:Profile.ArgonQuotaColumnVisibility}"/>
+
+                                                        <!-- Right Column: Claude & GPT Models -->
+                                                        <StackPanel Grid.Column="4">
+                                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,7" VerticalAlignment="Center">
+                                                                <Ellipse Width="6" Height="6" Fill="#7C3AED" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                <TextBlock Text="{DynamicResource Ag.ClaudeGptModels}" FontSize="11.5" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+
+                                                            <!-- Claude 5H -->
+                                                            <Grid Margin="0,0,0,3">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{DynamicResource Ag.FiveHourLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                    <Border Background="{Binding Quota3p5hCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding Quota3p5hCountdownVisibility}"
+                                                                            ToolTip="{Binding Quota3p5hCountdownTooltip}">
+                                                                        <TextBlock Text="{Binding Quota3p5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3p5hCountdownFg}"/>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3p5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
+                                                                        Foreground="#10B981"/>
+
+                                                            <!-- Claude Weekly -->
+                                                            <Grid Margin="0,0,0,3">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{DynamicResource Ag.WeeklyLabel}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"/>
+                                                                    <Border Background="{Binding Quota3pWeeklyCountdownBg}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding Quota3pWeeklyCountdownVisibility}"
+                                                                            ToolTip="{Binding Quota3pWeeklyCountdownTooltip}">
+                                                                        <TextBlock Text="{Binding Quota3pWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3pWeeklyCountdownFg}"/>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3pWeeklyPercentValue, Mode=OneWay}"
+                                                                        Foreground="#8B5CF6"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Row 2: Flat & Merged Available Models Drawer -->
+                                                <StackPanel Grid.Row="2" Visibility="{Binding HasModelCatalogVisibility}" Margin="0,8,0,0">
+                                                    <Border Height="1" Background="#F1F5F9" Margin="0,0,0,6"/>
+                                                    <Button Click="OnToggleProfileModels" Cursor="Hand" Focusable="False"
+                                                            ToolTip="{DynamicResource Ag.ModelsToggleTip}">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="ToggleBd" Background="Transparent" CornerRadius="7" Padding="6,4">
+                                                                    <Grid>
+                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <TextBlock Text="✦" FontSize="10" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                                            <TextBlock Text="{Binding AvailableModelsHeaderText}" FontSize="11" FontWeight="SemiBold" Foreground="#475569" VerticalAlignment="Center"/>
+                                                                        </StackPanel>
+                                                                        <Path x:Name="ChevronPath" Data="M 1 1 L 5 5 L 9 1" Stroke="#64748B" StrokeThickness="1.5"
+                                                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                                                              Width="9" Height="6" Stretch="Uniform" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                                              RenderTransformOrigin="0.5,0.5">
+                                                                            <Path.RenderTransform>
+                                                                                <RotateTransform Angle="0"/>
+                                                                            </Path.RenderTransform>
+                                                                        </Path>
+                                                                    </Grid>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="ToggleBd" Property="Background" Value="#F1F5F9"/>
+                                                                    </Trigger>
+                                                                    <DataTrigger Binding="{Binding IsModelsExpanded}" Value="True">
+                                                                        <Setter TargetName="ToggleBd" Property="Background" Value="#EEF2FF"/>
+                                                                        <Setter TargetName="ChevronPath" Property="Stroke" Value="{StaticResource AccentBrush}"/>
+                                                                        <Setter TargetName="ChevronPath" Property="RenderTransform">
+                                                                            <Setter.Value>
+                                                                                <RotateTransform Angle="180"/>
+                                                                            </Setter.Value>
+                                                                        </Setter>
+                                                                    </DataTrigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+
+                                                    <ItemsControl ItemsSource="{Binding MergedAvailableModels}" Visibility="{Binding ModelsDrawerVisibility}" Margin="2,6,0,0">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel Orientation="Horizontal"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="{Binding ChipBg}" BorderBrush="{Binding ChipBorder}" BorderThickness="1"
+                                                                        CornerRadius="6" Padding="8,3.5" Margin="0,0,6,5" ToolTip="{Binding Tooltip}">
+                                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding DisplayTitle}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding TitleFg}" VerticalAlignment="Center"/>
+                                                                        <Border Background="{Binding BadgeBg}" CornerRadius="4" Padding="4.5,1" Margin="6,0,0,0"
+                                                                                VerticalAlignment="Center" Visibility="{Binding LevelsBadgeVisibility}">
+                                                                            <TextBlock Text="{Binding LevelsBadge}" FontSize="9.5" FontWeight="SemiBold" Foreground="{Binding BadgeFg}"/>
+                                                                        </Border>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </Grid>
                                         </Grid>
                                     </Border>
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#CBD5E1"/>
+                                            <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
+                                        <DataTrigger Binding="{Binding IsPaidPro}" Value="True">
+                                            <Setter TargetName="TierBadgeBorder" Property="Background" Value="#EEF2FF"/>
+                                            <Setter TargetName="TierBadgeBorder" Property="BorderBrush" Value="#C7D2FE"/>
+                                            <Setter TargetName="TierBadgeText" Property="Foreground" Value="#4338CA"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsPromoPro}" Value="True">
+                                            <Setter TargetName="TierBadgeBorder" Property="Background" Value="#F1F5F9"/>
+                                            <Setter TargetName="TierBadgeBorder" Property="BorderBrush" Value="#CBD5E1"/>
+                                            <Setter TargetName="TierBadgeText" Property="Foreground" Value="#475569"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsPlus}" Value="True">
+                                            <Setter TargetName="TierBadgeBorder" Property="Background" Value="#E0F2FE"/>
+                                            <Setter TargetName="TierBadgeBorder" Property="BorderBrush" Value="#BAE6FD"/>
+                                            <Setter TargetName="TierBadgeText" Property="Foreground" Value="#0369A1"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsUltra}" Value="True">
+                                            <Setter TargetName="TierBadgeBorder" Property="Background" Value="#FEF3C7"/>
+                                            <Setter TargetName="TierBadgeBorder" Property="BorderBrush" Value="#FCD34D"/>
+                                            <Setter TargetName="TierBadgeText" Property="Foreground" Value="#B45309"/>
+                                        </DataTrigger>
                                         <DataTrigger Binding="{Binding IsActivating}" Value="True">
                                             <Setter TargetName="ActivateIcon" Property="Opacity" Value="0.6"/>
                                             <DataTrigger.EnterActions>
@@ -699,6 +795,7 @@
                                             <Setter TargetName="RefreshIcon" Property="Opacity" Value="1"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible"/>
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource CardActiveBrush}"/>
                                             <Setter TargetName="CurrentBadge" Property="Visibility" Value="Visible"/>
@@ -739,7 +836,7 @@
                 </StackPanel>
             </TabItem.Header>
 
-            <Grid Margin="28,14,28,24">
+            <Grid Margin="28,14,28,22">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -748,69 +845,72 @@
 
                 <!-- Hero Status Card -->
                 <Border Grid.Row="0" Background="{DynamicResource HeroCardBgBrush}" BorderBrush="{DynamicResource HeroCardBorderBrush}"
-                        BorderThickness="1" CornerRadius="12" Padding="20,16">
+                        BorderThickness="1" CornerRadius="14" Padding="20,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconOpenAi}" Fill="{StaticResource OpenAiBrush}" Width="22" Height="22" Stretch="Uniform"
+                        <Border Width="48" Height="48" CornerRadius="13" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconOpenAi}" Fill="{StaticResource OpenAiBrush}" Width="24" Height="24" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="{DynamicResource Codex.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                            <TextBlock Text="{DynamicResource Codex.HeroTitle}" FontSize="16.5" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{DynamicResource Common.CurrentProvider}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="CodexCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock x:Name="CodexCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                     </StackPanel>
                                 </Border>
-                                <Border x:Name="CodexRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                <Border x:Name="CodexRouterChip" Style="{StaticResource Chip}" Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse x:Name="CodexRouterDot" Width="6" Height="6" Fill="#10B981" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                         <TextBlock x:Name="CodexRouterChipText" Text="{DynamicResource Router.DirectModeNoRouter}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource GhostButton}" Padding="12,7" Margin="0,0,8,0" Click="OnRestartCodex">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Codex.RestartBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource PrimaryButton}" Padding="14,7" Click="OnAddCodex">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- Action Toolbar -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnAddCodex">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,10">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="CodexToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleCodexProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
+                    <Button x:Name="CodexToolbarRouterBtn" Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnToggleCodexProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="CodexToolbarRouterDot" Width="7" Height="7" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="CodexToolbarRouterText" Text="{DynamicResource Router.ToolbarOff}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRestartCodex">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Codex.RestartBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenCodexConfig">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnOpenCodexConfig">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Codex.OpenConfigBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Codex.OpenConfigBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -819,7 +919,7 @@
                 <Grid Grid.Row="2">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
-                        <ListBox x:Name="CodexList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                        <ListBox x:Name="CodexList" Margin="0,2,0,0" Background="Transparent" BorderThickness="0"
                                 VirtualizingPanel.IsVirtualizing="False"
                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -829,63 +929,79 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
-                                            BorderThickness="1" CornerRadius="12" Padding="16,14" Margin="0,4" HorizontalAlignment="Stretch">
+                                            BorderThickness="1" CornerRadius="12" Padding="16,13" Margin="0,4" HorizontalAlignment="Stretch">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
+                                            <Border x:Name="ActiveBar" Grid.Column="0" Width="3.5" CornerRadius="2"
+                                                    Background="{DynamicResource AccentGradient}" Margin="-8,-1,8,-1" Visibility="Collapsed"/>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
+                                            <Border Grid.Column="1" Width="18" Height="30" Background="Transparent" VerticalAlignment="Center" Margin="0,0,7,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
-                                                      Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
                                             </Border>
                                             <!-- Avatar -->
-                                            <Border Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" VerticalAlignment="Center">
+                                            <Border Grid.Column="2" Width="38" Height="38" CornerRadius="10" Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource OpenAiBrush}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <!-- Info -->
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="12,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
                                                         <TextBlock Text="{DynamicResource Common.InUseBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
                                                     <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
-                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
+                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="7,0,0,0"
                                                             VerticalAlignment="Center" Visibility="{Binding RouterBadgeVisibility}"
                                                             ToolTip="{Binding RouterBadgeTooltip}">
-                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="11" FontWeight="Medium"
+                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="10.5" FontWeight="Medium"
                                                                    Foreground="{Binding RouterBadgeForeground}"/>
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                                <TextBlock Text="{Binding SubText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"
                                                            Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                             <!-- Buttons -->
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyCodex">
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Height="30" Padding="12,0" FontSize="12" Click="OnRowApplyCodex">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditCodex"/>
-                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyCodex"/>
-                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteCodex"/>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardEditCodex">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconEdit}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.Edit}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardCopyCodex">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconCopy}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.CopyCross}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardDangerIconBtn}" Margin="6,0,0,0" Click="OnCardDeleteCodex" ToolTip="{DynamicResource Common.Delete}">
+                                                    <Path Data="{StaticResource IconTrash}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#CBD5E1"/>
                                             <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible"/>
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource CardActiveBrush}"/>
                                             <Setter TargetName="CurrentBadge" Property="Visibility" Value="Visible"/>
@@ -922,7 +1038,7 @@
                 </StackPanel>
             </TabItem.Header>
 
-            <Grid Margin="28,14,28,24">
+            <Grid Margin="28,14,28,22">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -931,68 +1047,72 @@
 
                 <!-- Hero Status Card -->
                 <Border Grid.Row="0" Background="{DynamicResource HeroCardBgBrush}" BorderBrush="{DynamicResource HeroCardBorderBrush}"
-                        BorderThickness="1" CornerRadius="12" Padding="20,16">
+                        BorderThickness="1" CornerRadius="14" Padding="20,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconClaude}" Fill="{StaticResource ClaudeBrush}" Width="22" Height="22" Stretch="Uniform"
+                        <Border Width="48" Height="48" CornerRadius="13" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconClaude}" Fill="{StaticResource ClaudeBrush}" Width="24" Height="24" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="{DynamicResource Claude.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                            <TextBlock Text="{DynamicResource Claude.HeroTitle}" FontSize="16.5" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{DynamicResource Common.CurrentProvider}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="ClaudeCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock x:Name="ClaudeCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                     </StackPanel>
                                 </Border>
-                                <Border x:Name="ClaudeRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                <Border x:Name="ClaudeRouterChip" Style="{StaticResource Chip}" Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse x:Name="ClaudeRouterDot" Width="6" Height="6" Fill="#94A3B8" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                         <TextBlock x:Name="ClaudeRouterChipText" Text="{DynamicResource Router.DirectModeNoRouter}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource PrimaryButton}" Padding="14,7" Click="OnAddClaude">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- Action Toolbar -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnAddClaude">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,10">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ClaudeToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeCliProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
+                    <Button x:Name="ClaudeToolbarRouterBtn" Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnToggleClaudeCliProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="ClaudeToolbarRouterDot" Width="7" Height="7" Fill="#94A3B8" Margin="0,0,6,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="ClaudeToolbarRouterText" Text="{DynamicResource Router.ToolbarOff}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenClaudeSettings">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnOpenClaudeSettings">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Claude.OpenSettingsBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Claude.OpenSettingsBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnStopClaudeCli" ToolTip="{DynamicResource Claude.StopProcessTip}">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnStopClaudeCli" ToolTip="{DynamicResource Claude.StopProcessTip}">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPower}" Fill="#EF4444" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Claude.StopProcessBtn}" Foreground="#EF4444" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Claude.StopProcessBtn}" Foreground="#EF4444" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1001,7 +1121,7 @@
                 <Grid Grid.Row="2">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
-                        <ListBox x:Name="ClaudeList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                        <ListBox x:Name="ClaudeList" Margin="0,2,0,0" Background="Transparent" BorderThickness="0"
                                 VirtualizingPanel.IsVirtualizing="False"
                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -1011,63 +1131,79 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
-                                            BorderThickness="1" CornerRadius="12" Padding="16,14" Margin="0,4" HorizontalAlignment="Stretch">
+                                            BorderThickness="1" CornerRadius="12" Padding="16,13" Margin="0,4" HorizontalAlignment="Stretch">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
+                                            <Border x:Name="ActiveBar" Grid.Column="0" Width="3.5" CornerRadius="2"
+                                                    Background="{DynamicResource AccentGradient}" Margin="-8,-1,8,-1" Visibility="Collapsed"/>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
+                                            <Border Grid.Column="1" Width="18" Height="30" Background="Transparent" VerticalAlignment="Center" Margin="0,0,7,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
-                                                      Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
                                             </Border>
                                             <!-- Avatar -->
-                                            <Border Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
+                                            <Border Grid.Column="2" Width="38" Height="38" CornerRadius="10" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource ClaudeBrush}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <!-- Info -->
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="12,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
                                                         <TextBlock Text="{DynamicResource Common.InUseBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
                                                     <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
-                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
+                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="7,0,0,0"
                                                             VerticalAlignment="Center" Visibility="{Binding RouterBadgeVisibility}"
                                                             ToolTip="{Binding RouterBadgeTooltip}">
-                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="11" FontWeight="Medium"
+                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="10.5" FontWeight="Medium"
                                                                    Foreground="{Binding RouterBadgeForeground}"/>
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                                <TextBlock Text="{Binding SubText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"
                                                            Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                             <!-- Buttons -->
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyClaude">
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Height="30" Padding="12,0" FontSize="12" Click="OnRowApplyClaude">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditClaude"/>
-                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyClaude"/>
-                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteClaude"/>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardEditClaude">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconEdit}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.Edit}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardCopyClaude">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconCopy}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.CopyCross}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardDangerIconBtn}" Margin="6,0,0,0" Click="OnCardDeleteClaude" ToolTip="{DynamicResource Common.Delete}">
+                                                    <Path Data="{StaticResource IconTrash}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#CBD5E1"/>
                                             <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible"/>
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource CardActiveBrush}"/>
                                             <Setter TargetName="CurrentBadge" Property="Visibility" Value="Visible"/>
@@ -1105,7 +1241,7 @@
                 </StackPanel>
             </TabItem.Header>
 
-            <Grid Margin="28,14,28,24">
+            <Grid Margin="28,14,28,22">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -1114,74 +1250,78 @@
 
                 <!-- Hero Status Card -->
                 <Border Grid.Row="0" Background="{DynamicResource HeroCardBgBrush}" BorderBrush="{DynamicResource HeroCardBorderBrush}"
-                        BorderThickness="1" CornerRadius="12" Padding="20,16">
+                        BorderThickness="1" CornerRadius="14" Padding="20,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconClaude}" Fill="{StaticResource ClaudeBrush}" Width="22" Height="22" Stretch="Uniform"
+                        <Border Width="48" Height="48" CornerRadius="13" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconClaude}" Fill="{StaticResource ClaudeBrush}" Width="24" Height="24" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="{DynamicResource Desktop.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                            <TextBlock Text="{DynamicResource Desktop.HeroTitle}" FontSize="16.5" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{DynamicResource Common.CurrentProvider}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="DesktopCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock x:Name="DesktopCurrentText" Text="{DynamicResource Ag.Detecting}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                     </StackPanel>
                                 </Border>
-                                <Border x:Name="DesktopRouterChip" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                <Border x:Name="DesktopRouterChip" Style="{StaticResource Chip}" Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse x:Name="DesktopRouterDot" Width="6" Height="6" Fill="#94A3B8" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                         <TextBlock x:Name="DesktopRouterChipText" Text="{DynamicResource Router.DirectModeNoRouter}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource GhostButton}" Padding="12,7" Margin="0,0,8,0" Click="OnRestartClaudeDesktop" ToolTip="{DynamicResource Desktop.RestartTip}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Desktop.RestartBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource PrimaryButton}" Padding="14,7" Click="OnAddDesktop">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- Action Toolbar -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnAddDesktop">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,10">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="DesktopToolbarRouterBtn" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnToggleClaudeDesktopProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
+                    <Button x:Name="DesktopToolbarRouterBtn" Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnToggleClaudeDesktopProxy" ToolTip="{DynamicResource Main.RouterToggleTip}">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="DesktopToolbarRouterDot" Width="7" Height="7" Fill="#94A3B8" Margin="0,0,6,0" VerticalAlignment="Center"/>
                             <TextBlock x:Name="DesktopToolbarRouterText" Text="{DynamicResource Router.ToolbarOff}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRestartClaudeDesktop" ToolTip="{DynamicResource Desktop.RestartTip}">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Desktop.RestartBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnStopClaudeDesktop" ToolTip="{DynamicResource Desktop.StopProcessTip}">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnStopClaudeDesktop" ToolTip="{DynamicResource Desktop.StopProcessTip}">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconPower}" Fill="#EF4444" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Desktop.StopProcessBtn}" Foreground="#EF4444" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Desktop.StopProcessBtn}" Foreground="#EF4444" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenDesktopConfig">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnOpenDesktopConfig">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Desktop.OpenConfigBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Desktop.OpenConfigBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1190,7 +1330,7 @@
                 <Grid Grid.Row="2">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
-                        <ListBox x:Name="DesktopList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                        <ListBox x:Name="DesktopList" Margin="0,2,0,0" Background="Transparent" BorderThickness="0"
                                 VirtualizingPanel.IsVirtualizing="False"
                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -1200,63 +1340,79 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
-                                            BorderThickness="1" CornerRadius="12" Padding="16,14" Margin="0,4" HorizontalAlignment="Stretch">
+                                            BorderThickness="1" CornerRadius="12" Padding="16,13" Margin="0,4" HorizontalAlignment="Stretch">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
+                                            <Border x:Name="ActiveBar" Grid.Column="0" Width="3.5" CornerRadius="2"
+                                                    Background="{DynamicResource AccentGradient}" Margin="-8,-1,8,-1" Visibility="Collapsed"/>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
+                                            <Border Grid.Column="1" Width="18" Height="30" Background="Transparent" VerticalAlignment="Center" Margin="0,0,7,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
-                                                      Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
                                             </Border>
                                             <!-- Avatar -->
-                                            <Border Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" VerticalAlignment="Center">
+                                            <Border Grid.Column="2" Width="38" Height="38" CornerRadius="10" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#2563EB"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <!-- Info -->
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="12,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
                                                     <Border x:Name="CurrentBadge" Style="{StaticResource CurrentBadge}">
                                                         <TextBlock Text="{DynamicResource Common.InUseBadge}" Style="{StaticResource BadgeGreenText}"/>
                                                     </Border>
                                                     <Border Background="{Binding RouterBadgeBackground}" BorderBrush="{Binding RouterBadgeBorderBrush}"
-                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="8,0,0,0"
+                                                            BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="7,0,0,0"
                                                             VerticalAlignment="Center" Visibility="{Binding RouterBadgeVisibility}"
                                                             ToolTip="{Binding RouterBadgeTooltip}">
-                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="11" FontWeight="Medium"
+                                                        <TextBlock Text="{Binding RouterBadgeText}" FontSize="10.5" FontWeight="Medium"
                                                                    Foreground="{Binding RouterBadgeForeground}"/>
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                                <TextBlock Text="{Binding SubText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"
                                                            Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
                                             <!-- Buttons -->
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Padding="14,6" Click="OnRowApplyDesktop">
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <Button x:Name="ApplyBtnCard" Style="{StaticResource PrimaryButton}" Height="30" Padding="12,0" FontSize="12" Click="OnRowApplyDesktop">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconZap}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.ApplyBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditDesktop"/>
-                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyDesktop"/>
-                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteDesktop"/>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardEditDesktop">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconEdit}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.Edit}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardCopyDesktop">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconCopy}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.CopyCross}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardDangerIconBtn}" Margin="6,0,0,0" Click="OnCardDeleteDesktop" ToolTip="{DynamicResource Common.Delete}">
+                                                    <Path Data="{StaticResource IconTrash}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#CBD5E1"/>
                                             <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible"/>
                                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardActiveBorderBrush}"/>
                                             <Setter TargetName="Card" Property="Background" Value="{StaticResource CardActiveBrush}"/>
                                             <Setter TargetName="CurrentBadge" Property="Visibility" Value="Visible"/>
@@ -1294,7 +1450,7 @@
                 </StackPanel>
             </TabItem.Header>
 
-            <Grid Margin="28,14,28,24">
+            <Grid Margin="28,14,28,22">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -1303,62 +1459,66 @@
 
                 <!-- Hero Status Card -->
                 <Border Grid.Row="0" Background="{DynamicResource HeroCardBgBrush}" BorderBrush="{DynamicResource HeroCardBorderBrush}"
-                        BorderThickness="1" CornerRadius="12" Padding="20,16">
+                        BorderThickness="1" CornerRadius="14" Padding="20,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconOpenCode}" Fill="#38BDF8" Width="20" Height="20" Stretch="Uniform"
+                        <Border Width="48" Height="48" CornerRadius="13" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconOpenCode}" Fill="#38BDF8" Width="21" Height="21" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="{DynamicResource Oc.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                            <TextBlock Text="{DynamicResource Oc.HeroTitle}" FontSize="16.5" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="OcPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                        <TextBlock x:Name="OcPoolCountText" Text="" FontSize="11.5" FontWeight="SemiBold" Foreground="#0284C7"/>
                                     </StackPanel>
                                 </Border>
-                                <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Oc.DefaultTip}">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,0,2" ToolTip="{DynamicResource Oc.DefaultTip}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="OcDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                        <TextBlock x:Name="OcDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="11.5" FontWeight="SemiBold" Foreground="#0284C7"/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource PrimaryButton}" Padding="14,7" Click="OnAddOpencode">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- Action Toolbar -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnAddOpencode">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,10">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshOpencode">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnRefreshOpencode">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenOcConfig">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnOpenOcConfig">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Oc.OpenConfigBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Oc.OpenConfigBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1367,7 +1527,7 @@
                 <Grid Grid.Row="2">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
-                        <ListBox x:Name="OcList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                        <ListBox x:Name="OcList" Margin="0,2,0,0" Background="Transparent" BorderThickness="0"
                                 VirtualizingPanel.IsVirtualizing="False"
                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -1377,74 +1537,90 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
-                                            BorderThickness="1" CornerRadius="12" Padding="16,14" Margin="0,4" HorizontalAlignment="Stretch">
+                                            BorderThickness="1" CornerRadius="12" Padding="16,13" Margin="0,4" HorizontalAlignment="Stretch">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
+                                            <Border x:Name="ActiveBar" Grid.Column="0" Width="3.5" CornerRadius="2"
+                                                    Background="#0284C7" Margin="-8,-1,8,-1" Visibility="Collapsed"/>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
+                                            <Border Grid.Column="1" Width="18" Height="30" Background="Transparent" VerticalAlignment="Center" Margin="0,0,7,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
-                                                      Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
                                             </Border>
-                                            <Border x:Name="AvatarBorder" Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" VerticalAlignment="Center">
+                                            <Border x:Name="AvatarBorder" Grid.Column="2" Width="38" Height="38" CornerRadius="10" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" VerticalAlignment="Center">
                                                 <TextBlock x:Name="AvatarText" Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#0284C7"
                                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="12,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#E0F2FE" BorderBrush="#7DD3FC" BorderThickness="1"
+                                                    <Border Style="{StaticResource Badge}" Margin="7,0,0,0" Background="#E0F2FE" BorderBrush="#7DD3FC" BorderThickness="1"
                                                             Visibility="{Binding PoolBadgeVisibility}">
-                                                        <TextBlock Text="{DynamicResource Common.PoolBadge}" FontSize="11" FontWeight="SemiBold" Foreground="#0284C7"/>
+                                                        <TextBlock Text="{DynamicResource Common.PoolBadge}" FontSize="10.5" FontWeight="SemiBold" Foreground="#0284C7"/>
                                                     </Border>
-                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                    <Border Style="{StaticResource Badge}" Margin="7,0,0,0" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1"
                                                             Visibility="{Binding UnpoolBadgeVisibility}">
-                                                        <TextBlock Text="{DynamicResource Common.UnpoolBadge}" FontSize="11" FontWeight="Medium" Foreground="#64748B"/>
+                                                        <TextBlock Text="{DynamicResource Common.UnpoolBadge}" FontSize="10.5" FontWeight="Medium" Foreground="#64748B"/>
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                                <TextBlock Text="{Binding SubText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"
                                                             Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                <Button Style="{StaticResource PrimaryButton}" Padding="14,6" Background="#10B981" BorderBrush="#059669"
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <Button Style="{StaticResource PrimaryButton}" Height="30" Padding="12,0" FontSize="12" Background="#10B981" BorderBrush="#059669"
                                                         Visibility="{Binding AddBtnVisibility}" Click="OnRowAddOc">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconPlus}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{DynamicResource Common.AddBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.AddBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Style="{StaticResource GhostButton}" Padding="12,6" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
+                                                <Button Style="{StaticResource CardGhostBtn}" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
                                                         Visibility="{Binding RemoveBtnVisibility}" Click="OnRowRemoveOc">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconTrash}" Fill="#EA580C" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{DynamicResource Common.RemoveBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.RemoveBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditOc"/>
-                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyOc"/>
-                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeleteOc"/>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardEditOc">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconEdit}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.Edit}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardCopyOc">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconCopy}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.CopyCross}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardDangerIconBtn}" Margin="6,0,0,0" Click="OnCardDeleteOc" ToolTip="{DynamicResource Common.Delete}">
+                                                    <Path Data="{StaticResource IconTrash}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#CBD5E1"/>
                                             <Setter TargetName="Card" Property="Opacity" Value="1.0"/>
+                                            <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsInConfig}" Value="True">
+                                            <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible"/>
                                             <Setter TargetName="Card" Property="BorderBrush" Value="#0284C7"/>
-                                            <Setter TargetName="Card" Property="BorderThickness" Value="1.5"/>
                                             <Setter TargetName="Card" Property="Background" Value="#F0F9FF"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsInConfig}" Value="False">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="#E2E8F0"/>
                                             <Setter TargetName="Card" Property="Background" Value="#FAFAFA"/>
-                                            <Setter TargetName="Card" Property="Opacity" Value="0.85"/>
+                                            <Setter TargetName="Card" Property="Opacity" Value="0.88"/>
                                             <Setter TargetName="AvatarBorder" Property="Background" Value="#F1F5F9"/>
                                             <Setter TargetName="AvatarBorder" Property="BorderBrush" Value="#E2E8F0"/>
                                             <Setter TargetName="AvatarText" Property="Foreground" Value="#94A3B8"/>
@@ -1481,7 +1657,7 @@
                 </StackPanel>
             </TabItem.Header>
 
-            <Grid Margin="28,14,28,24">
+            <Grid Margin="28,14,28,22">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -1490,74 +1666,78 @@
 
                 <!-- Hero Status Card -->
                 <Border Grid.Row="0" Background="{DynamicResource HeroCardBgBrush}" BorderBrush="{DynamicResource HeroCardBorderBrush}"
-                        BorderThickness="1" CornerRadius="12" Padding="20,16">
+                        BorderThickness="1" CornerRadius="14" Padding="20,16">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Width="46" Height="46" CornerRadius="23" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" VerticalAlignment="Center">
-                            <Path Data="{StaticResource IconPi}" Fill="#7C3AED" Width="20" Height="20" Stretch="Uniform"
+                        <Border Width="48" Height="48" CornerRadius="13" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconPi}" Fill="#7C3AED" Width="21" Height="21" Stretch="Uniform"
                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0">
-                            <TextBlock Text="{DynamicResource Pi.HeroTitle}" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Border Style="{StaticResource Chip}">
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,16,0">
+                            <TextBlock Text="{DynamicResource Pi.HeroTitle}" FontSize="16.5" FontWeight="Bold" Foreground="{StaticResource TextBrush}"/>
+                            <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,2">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{DynamicResource Common.PoolLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="PiPoolCountText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                        <TextBlock x:Name="PiPoolCountText" Text="" FontSize="11.5" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                     </StackPanel>
                                 </Border>
-                                <Border Style="{StaticResource Chip}" Margin="8,0,0,0" ToolTip="{DynamicResource Pi.DefaultTip}">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,0,2" ToolTip="{DynamicResource Pi.DefaultTip}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{DynamicResource Common.DefaultLabel}" FontSize="11" Foreground="{StaticResource TextDimBrush}"/>
-                                        <TextBlock x:Name="PiDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="12" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                        <TextBlock x:Name="PiDefaultModelText" Text="{DynamicResource Common.NotSet}" FontSize="11.5" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource PrimaryButton}" Padding="14,7" Click="OnAddPi">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- Action Toolbar -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,12">
-                    <Button Style="{StaticResource PrimaryButton}" Click="OnAddPi">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconPlus}" Fill="White" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.AddProvider}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="10,0,0,0" Click="OnImportCc">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,10">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Click="OnImportCc">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconImport}" Fill="{StaticResource AccentBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.CcImport}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnRefreshPi">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnRefreshPi">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconRefresh}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Common.Refresh}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenPiModels">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnOpenPiModels">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconExternal}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Pi.OpenModelsBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Pi.OpenModelsBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnOpenPiDir">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnOpenPiDir">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconFolder}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Pi.OpenDirBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Pi.OpenDirBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCapturePi">
+                    <Button Style="{StaticResource GhostButton}" Padding="11,6" Margin="8,0,0,0" Click="OnCapturePi">
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{StaticResource IconSave}" Fill="{StaticResource TextDimBrush}" Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center"/>
-                            <TextBlock Text="{DynamicResource Pi.CaptureBtn}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{DynamicResource Pi.CaptureBtn}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -1566,7 +1746,7 @@
                 <Grid Grid.Row="2">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="OnCardsPreviewMouseWheel">
-                        <ListBox x:Name="PiList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0"
+                        <ListBox x:Name="PiList" Margin="0,2,0,0" Background="Transparent" BorderThickness="0"
                                 VirtualizingPanel.IsVirtualizing="False"
                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -1576,74 +1756,90 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
-                                            BorderThickness="1" CornerRadius="12" Padding="16,14" Margin="0,4" HorizontalAlignment="Stretch">
+                                            BorderThickness="1" CornerRadius="12" Padding="16,13" Margin="0,4" HorizontalAlignment="Stretch">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
+                                            <Border x:Name="ActiveBar" Grid.Column="0" Width="3.5" CornerRadius="2"
+                                                    Background="#7C3AED" Margin="-8,-1,8,-1" Visibility="Collapsed"/>
                                             <!-- Drag Handle Grip -->
-                                            <Border Grid.Column="0" Width="22" Height="32" Background="Transparent" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
+                                            <Border Grid.Column="1" Width="18" Height="30" Background="Transparent" VerticalAlignment="Center" Margin="0,0,7,0" Cursor="SizeAll" ToolTip="{DynamicResource Main.DragCardTip}">
                                                 <Path x:Name="DragGrip" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                       Data="M 4 5 h 2.5 v 2.5 H 4 Z M 9.5 5 h 2.5 v 2.5 H 9.5 Z M 4 10.5 h 2.5 v 2.5 H 4 Z M 9.5 10.5 h 2.5 v 2.5 H 9.5 Z M 4 16 h 2.5 v 2.5 H 4 Z M 9.5 16 h 2.5 v 2.5 H 9.5 Z"
-                                                      Fill="#94A3B8" Width="10" Height="14" Stretch="Uniform"/>
+                                                      Fill="#CBD5E1" Width="10" Height="14" Stretch="Uniform"/>
                                             </Border>
-                                            <Border x:Name="AvatarBorder" Grid.Column="1" Width="40" Height="40" CornerRadius="20" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" VerticalAlignment="Center">
+                                            <Border x:Name="AvatarBorder" Grid.Column="2" Width="38" Height="38" CornerRadius="10" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" VerticalAlignment="Center">
                                                 <TextBlock x:Name="AvatarText" Text="{Binding Initial}" FontSize="15" FontWeight="Bold" Foreground="#7C3AED"
                                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="12,0,0,0">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
-                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#EDE9FE" BorderBrush="#DDD6FE" BorderThickness="1"
+                                                    <Border Style="{StaticResource Badge}" Margin="7,0,0,0" Background="#EDE9FE" BorderBrush="#DDD6FE" BorderThickness="1"
                                                             Visibility="{Binding PoolBadgeVisibility}">
-                                                        <TextBlock Text="{DynamicResource Common.PoolBadge}" FontSize="11" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                                        <TextBlock Text="{DynamicResource Common.PoolBadge}" FontSize="10.5" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                                     </Border>
-                                                    <Border Style="{StaticResource Badge}" Margin="8,0,0,0" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                    <Border Style="{StaticResource Badge}" Margin="7,0,0,0" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1"
                                                             Visibility="{Binding UnpoolBadgeVisibility}">
-                                                        <TextBlock Text="{DynamicResource Common.UnpoolBadge}" FontSize="11" FontWeight="Medium" Foreground="#64748B"/>
+                                                        <TextBlock Text="{DynamicResource Common.UnpoolBadge}" FontSize="10.5" FontWeight="Medium" Foreground="#64748B"/>
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding SubText}" FontSize="12" Foreground="{StaticResource TextDimBrush}"
+                                                <TextBlock Text="{Binding SubText}" FontSize="11.5" Foreground="{StaticResource TextMutedBrush}"
                                                             Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
-                                                <Button Style="{StaticResource PrimaryButton}" Padding="14,6" Background="#10B981" BorderBrush="#059669"
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <Button Style="{StaticResource PrimaryButton}" Height="30" Padding="12,0" FontSize="12" Background="#10B981" BorderBrush="#059669"
                                                         Visibility="{Binding AddBtnVisibility}" Click="OnRowAddPi">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconPlus}" Fill="White" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{DynamicResource Common.AddBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.AddBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Style="{StaticResource GhostButton}" Padding="12,6" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
+                                                <Button Style="{StaticResource CardGhostBtn}" Foreground="#EA580C" Background="#FFF7ED" BorderBrush="#FDBA74"
                                                         Visibility="{Binding RemoveBtnVisibility}" Click="OnRowRemovePi">
                                                     <StackPanel Orientation="Horizontal">
                                                         <Path Data="{StaticResource IconTrash}" Fill="#EA580C" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{DynamicResource Common.RemoveBtn}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.RemoveBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Content="{DynamicResource Common.Edit}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardEditPi"/>
-                                                <Button Content="{DynamicResource Common.CopyCross}" Style="{StaticResource GhostButton}" Margin="8,0,0,0" Click="OnCardCopyPi"/>
-                                                <Button Content="{DynamicResource Common.Delete}" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Click="OnCardDeletePi"/>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardEditPi">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconEdit}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.Edit}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardCopyPi">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Path Data="{StaticResource IconCopy}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{DynamicResource Common.CopyCross}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource CardDangerIconBtn}" Margin="6,0,0,0" Click="OnCardDeletePi" ToolTip="{DynamicResource Common.Delete}">
+                                                    <Path Data="{StaticResource IconTrash}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
                                     <DataTemplate.Triggers>
                                         <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardHoverBrush}"/>
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="#CBD5E1"/>
                                             <Setter TargetName="Card" Property="Opacity" Value="1.0"/>
+                                            <Setter TargetName="DragGrip" Property="Fill" Value="#94A3B8"/>
                                         </Trigger>
                                         <DataTrigger Binding="{Binding IsInConfig}" Value="True">
+                                            <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible"/>
                                             <Setter TargetName="Card" Property="BorderBrush" Value="#7C3AED"/>
-                                            <Setter TargetName="Card" Property="BorderThickness" Value="1.5"/>
                                             <Setter TargetName="Card" Property="Background" Value="#FAF5FF"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsInConfig}" Value="False">
                                             <Setter TargetName="Card" Property="BorderBrush" Value="#E2E8F0"/>
                                             <Setter TargetName="Card" Property="Background" Value="#FAFAFA"/>
-                                            <Setter TargetName="Card" Property="Opacity" Value="0.85"/>
+                                            <Setter TargetName="Card" Property="Opacity" Value="0.88"/>
                                             <Setter TargetName="AvatarBorder" Property="Background" Value="#F1F5F9"/>
                                             <Setter TargetName="AvatarBorder" Property="BorderBrush" Value="#E2E8F0"/>
                                             <Setter TargetName="AvatarText" Property="Foreground" Value="#94A3B8"/>

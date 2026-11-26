@@ -2,6 +2,34 @@
 
 # APISwitch 更新日志
 
+## APISwitch v0.3.5 更新日志
+
+【重磅新增 · Antigravity 桌面实时悬浮窗组件】
+• **极简常驻悬浮胶囊**：默认停靠主屏幕工作区右下角（不随主窗口最小化或收进托盘而隐藏），单行实时显示当前账号 `Gemini` / `Claude & GPT` **5h + 周限**双维度剩余额度、Antigravity 今日单端 Token 总量与最新输出速率（`tok/s`）。
+• **展开详情与零偏移交互重构**：左键点击胶囊即向内侧优雅展开完整卡片：
+  - **双栏 5h + 周限面板**：对照呈现 `Gemini` 与 `Claude / GPT` 的 5 小时与周限进度条及重置状态微胶囊；
+  - **单端性能与用量卡**：独立统计 Antigravity 当日 Token / 请求次数、最新速率与今日均速（`tok/s`），以及最近调用模型名与首字耗时（TTFT）；
+  - **可用模型抽屉 & 一键切号**：支持折叠查看当前账号已开放的模型列表，并可在悬浮窗内直接对比各账号 `5h/周` 余量一键切换；
+  - **防误触与零漂移定位**：展开面板移除右上角关闭按钮，改为醒目靛蓝 **`收起 ▾`** 胶囊按钮；隐藏或重置位置统一由右键圆角菜单、Antigravity 主界面工具栏开关、托盘菜单或常规设置控制；采用独立胶囊基准坐标锁定，彻底修复展开/收起位置偏移问题。
+• **毫秒级监听与零卡顿刷新**：监听 `~/.gemini/antigravity/brain/**/transcript.jsonl`（1.5s 防抖增量快扫 + 15s 兜底同步），并为 `pricing_ledger_v1.json` / `conversation_summaries.db` 加入基于文件签名的内存缓存，对话落盘后 1–2 秒即可低开销跳数。
+
+【优化 · Antigravity 可用模型过滤、思考合并与防误关】
+• **对齐官方模型选择器白名单**：深度解析 `fetchAvailableModels` 返回的 `agentModelSorts` 与 `groupedModels`，剔除内部/测试隐藏模型（如 `tab_*`、`chat_*`、`*-tiered`、`*-sonar`、`*-image`、`flash-lite`、`gemini-2.5-*`、`gemini-3-flash` 及 `disabled` 项），同时去除冗杂的单模型百分比。
+• **按系列合并思考强度档位**：同系列模型不同思考深度（如 `Gemini 4 Neon [Low–XHigh]`、`Claude Opus 5.5 [Low–High]`）自动聚合为单枚紧凑标签。
+• **原地刷新零闪烁修复**：将 `RefreshAntigravityAsync()` 与额度刷新改为原位 `UpdateFrom` 更新与定向属性通知（不再全量清空重置集合），消除切回主窗或后台定时刷新时下拉框卡顿或自动关闭问题。
+
+【UI 重构 · 全端统一小卡片、用量监控与现代托盘菜单】
+• **全六端小卡片与 Hero 视觉统一**：参考 Antigravity 新卡片体系同步重构 **Codex**、**Claude Code CLI**、**Claude Desktop**、**OpenCode** 与 **Pi** 五端界面，统一圆角卡片、左侧激活指示条、紧凑双行元信息与统一高度操作按钮组。
+• **用量监控界面梳理与多格式导出**：将顶部视图、搜索、快捷周期、表盘日期选择及 10 客户端图标筛选栏收束为统一控制卡，优化 5 大 KPI 卡片视觉与列表行高交互，并新增调用明细 **JSON / CSV** 导出。
+• **现代化自绘托盘菜单**：GDI+ 重绘高颜值圆角头部（含版本号徽章）、双列账号切换行（自带 `G` / `C` 彩色余量胶囊），并加入「开启/隐藏桌面悬浮窗」快捷菜单。
+
+【修复与工程架构优化】
+• **未知模型精准补齐**：修复 `StepCode`（优先解析 `message.model` 并带 `stepcode:model_fix_v1` 自愈）与 `Codex`/`Pi` 增量扫描头部模型丢失问题。
+• **Pro 档位判定强化与文案清理**：兼容 `gemini-4-neon` / `gemini-4-carbon` 强化正价 Pro 订阅识别，清理过时 Argon 相关提示词条。
+• **系统级模块化拆分**：将超大单文件 `App.xaml.cs` 与 `MainWindow.xaml.cs` 按职责拆分为 `App.SelfTest.cs` 及 8 个高内聚 `MainWindow.*.cs` 分部类模块。
+
+---
+
 ## APISwitch v0.3.4 更新日志
 
 【优化 · 额度计时状态识别与刷新交互体验】

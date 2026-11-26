@@ -1262,35 +1262,93 @@ public partial class UsageMonitorWindow : Window
         var dlg = new SaveFileDialog
         {
             Title = I18nService.T("Usage.ExportCsvBtn"),
-            Filter = "CSV (*.csv)|*.csv",
+            Filter = "CSV (*.csv)|*.csv|JSON (*.json)|*.json",
             FileName = $"APISwitch-usage-{DateTime.Now:yyyyMMdd-HHmm}.csv",
             DefaultExt = ".csv",
         };
         if (dlg.ShowDialog(this) != true) return;
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Time,Client,Provider,Model,InputTokens,OutputTokens,TotalTokens,CacheReadTokens,CacheWriteTokens,CacheHitRate,DurationMs,TtftMs");
-        foreach (var r in rows)
+        bool exportJson = dlg.FilterIndex == 2 || dlg.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+        if (exportJson)
         {
-            var dt = r.Ts.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-            long tot = r.InTokens + r.OutTokens;
-            string hit = FormatCacheHitRate(r.InTokens, r.CacheReadTokens, r.CacheWriteTokens);
-            sb.AppendLine(string.Join(",",
-                CsvEscape(dt),
-                CsvEscape(AgentName(r.Agent)),
-                CsvEscape(r.ProviderName),
-                CsvEscape(r.Model),
-                r.InTokens.ToString(CultureInfo.InvariantCulture),
-                r.OutTokens.ToString(CultureInfo.InvariantCulture),
-                tot.ToString(CultureInfo.InvariantCulture),
-                r.CacheReadTokens.ToString(CultureInfo.InvariantCulture),
-                r.CacheWriteTokens.ToString(CultureInfo.InvariantCulture),
-                CsvEscape(hit),
-                r.DurationMs.ToString(CultureInfo.InvariantCulture),
-                r.TtftMs.ToString(CultureInfo.InvariantCulture)));
+            long sumIn = 0, sumOut = 0, sumCr = 0, sumCw = 0;
+            foreach (var r in rows)
+            {
+                sumIn += r.InTokens;
+                sumOut += r.OutTokens;
+                sumCr += r.CacheReadTokens;
+                sumCw += r.CacheWriteTokens;
+            }
+
+            var payload = new
+            {
+                exportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                range = new
+                {
+                    from = effFrom.ToString("yyyy-MM-dd HH:mm:ss"),
+                    to = effTo.ToString("yyyy-MM-dd HH:mm:ss"),
+                    clientFilter = string.IsNullOrEmpty(activeAgent) ? "all" : activeAgent,
+                    searchQuery = q
+                },
+                summary = new
+                {
+                    requests = rows.Count,
+                    totalTokens = sumIn + sumOut,
+                    inputTokens = sumIn,
+                    outputTokens = sumOut,
+                    cacheReadTokens = sumCr,
+                    cacheWriteTokens = sumCw,
+                    cacheHitRate = FormatCacheHitRate(sumIn, sumCr, sumCw)
+                },
+                records = rows.Select(r => new
+                {
+                    time = r.Ts.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                    client = AgentName(r.Agent),
+                    agentId = r.Agent,
+                    provider = r.ProviderName,
+                    model = r.Model,
+                    inputTokens = r.InTokens,
+                    outputTokens = r.OutTokens,
+                    totalTokens = r.InTokens + r.OutTokens,
+                    cacheReadTokens = r.CacheReadTokens,
+                    cacheWriteTokens = r.CacheWriteTokens,
+                    cacheHitRate = FormatCacheHitRate(r.InTokens, r.CacheReadTokens, r.CacheWriteTokens),
+                    durationMs = r.DurationMs,
+                    ttftMs = r.TtftMs
+                })
+            };
+
+            var jsonOpts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            var jsonStr = System.Text.Json.JsonSerializer.Serialize(payload, jsonOpts);
+            await File.WriteAllTextAsync(dlg.FileName, jsonStr, new UTF8Encoding(false));
+        }
+        else
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Time,Client,Provider,Model,InputTokens,OutputTokens,TotalTokens,CacheReadTokens,CacheWriteTokens,CacheHitRate,DurationMs,TtftMs");
+            foreach (var r in rows)
+            {
+                var dt = r.Ts.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+                long tot = r.InTokens + r.OutTokens;
+                string hit = FormatCacheHitRate(r.InTokens, r.CacheReadTokens, r.CacheWriteTokens);
+                sb.AppendLine(string.Join(",",
+                    CsvEscape(dt),
+                    CsvEscape(AgentName(r.Agent)),
+                    CsvEscape(r.ProviderName),
+                    CsvEscape(r.Model),
+                    r.InTokens.ToString(CultureInfo.InvariantCulture),
+                    r.OutTokens.ToString(CultureInfo.InvariantCulture),
+                    tot.ToString(CultureInfo.InvariantCulture),
+                    r.CacheReadTokens.ToString(CultureInfo.InvariantCulture),
+                    r.CacheWriteTokens.ToString(CultureInfo.InvariantCulture),
+                    CsvEscape(hit),
+                    r.DurationMs.ToString(CultureInfo.InvariantCulture),
+                    r.TtftMs.ToString(CultureInfo.InvariantCulture)));
+            }
+
+            await File.WriteAllTextAsync(dlg.FileName, sb.ToString(), new UTF8Encoding(true));
         }
 
-        await File.WriteAllTextAsync(dlg.FileName, sb.ToString(), new UTF8Encoding(true));
         FooterStatusText.Text = I18nService.F("Usage.ExportCsvDoneFmt", rows.Count, System.IO.Path.GetFileName(dlg.FileName));
     }
 

@@ -10,6 +10,9 @@ public class AppSettings
     public bool MinimizeToTrayOnClose { get; set; } = true;
     /// <summary>界面语言：auto（跟随系统）/ zh-CN / en-US</summary>
     public string Language { get; set; } = "auto";
+    public bool FloatingWidgetEnabled { get; set; } = true;
+    public double? FloatingWidgetCapsuleLeft { get; set; }
+    public double? FloatingWidgetCapsuleTop { get; set; }
 }
 
 public static class AppSettingsService

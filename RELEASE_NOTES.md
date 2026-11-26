@@ -2,6 +2,34 @@
 
 # APISwitch Release Notes
 
+## APISwitch v0.3.5 Release Notes
+
+### [New · Desktop Floating Widget for Antigravity]
+• **Compact Always-On-Top Capsule**: Defaults to the bottom-right corner of the primary screen (independent of main window minimization or tray hiding), displaying live **5H + Weekly quotas** (`Gemini` & `Claude/GPT`), single-client **today's Antigravity token total**, and latest step generation speed (`tok/s`).
+• **Expandable Detail Card & Zero-Drift Anchoring**: Click the capsule to expand upward/inward into a clean dashboard featuring:
+  - Dual-column **5H + Weekly** quota progress bars and countdown status pills;
+  - 3-column Antigravity daily usage card (Today tokens/requests/In-Out, Latest & Avg `tok/s`, Most recent model & TTFT);
+  - Collapsible **Available Models** chip drawer and **1-click Antigravity Account Switcher** with live 5H/Weekly badges;
+  - Anti-misclick UX: removed top-right `×` close button in favor of a prominent **`Collapse ▾`** pill; hiding or resetting position is cleanly handled via right-click menu, Tray menu, Settings, or the dedicated toggle button in the Antigravity toolbar. Canonical capsule anchor locking eliminates expand/collapse position drift.
+• **Real-Time Low-Overhead Collection**: Watches `~/.gemini/antigravity/brain/**/transcript.jsonl` with 1.5s debounce + 15s fallback sync (`ScanAntigravityQuick`) and caches parsed `pricing_ledger_v1.json` / `conversation_summaries.db` signatures in memory for zero-stutter updates.
+
+### [New · Smart Merged Model Picker & Anti-Close Fix]
+• **Official Picker Whitelist Filtering**: Parses `agentModelSorts` and `groupedModels` from `fetchAvailableModels` to hide internal/disabled entries (`tab_*`, `chat_*`, `*-tiered`, `*-sonar`, `*-image`, `flash-lite`, `gemini-2.5-*`, `gemini-3-flash`, disabled slots), removing noisy per-model percentages.
+• **Merged Thinking-Effort Chips**: Consolidates thinking variants of the same model family into a single sleek chip (e.g. `Gemini 4 Neon [Low–XHigh]`, `Claude Opus 5.5 [Low–High]`).
+• **In-Place Refresh Stability**: Replaced destructive `Clear()` / `Items.Refresh()` calls with in-place `Profile.UpdateFrom()` and targeted bindings so expanding the available models drawer never stutters or unexpectedly closes on focus/timer refresh.
+
+### [UI Refactor · Unified 6-Client Cards, Usage Monitor & Modern Tray Menu]
+• **Unified Card & Hero Design Across All 6 Tabs**: Refactored Antigravity, Codex, Claude Code CLI, Claude Desktop, OpenCode, and Pi tabs with consistent `12px`/`14px` rounded cards, left active accent bars, compact icon buttons (`CardGhostBtn` / `CardDangerIconBtn`), and 2-line metadata hierarchy.
+• **Usage Monitor Layout Polish & Export**: Consolidated top view tabs, search bar, quick ranges, clock-dial date pickers, and the 10-client icon strip into one crisp control bar, refreshed the 5 KPI cards and table spacing, and added **JSON / CSV** call record export.
+• **Redesigned Tray Context Menu**: Custom GDI+ painted rounded header with version pill and two-column quick-switch rows featuring color-coded `G` / `C` quota capsules plus quick Floating Widget toggle.
+
+### [Fixes & Engineering Refactor]
+• **Model Attribution Self-Heal**: Fixed missing model names in `StepCode` (`message.model` + `stepcode:model_fix_v1`) and `Codex`/`Pi` (`codex:model_fix_v1` header model carry-over).
+• **Pro Subscription Detection & Copy Cleanup**: Refined paid Pro entitlement detection (`gemini-4-neon` / `gemini-4-carbon`) and cleaned up legacy Argon copy across locales.
+• **Modular Architecture**: Split `App.xaml.cs` and `MainWindow.xaml.cs` into cohesive partial modules (`App.SelfTest.cs`, `MainWindow.Antigravity.cs`, `MainWindow.Claude.cs`, `MainWindow.CodexAndRouter.cs`, `MainWindow.OpenCodeAndPi.cs`, `MainWindow.DragDrop.cs`, `MainWindow.FloatingWidget.cs`, `MainWindow.Tray.cs`).
+
+---
+
 ## APISwitch v0.3.4 Release Notes
 
 ### [Improvements · Quota Countdown & Refresh UX]

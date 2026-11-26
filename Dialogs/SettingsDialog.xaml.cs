@@ -184,34 +184,46 @@ public partial class SettingsDialog : Window
         Resources["AccentGradient"] = grad;
     }
 
+    private bool _isSettingsInitializing;
+
     private void InitSettingsValues()
     {
-        AutoStartCheckBox.IsChecked = AppSettingsService.IsAutoStartEnabled();
-
-        var settings = AppSettingsService.Current;
-        CloseMinimizeRadio.IsChecked = settings.MinimizeToTrayOnClose;
-        CloseExitRadio.IsChecked = !settings.MinimizeToTrayOnClose;
-        AutoCheckUpdateCheckBox.IsChecked = settings.AutoCheckUpdate;
-
-        var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        if (ver != null && AboutVersionText != null)
+        _isSettingsInitializing = true;
+        try
         {
-            AboutVersionText.Text = $"v{ver.Major}.{ver.Minor}.{ver.Build}";
+            AutoStartCheckBox.IsChecked = AppSettingsService.IsAutoStartEnabled();
+
+            var settings = AppSettingsService.Current;
+            if (FloatingWidgetCheckBox != null)
+                FloatingWidgetCheckBox.IsChecked = settings.FloatingWidgetEnabled;
+            CloseMinimizeRadio.IsChecked = settings.MinimizeToTrayOnClose;
+            CloseExitRadio.IsChecked = !settings.MinimizeToTrayOnClose;
+            AutoCheckUpdateCheckBox.IsChecked = settings.AutoCheckUpdate;
+
+            var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            if (ver != null && AboutVersionText != null)
+            {
+                AboutVersionText.Text = $"v{ver.Major}.{ver.Minor}.{ver.Build}";
+            }
+
+            if (ProxyHostTextBox != null)
+                ProxyHostTextBox.Text = LocalProxyServer.Host;
+            if (ProxyPortTextBox != null)
+                ProxyPortTextBox.Text = LocalProxyServer.Port.ToString();
+
+            UpdateProxyEndpointsUI();
+
+            if (CodexProxyStatusText != null)
+                CodexProxyStatusText.Text = LocalProxyServer.IsCodexEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
+            if (ClaudeCliProxyStatusText != null)
+                ClaudeCliProxyStatusText.Text = LocalProxyServer.IsClaudeCliEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
+            if (DesktopProxyStatusText != null)
+                DesktopProxyStatusText.Text = LocalProxyServer.IsClaudeDesktopEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
         }
-
-        if (ProxyHostTextBox != null)
-            ProxyHostTextBox.Text = LocalProxyServer.Host;
-        if (ProxyPortTextBox != null)
-            ProxyPortTextBox.Text = LocalProxyServer.Port.ToString();
-
-        UpdateProxyEndpointsUI();
-
-        if (CodexProxyStatusText != null)
-            CodexProxyStatusText.Text = LocalProxyServer.IsCodexEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
-        if (ClaudeCliProxyStatusText != null)
-            ClaudeCliProxyStatusText.Text = LocalProxyServer.IsClaudeCliEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
-        if (DesktopProxyStatusText != null)
-            DesktopProxyStatusText.Text = LocalProxyServer.IsClaudeDesktopEnabled ? I18nService.T("Proxy.Ready") : I18nService.T("Proxy.Disabled");
+        finally
+        {
+            _isSettingsInitializing = false;
+        }
     }
 
     private void UpdateProxyEndpointsUI()
@@ -347,17 +359,26 @@ public partial class SettingsDialog : Window
 
     private void AutoStartCheckBox_Changed(object sender, RoutedEventArgs e)
     {
+        if (_isSettingsInitializing) return;
         AppSettingsService.SetAutoStart(AutoStartCheckBox.IsChecked == true);
+    }
+
+    private void FloatingWidgetCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isSettingsInitializing) return;
+        _mainWindow.SetFloatingWidgetEnabled(FloatingWidgetCheckBox.IsChecked == true);
     }
 
     private void CloseActionRadio_Changed(object sender, RoutedEventArgs e)
     {
+        if (_isSettingsInitializing) return;
         AppSettingsService.Current.MinimizeToTrayOnClose = CloseMinimizeRadio.IsChecked == true;
         AppSettingsService.Save();
     }
 
     private void AutoCheckUpdateCheckBox_Changed(object sender, RoutedEventArgs e)
     {
+        if (_isSettingsInitializing) return;
         AppSettingsService.Current.AutoCheckUpdate = AutoCheckUpdateCheckBox.IsChecked == true;
         AppSettingsService.Save();
     }

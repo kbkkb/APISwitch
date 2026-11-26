@@ -646,24 +646,52 @@ public sealed class AntigravityUsageSource : UsageSourceBase
         readonly Dictionary<(long InTok, long CacheRead, long OutTok), List<(long TsSec, string Model)>> _byGlobalTokens = new();
         readonly Dictionary<string, string> _parentMap = new(StringComparer.OrdinalIgnoreCase);
 
+        static readonly object s_cacheLock = new();
+        static string? s_cachedRoot;
+        static long s_cachedLedgerSig;
+        static long s_cachedSummariesSig;
+        static LedgerLookup? s_cachedLookup;
+
         public string LedgerPath { get; init; } = "";
         public long Signature { get; init; }
         public bool HasData => _byCascadeTokens.Count > 0 || _byStep.Count > 0;
         public IReadOnlyDictionary<string, string> ParentMap => _parentMap;
 
+        static long ComputeFileSig(string path)
+        {
+            try
+            {
+                var fi = new FileInfo(path);
+                if (!fi.Exists) return 0;
+                long sig = (fi.LastWriteTimeUtc.Ticks & 0x7FFFFFFFFFFFFFFFL) ^ fi.Length;
+                return sig == 0 ? 1 : sig;
+            }
+            catch { return 0; }
+        }
+
         public static LedgerLookup Load(string agRoot)
         {
             var ledgerPath = Path.Combine(agRoot, "pricing_ledger_v1.json");
-            var lookup = new LedgerLookup { LedgerPath = ledgerPath, Signature = 0 };
-            if (File.Exists(ledgerPath))
+            var summariesPath = Path.Combine(agRoot, "conversation_summaries.db");
+            long ledgerSig = ComputeFileSig(ledgerPath);
+            long summariesSig = ComputeFileSig(summariesPath);
+
+            lock (s_cacheLock)
+            {
+                if (s_cachedLookup != null &&
+                    string.Equals(s_cachedRoot, agRoot, StringComparison.OrdinalIgnoreCase) &&
+                    s_cachedLedgerSig == ledgerSig &&
+                    s_cachedSummariesSig == summariesSig)
+                {
+                    return s_cachedLookup;
+                }
+            }
+
+            var lookup = new LedgerLookup { LedgerPath = ledgerPath, Signature = ledgerSig };
+            if (ledgerSig != 0)
             {
                 try
                 {
-                    var fi = new FileInfo(ledgerPath);
-                    long sig = (fi.LastWriteTimeUtc.Ticks & 0x7FFFFFFFFFFFFFFFL) ^ fi.Length;
-                    if (sig == 0) sig = 1;
-                    lookup = new LedgerLookup { LedgerPath = ledgerPath, Signature = sig };
-
                     using var fs = new FileStream(ledgerPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                     using var doc = JsonDocument.Parse(fs);
                     if (doc.RootElement.TryGetProperty("calls", out var callsEl) && callsEl.ValueKind == JsonValueKind.Object)
@@ -719,6 +747,13 @@ public sealed class AntigravityUsageSource : UsageSourceBase
             }
 
             LoadParentMap(agRoot, lookup._parentMap);
+            lock (s_cacheLock)
+            {
+                s_cachedRoot = agRoot;
+                s_cachedLedgerSig = ledgerSig;
+                s_cachedSummariesSig = summariesSig;
+                s_cachedLookup = lookup;
+            }
             return lookup;
         }
 

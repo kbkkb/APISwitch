@@ -564,9 +564,9 @@
     <sys:String x:Key="Ag.TierProPromo">Google AI Pro (Promotional)</sys:String>
     <sys:String x:Key="Ag.TierUltra">Google AI Ultra</sys:String>
     <sys:String x:Key="Ag.TierStarterTooltip">Starter tier with free baseline quotas</sys:String>
-    <sys:String x:Key="Ag.TierPlusTooltip">Google AI Plus tier: Baseline weekly quotas on Antigravity (no 5H limit or independent Argon pool)</sys:String>
-    <sys:String x:Key="Ag.TierProPaidTooltip">Paid Subscription: Full access to independent Gemini 4 Argon quota and advanced models</sys:String>
-    <sys:String x:Key="Ag.TierProPromoTooltip">Promotional/Trial access: Supports Gemini 3.8 and Claude 3.7, no independent Argon quota</sys:String>
+    <sys:String x:Key="Ag.TierPlusTooltip">Google AI Plus tier: Baseline weekly quotas on Antigravity</sys:String>
+    <sys:String x:Key="Ag.TierProPaidTooltip">Paid Subscription: Full access to Gemini 4 advanced models and full 5H / weekly quotas</sys:String>
+    <sys:String x:Key="Ag.TierProPromoTooltip">Promotional/Trial access: Supports standard models within trial tier model scope</sys:String>
     <sys:String x:Key="Ag.TierProTooltip">Google AI Pro tier</sys:String>
     <sys:String x:Key="Ag.TierUltraTooltip">Google AI Ultra: Maximum rate limits and unrestricted model access</sys:String>
     <sys:String x:Key="Ag.ArgonQuotaTooltip">Gemini 4 Argon independent weekly quota pool (Subscription exclusive)</sys:String>
@@ -710,7 +710,7 @@
     <sys:String x:Key="Usage.RefreshBtn">Refresh</sys:String>
     <sys:String x:Key="Usage.RefreshTip">Rescan local session logs and refresh all stats now</sys:String>
     <sys:String x:Key="Usage.ExportCsvBtn">Export</sys:String>
-    <sys:String x:Key="Usage.ExportCsvTip">Export filtered call records to CSV</sys:String>
+    <sys:String x:Key="Usage.ExportCsvTip">Export filtered call records (CSV / JSON)</sys:String>
     <sys:String x:Key="Usage.ExportCsvDoneFmt">Exported {0} records to {1}</sys:String>
     <sys:String x:Key="Usage.FilterAllAgents">All Clients</sys:String>
     <sys:String x:Key="Usage.ClientAllPill">All</sys:String>
@@ -728,7 +728,55 @@
     <sys:String x:Key="Usage.ClientMixLabel">Client Mix</sys:String>
     <sys:String x:Key="Usage.ChartDayCallsFmt">{0} reqs</sys:String>
     <sys:String x:Key="Usage.FocusedDayFmt">Focused {0} (click bar again to clear)</sys:String>
-    <sys:String x:Key="Usage.FooterHint">Covers local Codex / Claude Code / OpenCode / Pi / Antigravity / Gemini CLI / dsh logs (1-year retention)</sys:String>
+    <sys:String x:Key="Usage.FooterHint">Covers local Antigravity / Codex / Claude Code / OpenCode / Pi / Gemini CLI / StepCode / zcode / dsh logs (1-year retention)</sys:String>
     <sys:String x:Key="Usage.FooterSummary">{0} reqs · {1} active days</sys:String>
     <sys:String x:Key="Usage.MaxTip">Maximize / Restore</sys:String>
+
+    <!-- ==================== Antigravity Models Drawer & Tray ==================== -->
+    <sys:String x:Key="Ag.AvailableModelsFmt">Available Models · {0}</sys:String>
+    <sys:String x:Key="Ag.RestrictedModelsFmt">Unavailable on Tier ({0})</sys:String>
+    <sys:String x:Key="Ag.ModelsToggleTip">Expand or collapse available models for this account</sys:String>
+    <sys:String x:Key="Ag.ModelCapThinking">Thinking</sys:String>
+    <sys:String x:Key="Ag.ModelCapImages">Vision</sys:String>
+    <sys:String x:Key="Ag.ModelContextFmt">Context {0}K</sys:String>
+    <sys:String x:Key="Ag.ModelRestrictedTip">This model is unavailable on this account's current subscription tier</sys:String>
+    <sys:String x:Key="Ag.AccountCountFmt">{0} accounts</sys:String>
+    <sys:String x:Key="Tray.AccountsHeader">Switch Account (Live Quota)</sys:String>
+    <sys:String x:Key="Tray.UsageMonitor">Usage Monitor</sys:String>
+
+    <!-- ==================== Desktop Floating Widget ==================== -->
+    <sys:String x:Key="Main.WidgetShortTitle">Widget</sys:String>
+    <sys:String x:Key="Main.WidgetTip">Show or hide desktop Antigravity live floating widget</sys:String>
+    <sys:String x:Key="Tray.ShowWidget">Show Floating Widget</sys:String>
+    <sys:String x:Key="Tray.HideWidget">Hide Floating Widget</sys:String>
+    <sys:String x:Key="General.WidgetTitle">Desktop Floating Widget</sys:String>
+    <sys:String x:Key="General.WidgetDesc">Pin a compact capsule on the desktop showing live Antigravity quota, today's usage, and latest generation speed, with one-click account switching.</sys:String>
+    <sys:String x:Key="General.WidgetEnableCheck">Enable desktop floating widget (Antigravity quota, stats &amp; switcher)</sys:String>
+    <sys:String x:Key="Widget.NoAccount">No Antigravity Account</sys:String>
+    <sys:String x:Key="Widget.TodayLabel">Today</sys:String>
+    <sys:String x:Key="Widget.SpeedLabel">Latest Speed</sys:String>
+    <sys:String x:Key="Widget.ModelLabel">Recent Model</sys:String>
+    <sys:String x:Key="Widget.TodaySubFmt">{0} reqs · in {1} / out {2}</sys:String>
+    <sys:String x:Key="Widget.AvgSpeedFmt">Avg {0} tok/s</sys:String>
+    <sys:String x:Key="Widget.TtftFmt">TTFT {0}</sys:String>
+    <sys:String x:Key="Widget.NoCallsToday">No calls today</sys:String>
+    <sys:String x:Key="Widget.ModelsHeaderFmt">Available Models · {0}</sys:String>
+    <sys:String x:Key="Widget.SwitchHeaderFmt">Quick Switch ({0})</sys:String>
+    <sys:String x:Key="Widget.CurrentBadge">Active</sys:String>
+    <sys:String x:Key="Widget.SwitchBtn">Switch</sys:String>
+    <sys:String x:Key="Widget.OpenMainTip">Open Main Window</sys:String>
+    <sys:String x:Key="Widget.OpenUsageTip">Open Usage Monitor</sys:String>
+    <sys:String x:Key="Widget.RefreshTip">Refresh quota &amp; usage</sys:String>
+    <sys:String x:Key="Widget.CollapseTip">Collapse to capsule</sys:String>
+    <sys:String x:Key="Widget.HideTip">Hide widget (re-enable from title bar or tray)</sys:String>
+    <sys:String x:Key="Widget.CapsuleTip">Click to expand · Drag to move · Right-click for menu</sys:String>
+    <sys:String x:Key="Widget.HiddenToast">Floating widget hidden. Re-enable anytime from the Antigravity toolbar or Tray menu.</sys:String>
+    <sys:String x:Key="Ag.WidgetBtnOn">Floating Widget: ON</sys:String>
+    <sys:String x:Key="Ag.WidgetBtnOff">Show Floating Widget</sys:String>
+    <sys:String x:Key="Widget.ShortWeekFmt">W {0}</sys:String>
+    <sys:String x:Key="Widget.CollapseBtn">Collapse ▾</sys:String>
+    <sys:String x:Key="Widget.RightClickHint">Right-click to hide or reset position</sys:String>
+    <sys:String x:Key="Widget.ResetPosition">Reset to Bottom-Right</sys:String>
+    <sys:String x:Key="Widget.MainBtn">Main Window</sys:String>
+    <sys:String x:Key="Widget.UsageBtn">Usage</sys:String>
 </ResourceDictionary>

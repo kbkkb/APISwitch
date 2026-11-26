@@ -63,7 +63,61 @@ public class Profile : INotifyPropertyChanged
     public DateTime? QuotaUpdatedAt { get; set; }
 
     // Per-model detailed quotas (populated by fetchAvailableModels)
-    public List<AgModelQuotaInfo>? ModelQuotas { get; set; }
+    public List<AgModelQuotaInfo>? ModelQuotas
+    {
+        get => _modelQuotas;
+        set { _modelQuotas = value; _cachedMergedModels = null; }
+    }
+    private List<AgModelQuotaInfo>? _modelQuotas;
+    private List<ProfileModelChip>? _cachedMergedModels;
+
+    /// <summary>清空模型目录缓存并批量通知 UI 属性刷新（不重建 ListBoxItem 容器，完整保留折叠展开态）。</summary>
+    public void NotifyQuotaUiChanged()
+    {
+        _cachedMergedModels = null;
+        OnPropertyChanged(string.Empty);
+    }
+
+    /// <summary>原地同步来自磁盘/接口的账号元数据与配额，保留 UI 交互态（展开、旋转动画等）。</summary>
+    public void UpdateFrom(Profile src)
+    {
+        Name = src.Name;
+        Email = src.Email;
+        Plan = src.Plan;
+        AuthState = src.AuthState;
+        CapturedAtUtc = src.CapturedAtUtc;
+        Values = src.Values;
+        RefreshToken = src.RefreshToken;
+        AccessToken = src.AccessToken;
+        IdToken = src.IdToken;
+        ExpiryTimestamp = src.ExpiryTimestamp;
+        SubscriptionTier = src.SubscriptionTier;
+        IsPaidSubscription = src.IsPaidSubscription;
+        Quota5hFraction = src.Quota5hFraction;
+        Quota5hResetTime = src.Quota5hResetTime;
+        QuotaWeeklyFraction = src.QuotaWeeklyFraction;
+        QuotaWeeklyResetTime = src.QuotaWeeklyResetTime;
+        Quota3p5hFraction = src.Quota3p5hFraction;
+        Quota3p5hResetTime = src.Quota3p5hResetTime;
+        Quota3pWeeklyFraction = src.Quota3pWeeklyFraction;
+        Quota3pWeeklyResetTime = src.Quota3pWeeklyResetTime;
+        QuotaArgon5hFraction = src.QuotaArgon5hFraction;
+        QuotaArgon5hResetTime = src.QuotaArgon5hResetTime;
+        QuotaArgonWeeklyFraction = src.QuotaArgonWeeklyFraction;
+        QuotaArgonWeeklyResetTime = src.QuotaArgonWeeklyResetTime;
+        DeviceProfile = src.DeviceProfile;
+        QuotaUpdatedAt = src.QuotaUpdatedAt;
+        ModelQuotas = src.ModelQuotas;
+        IsActivated = src.IsActivated;
+        ActivatedAt = src.ActivatedAt;
+        ActivationLatencyMs = src.ActivationLatencyMs;
+        ActivationError = src.ActivationError;
+        QuotaExhaustedResetAt = src.QuotaExhaustedResetAt;
+        QuotaExhausted = src.QuotaExhausted;
+        IsCurrent = src.IsCurrent;
+        if (!string.IsNullOrEmpty(src.FilePath)) FilePath = src.FilePath;
+        NotifyQuotaUiChanged();
+    }
 
     // Activation Status (Mode A: Google Cloud Code official handshake)
     public bool? IsActivated { get; set; }
@@ -94,6 +148,23 @@ public class Profile : INotifyPropertyChanged
         set { if (_isRefreshingQuota != value) { _isRefreshingQuota = value; OnPropertyChanged(nameof(IsRefreshingQuota)); } }
     }
     private bool _isRefreshingQuota;
+
+    // 可用模型折叠面板展开状态
+    [JsonIgnore]
+    public bool IsModelsExpanded
+    {
+        get => _isModelsExpanded;
+        set
+        {
+            if (_isModelsExpanded != value)
+            {
+                _isModelsExpanded = value;
+                OnPropertyChanged(nameof(IsModelsExpanded));
+                OnPropertyChanged(nameof(ModelsDrawerVisibility));
+            }
+        }
+    }
+    private bool _isModelsExpanded;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged(string name) =>
@@ -438,26 +509,29 @@ public class Profile : INotifyPropertyChanged
     }
 
     [JsonIgnore]
-    public bool Has5hQuota => IsProTier && Quota5hFraction.HasValue;
+    public bool Has5hQuota => Quota5hFraction.HasValue;
+
+    bool HasGemini5hSupport => IsProTier || Quota5hFraction.HasValue;
+    bool Has3p5hSupport => IsProTier || Quota3p5hFraction.HasValue;
 
     [JsonIgnore]
     public double Quota5hPercentValue
     {
-        get => (IsProTier && Quota5hFraction.HasValue) ? Math.Round(Quota5hFraction.Value * 100.0, 1) : 0.0;
+        get => (HasGemini5hSupport && Quota5hFraction.HasValue) ? Math.Round(Quota5hFraction.Value * 100.0, 1) : 0.0;
         set { }
     }
 
     [JsonIgnore]
-    public string Quota5hPercentText => (IsProTier && Quota5hFraction.HasValue) ? $"{Math.Round(Quota5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
+    public string Quota5hPercentText => (HasGemini5hSupport && Quota5hFraction.HasValue) ? $"{Math.Round(Quota5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
-    public string Quota5hCountdown => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Text;
+    public string Quota5hCountdown => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota5hCountdownFg => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Fg;
+    public System.Windows.Media.Brush Quota5hCountdownFg => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota5hCountdownBg => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Bg;
+    public System.Windows.Media.Brush Quota5hCountdownBg => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Bg;
     [JsonIgnore]
-    public string? Quota5hCountdownTooltip => EvaluateQuotaBadge(IsProTier, Quota5hFraction, Quota5hResetTime, is5h: true).Tooltip;
+    public string? Quota5hCountdownTooltip => EvaluateQuotaBadge(HasGemini5hSupport, Quota5hFraction, Quota5hResetTime, is5h: true).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility Quota5hCountdownVisibility =>
         string.IsNullOrEmpty(Quota5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
@@ -490,21 +564,21 @@ public class Profile : INotifyPropertyChanged
     [JsonIgnore]
     public double Quota3p5hPercentValue
     {
-        get => (IsProTier && Quota3p5hFraction.HasValue) ? Math.Round(Quota3p5hFraction.Value * 100.0, 1) : 0.0;
+        get => (Has3p5hSupport && Quota3p5hFraction.HasValue) ? Math.Round(Quota3p5hFraction.Value * 100.0, 1) : 0.0;
         set { }
     }
 
     [JsonIgnore]
-    public string Quota3p5hPercentText => (IsProTier && Quota3p5hFraction.HasValue) ? $"{Math.Round(Quota3p5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
+    public string Quota3p5hPercentText => (Has3p5hSupport && Quota3p5hFraction.HasValue) ? $"{Math.Round(Quota3p5hFraction.Value * 100.0)}%" : (IsProTier ? "100%" : "—");
 
     [JsonIgnore]
-    public string Quota3p5hCountdown => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Text;
+    public string Quota3p5hCountdown => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Text;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota3p5hCountdownFg => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Fg;
+    public System.Windows.Media.Brush Quota3p5hCountdownFg => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Fg;
     [JsonIgnore]
-    public System.Windows.Media.Brush Quota3p5hCountdownBg => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Bg;
+    public System.Windows.Media.Brush Quota3p5hCountdownBg => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Bg;
     [JsonIgnore]
-    public string? Quota3p5hCountdownTooltip => EvaluateQuotaBadge(IsProTier, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Tooltip;
+    public string? Quota3p5hCountdownTooltip => EvaluateQuotaBadge(Has3p5hSupport, Quota3p5hFraction, Quota3p5hResetTime, is5h: true).Tooltip;
     [JsonIgnore]
     public System.Windows.Visibility Quota3p5hCountdownVisibility =>
         string.IsNullOrEmpty(Quota3p5hCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
@@ -591,6 +665,237 @@ public class Profile : INotifyPropertyChanged
             return I18nService.F("Ag.UpdatedAtTimeFmt", QuotaUpdatedAt.Value.ToLocalTime().ToString("MM-dd HH:mm"));
         }
     }
+
+    // ==================== Available Models Catalog (Merged & Picker-Filtered) ====================
+
+    static readonly string[] KnownThinkingSuffixes = { "-xhigh", "-high", "-medium", "-low", "-thinking" };
+
+    static bool IsLegacyHiddenModel(AgModelQuotaInfo m)
+    {
+        var id = m.ModelId.Trim();
+        if (string.IsNullOrWhiteSpace(id)) return true;
+        if (m.Disabled) return true;
+        if (id.StartsWith("tab_", StringComparison.OrdinalIgnoreCase) ||
+            id.StartsWith("chat_", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (id.Contains("-tiered", StringComparison.OrdinalIgnoreCase) ||
+            id.Contains("-sonar", StringComparison.OrdinalIgnoreCase) ||
+            id.Contains("-image", StringComparison.OrdinalIgnoreCase) ||
+            id.Contains("flash-lite", StringComparison.OrdinalIgnoreCase) ||
+            id.StartsWith("gemini-2.5-", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(id, "gemini-3-flash", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(id, "gemini-3.8-flash-tiered", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
+    static string DeriveFamilyKey(AgModelQuotaInfo m)
+    {
+        if (!string.IsNullOrWhiteSpace(m.GroupKey)) return m.GroupKey.Trim();
+        var id = m.ModelId.Trim();
+        foreach (var sfx in KnownThinkingSuffixes)
+        {
+            if (id.EndsWith(sfx, StringComparison.OrdinalIgnoreCase) && id.Length > sfx.Length)
+                return id.Substring(0, id.Length - sfx.Length);
+        }
+        return id;
+    }
+
+    static string DeriveFamilyTitle(AgModelQuotaInfo m, string familyKey)
+    {
+        if (!string.IsNullOrWhiteSpace(m.GroupDisplayName)) return m.GroupDisplayName.Trim();
+        var dn = m.DisplayName?.Trim() ?? "";
+        if (!string.IsNullOrEmpty(dn) && !string.Equals(dn, m.ModelId, StringComparison.OrdinalIgnoreCase))
+        {
+            var parenIdx = dn.LastIndexOf(" (", StringComparison.Ordinal);
+            if (parenIdx > 0 && dn.EndsWith(")", StringComparison.Ordinal))
+                return dn.Substring(0, parenIdx).Trim();
+            return dn;
+        }
+        // Format slug e.g. gemini-4-hydrogen -> Gemini 4 Hydrogen
+        var parts = familyKey.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (string.Equals(parts[i], "gpt", StringComparison.OrdinalIgnoreCase)) parts[i] = "GPT";
+            else if (string.Equals(parts[i], "oss", StringComparison.OrdinalIgnoreCase)) parts[i] = "OSS";
+            else if (char.IsLetter(parts[i][0]))
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + parts[i][1..];
+        }
+        return string.Join(" ", parts);
+    }
+
+    static (int Rank, string ShortLabel) ParseThinkingLevel(AgModelQuotaInfo m)
+    {
+        var raw = m.ThinkingDisplayName?.Trim() ?? "";
+        var id = m.ModelId.Trim();
+        if (string.IsNullOrEmpty(raw))
+        {
+            if (id.EndsWith("-low", StringComparison.OrdinalIgnoreCase)) raw = "Low";
+            else if (id.EndsWith("-medium", StringComparison.OrdinalIgnoreCase)) raw = "Medium";
+            else if (id.EndsWith("-xhigh", StringComparison.OrdinalIgnoreCase)) raw = "Extra High";
+            else if (id.EndsWith("-high", StringComparison.OrdinalIgnoreCase)) raw = "High";
+            else if (id.EndsWith("-thinking", StringComparison.OrdinalIgnoreCase) ||
+                     (m.DisplayName?.Contains("(Thinking)", StringComparison.OrdinalIgnoreCase) ?? false))
+                raw = "Thinking";
+        }
+        if (string.Equals(raw, "Extra High", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(raw, "XHigh", StringComparison.OrdinalIgnoreCase)) return (3, "XHigh");
+        if (string.Equals(raw, "High", StringComparison.OrdinalIgnoreCase)) return (2, "High");
+        if (string.Equals(raw, "Medium", StringComparison.OrdinalIgnoreCase)) return (1, "Medium");
+        if (string.Equals(raw, "Low", StringComparison.OrdinalIgnoreCase)) return (0, "Low");
+        if (string.Equals(raw, "Thinking", StringComparison.OrdinalIgnoreCase)) return (4, I18nService.T("Ag.ModelCapThinking"));
+        return string.IsNullOrEmpty(raw) ? (-1, "") : (5, raw);
+    }
+
+    static int ModelSortRank(string familyKey, int pickerOrder)
+    {
+        if (pickerOrder >= 0) return pickerOrder;
+        if (familyKey.Contains("gemini-4-neon", StringComparison.OrdinalIgnoreCase)) return 10;
+        if (familyKey.Contains("gemini-4-carbon", StringComparison.OrdinalIgnoreCase)) return 11;
+        if (familyKey.Contains("gemini-4-argon", StringComparison.OrdinalIgnoreCase)) return 12;
+        if (familyKey.Contains("gemini-4", StringComparison.OrdinalIgnoreCase)) return 13;
+        if (familyKey.Contains("gemini-3.8", StringComparison.OrdinalIgnoreCase)) return 14;
+        if (familyKey.Contains("claude-opus-5", StringComparison.OrdinalIgnoreCase)) return 20;
+        if (familyKey.Contains("claude-sonnet-5", StringComparison.OrdinalIgnoreCase)) return 21;
+        if (familyKey.Contains("claude", StringComparison.OrdinalIgnoreCase)) return 22;
+        if (familyKey.Contains("gpt", StringComparison.OrdinalIgnoreCase)) return 30;
+        return 50;
+    }
+
+    List<ProfileModelChip> BuildMergedAvailableModels()
+    {
+        if (_modelQuotas == null || _modelQuotas.Count == 0)
+            return new List<ProfileModelChip>();
+
+        bool hasPickerMetadata = _modelQuotas.Any(m => m.IsPickerVisible || m.PickerOrder >= 0);
+        var visibleRaw = hasPickerMetadata
+            ? _modelQuotas.Where(m => m.IsPickerVisible && !m.Disabled && !string.IsNullOrWhiteSpace(m.ModelId)).ToList()
+            : _modelQuotas.Where(m => !IsLegacyHiddenModel(m)).ToList();
+
+        if (visibleRaw.Count == 0)
+            return new List<ProfileModelChip>();
+
+        var grouped = new Dictionary<string, (string Title, List<AgModelQuotaInfo> Items, int MinOrder)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in visibleRaw)
+        {
+            var key = DeriveFamilyKey(m);
+            if (!grouped.TryGetValue(key, out var bucket))
+            {
+                bucket = (DeriveFamilyTitle(m, key), new List<AgModelQuotaInfo>(), int.MaxValue);
+            }
+            bucket.Items.Add(m);
+            if (m.PickerOrder >= 0 && m.PickerOrder < bucket.MinOrder)
+                bucket.MinOrder = m.PickerOrder;
+            grouped[key] = bucket;
+        }
+
+        var chips = new List<ProfileModelChip>(grouped.Count);
+        foreach (var kv in grouped.OrderBy(x => ModelSortRank(x.Key, x.Value.MinOrder == int.MaxValue ? -1 : x.Value.MinOrder))
+                                  .ThenBy(x => x.Value.Title, StringComparer.OrdinalIgnoreCase))
+        {
+            var items = kv.Value.Items;
+            var rep = items[0];
+            bool isGemini = kv.Key.Contains("gemini", StringComparison.OrdinalIgnoreCase);
+            bool is3p = !isGemini;
+
+            var levels = items
+                .Select(ParseThinkingLevel)
+                .Where(x => x.Rank >= 0 && !string.IsNullOrEmpty(x.ShortLabel))
+                .DistinctBy(x => x.ShortLabel)
+                .OrderBy(x => x.Rank)
+                .ToList();
+
+            string levelsBadge = "";
+            if (levels.Count >= 2 && levels[0].Rank <= 3 && levels[^1].Rank <= 3)
+                levelsBadge = $"{levels[0].ShortLabel}–{levels[^1].ShortLabel}";
+            else if (levels.Count == 1)
+                levelsBadge = levels[0].ShortLabel;
+            else if (levels.Count > 1)
+                levelsBadge = string.Join(" / ", levels.Select(l => l.ShortLabel));
+            else if (items.Any(x => x.SupportsThinking))
+                levelsBadge = I18nService.T("Ag.ModelCapThinking");
+
+            int maxCtx = items.Max(x => x.MaxTokens);
+            bool hasThink = items.Any(x => x.SupportsThinking);
+            bool hasImg = items.Any(x => x.SupportsImages);
+            var tipParts = new List<string> { $"{kv.Value.Title}  ({kv.Key})" };
+            if (levels.Count > 0)
+                tipParts.Add(string.Join(" / ", levels.Select(l => l.ShortLabel)));
+            var caps = new List<string>();
+            if (hasThink) caps.Add(I18nService.T("Ag.ModelCapThinking"));
+            if (hasImg) caps.Add(I18nService.T("Ag.ModelCapImages"));
+            if (maxCtx >= 1000) caps.Add(I18nService.F("Ag.ModelContextFmt", maxCtx / 1000));
+            if (caps.Count > 0) tipParts.Add(string.Join(" · ", caps));
+
+            chips.Add(new ProfileModelChip(
+                kv.Key,
+                kv.Value.Title,
+                levelsBadge,
+                isGemini,
+                is3p,
+                string.Join("\n", tipParts)));
+        }
+
+        return chips;
+    }
+
+    [JsonIgnore]
+    public List<ProfileModelChip> MergedAvailableModels =>
+        _cachedMergedModels ??= BuildMergedAvailableModels();
+
+    [JsonIgnore]
+    public int AvailableModelCount => MergedAvailableModels.Count;
+
+    [JsonIgnore]
+    public bool HasModelCatalog => AvailableModelCount > 0;
+
+    [JsonIgnore]
+    public System.Windows.Visibility HasModelCatalogVisibility =>
+        HasModelCatalog ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
+    [JsonIgnore]
+    public System.Windows.Visibility ModelsDrawerVisibility =>
+        IsModelsExpanded && HasModelCatalog ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
+    [JsonIgnore]
+    public string AvailableModelsHeaderText =>
+        I18nService.F("Ag.AvailableModelsFmt", AvailableModelCount);
+}
+
+public sealed record ProfileModelChip(
+    string FamilyKey,
+    string DisplayTitle,
+    string LevelsBadge,
+    bool IsGemini,
+    bool Is3p,
+    string Tooltip)
+{
+    static System.Windows.Media.SolidColorBrush FreezeBrush(byte r, byte g, byte b)
+    {
+        var br = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+        br.Freeze();
+        return br;
+    }
+
+    static readonly System.Windows.Media.Brush GemChipBg = FreezeBrush(0xF0, 0xF4, 0xFF);
+    static readonly System.Windows.Media.Brush GemChipBorder = FreezeBrush(0xC7, 0xD2, 0xFE);
+    static readonly System.Windows.Media.Brush GemTitleFg = FreezeBrush(0x31, 0x2E, 0x81);
+    static readonly System.Windows.Media.Brush GemBadgeBg = FreezeBrush(0xE0, 0xE7, 0xFF);
+    static readonly System.Windows.Media.Brush GemBadgeFg = FreezeBrush(0x43, 0x38, 0xCA);
+
+    static readonly System.Windows.Media.Brush ThirdChipBg = FreezeBrush(0xF7, 0xF3, 0xFF);
+    static readonly System.Windows.Media.Brush ThirdChipBorder = FreezeBrush(0xDD, 0xD6, 0xFE);
+    static readonly System.Windows.Media.Brush ThirdTitleFg = FreezeBrush(0x4C, 0x1D, 0x95);
+    static readonly System.Windows.Media.Brush ThirdBadgeBg = FreezeBrush(0xED, 0xE9, 0xFE);
+    static readonly System.Windows.Media.Brush ThirdBadgeFg = FreezeBrush(0x6D, 0x28, 0xD9);
+
+    public System.Windows.Media.Brush ChipBg => IsGemini ? GemChipBg : ThirdChipBg;
+    public System.Windows.Media.Brush ChipBorder => IsGemini ? GemChipBorder : ThirdChipBorder;
+    public System.Windows.Media.Brush TitleFg => IsGemini ? GemTitleFg : ThirdTitleFg;
+    public System.Windows.Media.Brush BadgeBg => IsGemini ? GemBadgeBg : ThirdBadgeBg;
+    public System.Windows.Media.Brush BadgeFg => IsGemini ? GemBadgeFg : ThirdBadgeFg;
+    public System.Windows.Visibility LevelsBadgeVisibility =>
+        string.IsNullOrEmpty(LevelsBadge) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 }
 
 public class DeviceProfile
@@ -614,4 +919,9 @@ public class AgModelQuotaInfo
     public bool SupportsImages { get; set; }
     public int MaxTokens { get; set; }
     public int MaxOutputTokens { get; set; }
+    public bool IsPickerVisible { get; set; }
+    public int PickerOrder { get; set; } = -1;
+    public string? GroupKey { get; set; }
+    public string? GroupDisplayName { get; set; }
+    public string? ThinkingDisplayName { get; set; }
 }

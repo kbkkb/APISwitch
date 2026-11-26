@@ -62,6 +62,12 @@ public abstract class UsageSourceBase : IUsageSource
     /// <summary>按文件路径推进字节偏移水位。</summary>
     protected void SetFileOffset(string file, long pos) => _ctx.SetOffset("file:" + file, pos);
 
+    /// <summary>读取指定文件上次持久化的当前模型名（防止增量 Seek 跳过文件头丢失模型）。</summary>
+    protected string GetFileModel(string file) => _ctx.GetModel(file);
+
+    /// <summary>持久化指定文件的当前模型名。</summary>
+    protected void SetFileModel(string file, string model) => _ctx.SetModel(file, model);
+
     /// <summary>记录一条用量。</summary>
     protected void Record(string model, long inTokens, long outTokens, DateTime ts,
         long cacheRead = 0, long cacheWrite = 0, long durationMs = 0, long ttftMs = 0,
@@ -81,12 +87,14 @@ public abstract class UsageSourceBase : IUsageSource
 public sealed class UsageScanContext
 {
     private readonly Dictionary<string, long> _offsets;
+    private readonly Dictionary<string, string>? _fileModels;
     private readonly object _lock;
 
-    internal UsageScanContext(Dictionary<string, long> offsets, object scanLock)
+    internal UsageScanContext(Dictionary<string, long> offsets, object scanLock, Dictionary<string, string>? fileModels = null)
     {
         _offsets = offsets;
         _lock = scanLock;
+        _fileModels = fileModels;
     }
 
     internal long GetOffset(string key)
@@ -102,6 +110,24 @@ public sealed class UsageScanContext
         lock (_lock)
         {
             _offsets[key] = value;
+        }
+    }
+
+    internal string GetModel(string file)
+    {
+        if (_fileModels == null) return "";
+        lock (_lock)
+        {
+            return _fileModels.TryGetValue(file, out var m) ? m : "";
+        }
+    }
+
+    internal void SetModel(string file, string model)
+    {
+        if (_fileModels == null || string.IsNullOrEmpty(model)) return;
+        lock (_lock)
+        {
+            _fileModels[file] = model;
         }
     }
 }
