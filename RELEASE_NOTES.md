@@ -2,6 +2,33 @@
 
 # APISwitch Release Notes
 
+## APISwitch v0.3.7 Release Notes
+
+### [New · Equivalent USD Cost Engine & Pricing Center]
+• **4-Dimension Token Costing**: Added `UsagePricingService` to calculate real-time equivalent USD value across all 10 supported clients using per-million rates for **Input, Output, Cache Read, and Cache Write** tokens.
+• **Cloud Catalog Sync + Local Ledger Fusion**: Supports one-click and automatic cloud catalog synchronization from `models.dev` and `OpenRouter`, seamlessly combined with local Antigravity `pricing_ledger_v1.json` measured rates.
+• **Visual Pricing Center**: Configure **per-provider discount multipliers** (e.g., `0.2x` relay channels) and custom per-model or wildcard rate overrides directly from the UI.
+
+### [New · Antigravity Quota Insights & 5H/Weekly USD Pool Calibration]
+• **Live USD Pool Pills on Account Cards**: Dynamically calibrates and displays **remaining USD / 100% pool cap USD** (e.g., `≈ $3.32 / $9.04`) right next to `Gemini` and `Claude & GPT` 5H/Weekly quota bars on MainWindow cards, paired with a quick **Insights** button.
+• **Quota Deep Insights Window**: Supports per-account **monthly billing anchor day** configuration to track monthly actual spend, estimated monthly supply, expired unused quota, and unactivated idle loss; automatically detects **Official Early / Mass Reset** clusters alongside full historical cycle settlement records while hiding deprecated Argon buckets.
+
+### [New · Per-Account Antigravity Attribution & Lightweight Stop Hook]
+• **Per-Account Antigravity Breakdown Tab**: Added a dedicated **Antigravity** tab in Usage Monitor displaying independent token totals, request counts, cache hit rates, subscription badges, and USD spend per Google account.
+• **Zero-Overhead Native `Stop` Hook & Hub Watcher**: Added a fast `--ag-hook` CLI entry (`<30ms`, headless, no WPF load, zero network calls) plus live `app_storage.json` watching so manual in-IDE account switches are tracked accurately (configurable in General Settings).
+• **Mid-Conversation Switch Fix & Self-Healing**: Added `account_sessions` switch barriers, forward-bounded hook matching, and `acctAttrVer=3` automatic self-healing for mid-conversation account switches.
+
+### [UI Overhaul · Modern SaaS Analytics UI & Rich Model Hover Cards]
+• **Refreshed Usage Monitor & Insights Design**: Redesigned both analytics windows with crisp SaaS-style hierarchy—5 navigation pill tabs, 6 KPI summary cards (including Equivalent USD Value), collapsible trend/heatmap panels, and clean tabular alignment.
+• **Rich Model Hover Card (Zero Flicker)**: Eliminated two-stage tooltip flicker on model rows and introduced `ModelHoverTipStyle` across all 5 model display locations—showing **full model name + raw ID, pricing source & multiplier badge, provider & client, 2×2 unit pricing matrix (`USD / 1M Tokens`), and per-row token/cost breakdown**.
+
+### [Performance & Reliability · SQLite WAL Fluency & Non-Modal Floating Widget Fix]
+• **Zero-Freeze UI Architecture**: Enabled SQLite `WAL` mode (`synchronous=NORMAL`, `busy_timeout=5000`), removed synchronous UI-thread cache warming, and moved view-model aggregation to `Task.Run` with lock-free thread-safe `I18nService` lookups.
+• **Floating Widget Clickability Fix**: Converted Usage Monitor and Quota Insights from modal `ShowDialog()` calls to singleton modeless `ShowOrActivate()` windows and added a Win32 `WM_ENABLE` guard on `FloatingWidgetWindow`, fixing the bug where opening analytics windows blocked clicks on the desktop floating widget.
+• **Unified Build Output**: Consolidated build and publish paths into a single `bin\APISwitch.exe` binary directory and `Release_Package\` artifact folder.
+
+---
+
 ## APISwitch v0.3.6 Release Notes
 
 ### [Fixes · Antigravity 2.x (Hub) Account Switching & Credential Sync]

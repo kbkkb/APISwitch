@@ -3,15 +3,20 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <OutputPath>bin\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>APISwitch</AssemblyName>
     <RootNamespace>APISwitch</RootNamespace>
-    <Version>0.3.6</Version>
-    <FileVersion>0.3.6.0</FileVersion>
-    <AssemblyVersion>0.3.6.0</AssemblyVersion>
+    <StartupObject>APISwitch.Program</StartupObject>
+    <Version>0.3.7</Version>
+    <FileVersion>0.3.7.0</FileVersion>
+    <AssemblyVersion>0.3.7.0</AssemblyVersion>
     <Product>APISwitch</Product>
     <Description>第三方 API 和谷歌官方订阅切换与管理</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>

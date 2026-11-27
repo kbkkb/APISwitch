@@ -154,6 +154,9 @@ public partial class App : System.Windows.Application
                 }
                 win.Show();
                 win.UpdateLayout();
+                await win.EnsureAntigravityLoadedForRenderAsync();
+                await Task.Delay(120);
+                win.UpdateLayout();
                 var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
                     (int)win.ActualWidth, (int)win.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
                 rtb.Render(win);
@@ -189,13 +192,17 @@ public partial class App : System.Windows.Application
                 else if (days == 30) win.Quick30DRadio.IsChecked = true;
                 else if (days == 7) win.Quick7DRadio.IsChecked = true;
                 else if (days == 1) win.Quick1DRadio.IsChecked = true;
-                if (tab == "agents") win.TabAgentsRadio.IsChecked = true;
+                if (tab == "antigravity" || tab == "ag") win.TabAntigravityRadio.IsChecked = true;
+                else if (tab == "agents") win.TabAgentsRadio.IsChecked = true;
                 else if (tab == "models") win.TabModelsRadio.IsChecked = true;
                 else if (tab == "calls") win.TabCallsRadio.IsChecked = true;
-                if (!string.IsNullOrWhiteSpace(agent)) win.SelectAgentFilter(agent);
+                if (!string.IsNullOrWhiteSpace(agent) && !string.Equals(agent, "hovertip", StringComparison.OrdinalIgnoreCase))
+                    win.SelectAgentFilter(agent);
                 await Task.Delay(300);
                 await win.InitialScanTask;
                 await Task.Delay(400);
+                if (string.Equals(agent, "hovertip", StringComparison.OrdinalIgnoreCase))
+                    win.ShowRenderPreviewTooltipOverlay();
                 win.UpdateLayout();
                 var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
                     (int)Math.Max(win.ActualWidth, 100), (int)Math.Max(win.ActualHeight, 100), 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
@@ -212,6 +219,144 @@ public partial class App : System.Windows.Application
             {
                 File.WriteAllText(outputPath + ".err", ex.ToString());
             }
+            Shutdown();
+            return;
+        }
+
+        if (e.Args.Length >= 2 && e.Args[0] == "--render-pricing")
+        {
+            var outputPath = e.Args[1];
+            try
+            {
+                await UsagePricingService.SyncCloudPricesAsync();
+                var dlg = new Dialogs.PricingCenterDialog();
+                dlg.Show();
+                dlg.UpdateLayout();
+                await Task.Delay(200);
+                dlg.UpdateLayout();
+                var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)Math.Max(dlg.ActualWidth, 100), (int)Math.Max(dlg.ActualHeight, 100), 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                rtb.Render(dlg);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                using (var fs = File.Open(outputPath, FileMode.Create, FileAccess.Write))
+                {
+                    encoder.Save(fs);
+                }
+                dlg.Close();
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText(outputPath + ".err", ex.ToString());
+            }
+            Shutdown();
+            return;
+        }
+
+        if (e.Args.Length >= 2 && e.Args[0] == "--render-ag-insights")
+        {
+            var outputPath = e.Args[1];
+            string? email = e.Args.Length >= 3 ? e.Args[2] : null;
+            try
+            {
+                var dlg = new Dialogs.AgQuotaInsightsDialog(email);
+                dlg.Show();
+                dlg.UpdateLayout();
+                await dlg.ReadyTask;
+                await Task.Delay(180);
+                dlg.UpdateLayout();
+                var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)Math.Max(dlg.ActualWidth, 100), (int)Math.Max(dlg.ActualHeight, 100), 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                rtb.Render(dlg);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                using (var fs = File.Open(outputPath, FileMode.Create, FileAccess.Write))
+                {
+                    encoder.Save(fs);
+                }
+                dlg.Close();
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText(outputPath + ".err", ex.ToString());
+            }
+            Shutdown();
+            return;
+        }
+
+        if (e.Args.Length >= 2 && e.Args[0] == "--bench-ui")
+        {
+            var outFile = e.Args[1];
+            var sb = new StringBuilder();
+            try
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                LocalProxyServer.Initialize();
+                var mw = new MainWindow();
+                mw.Show();
+                mw.UpdateLayout();
+                long mwShowMs = sw.ElapsedMilliseconds;
+                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                long mwIdleMs = sw.ElapsedMilliseconds;
+                await mw.EnsureAntigravityLoadedForRenderAsync();
+                long mwWarmMs = sw.ElapsedMilliseconds;
+                sb.AppendLine($"MainWindow: show={mwShowMs}ms, idle={mwIdleMs}ms, agWarm={mwWarmMs}ms");
+
+                sw.Restart();
+                var uw = new Dialogs.UsageMonitorWindow { Owner = mw };
+                uw.Show();
+                uw.UpdateLayout();
+                long uwShowMs = sw.ElapsedMilliseconds;
+                await uw.InitialScanTask;
+                await Task.Delay(120);
+                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+                sw.Restart();
+                uw.TabAntigravityRadio.IsChecked = true;
+                uw.UpdateLayout();
+                long tAgMs = sw.ElapsedMilliseconds;
+
+                sw.Restart();
+                uw.TabAgentsRadio.IsChecked = true;
+                uw.UpdateLayout();
+                long tAgentsMs = sw.ElapsedMilliseconds;
+
+                sw.Restart();
+                uw.TabModelsRadio.IsChecked = true;
+                uw.UpdateLayout();
+                long tModelsMs = sw.ElapsedMilliseconds;
+
+                sw.Restart();
+                uw.TabCallsRadio.IsChecked = true;
+                uw.UpdateLayout();
+                long tCallsMs = sw.ElapsedMilliseconds;
+
+                sw.Restart();
+                uw.TabProvidersRadio.IsChecked = true;
+                uw.UpdateLayout();
+                long tProvsMs = sw.ElapsedMilliseconds;
+                sb.AppendLine($"UsageMonitor: open={uwShowMs}ms, tabAg={tAgMs}ms, tabAgents={tAgentsMs}ms, tabModels={tModelsMs}ms, tabCalls={tCallsMs}ms, tabProvs={tProvsMs}ms");
+
+                sw.Restart();
+                var idlg = new Dialogs.AgQuotaInsightsDialog("kingblue1013k@gmail.com") { Owner = uw };
+                idlg.Show();
+                idlg.UpdateLayout();
+                long insOpenMs = sw.ElapsedMilliseconds;
+                await idlg.ReadyTask;
+                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                long insReadyMs = sw.ElapsedMilliseconds;
+                sb.AppendLine($"AgQuotaInsights: open={insOpenMs}ms, ready={insReadyMs}ms");
+
+                idlg.Close();
+                uw.Close();
+                mw.Close();
+                sb.AppendLine("BENCH_OK=True");
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("BENCH_ERR=" + ex);
+            }
+            File.WriteAllText(outFile, sb.ToString());
             Shutdown();
             return;
         }
@@ -287,6 +432,7 @@ public partial class App : System.Windows.Application
 
         LocalProxyServer.Initialize();
         LogStartup("LocalProxyServer initialized.");
+        AgHookService.SyncWithSettings();
 
         // 修复：ComboBox 聚焦（未展开下拉）时滚轮会误切换选中项。
         // 在隧道阶段拦截（Combo 自身的 OnMouseWheel 在冒泡阶段），未展开时把滚轮

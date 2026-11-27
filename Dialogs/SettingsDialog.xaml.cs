@@ -196,6 +196,8 @@ public partial class SettingsDialog : Window
             var settings = AppSettingsService.Current;
             if (FloatingWidgetCheckBox != null)
                 FloatingWidgetCheckBox.IsChecked = settings.FloatingWidgetEnabled;
+            if (AgAccountTrackingCheckBox != null)
+                AgAccountTrackingCheckBox.IsChecked = settings.AntigravityAccountTrackingEnabled;
             CloseMinimizeRadio.IsChecked = settings.MinimizeToTrayOnClose;
             CloseExitRadio.IsChecked = !settings.MinimizeToTrayOnClose;
             AutoCheckUpdateCheckBox.IsChecked = settings.AutoCheckUpdate;
@@ -367,6 +369,16 @@ public partial class SettingsDialog : Window
     {
         if (_isSettingsInitializing) return;
         _mainWindow.SetFloatingWidgetEnabled(FloatingWidgetCheckBox.IsChecked == true);
+    }
+
+    private void AgAccountTrackingCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isSettingsInitializing) return;
+        bool enabled = AgAccountTrackingCheckBox.IsChecked == true;
+        AppSettingsService.Current.AntigravityAccountTrackingEnabled = enabled;
+        AppSettingsService.Save();
+        AgHookService.EnsureHookInstalled(enabled);
+        ShowToast(I18nService.T(enabled ? "Msg.AgTrackEnabled" : "Msg.AgTrackDisabled"));
     }
 
     private void CloseActionRadio_Changed(object sender, RoutedEventArgs e)

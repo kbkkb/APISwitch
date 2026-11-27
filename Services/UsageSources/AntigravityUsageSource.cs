@@ -26,6 +26,7 @@ namespace APISwitch.Services;
 public sealed class AntigravityUsageSource : UsageSourceBase
 {
     public override string AgentId => UsageStorage.AgentAntigravity;
+    internal static bool QuickRecentOnly;
 
     readonly record struct StepStub(
         string Type,
@@ -40,6 +41,14 @@ public sealed class AntigravityUsageSource : UsageSourceBase
 
     protected override int ScanCore()
     {
+        string liveEmail = "";
+        if (!AgPaths.IsSandboxed)
+        {
+            liveEmail = AgHookService.ReadCurrentAntigravityEmailFast();
+            if (!string.IsNullOrWhiteSpace(liveEmail))
+                UsageStorage.RecordAccountSession(liveEmail);
+        }
+
         var agRoot = Path.Combine(ClaudeCli.HomeDir, ".gemini", "antigravity");
         var brainRoot = Path.Combine(agRoot, "brain");
         if (!Directory.Exists(brainRoot)) return 0;
@@ -48,7 +57,9 @@ public sealed class AntigravityUsageSource : UsageSourceBase
         var convDb = new ConversationDbResolver(agRoot);
 
         int added = 0;
-        var cutoff = DateTime.Now.AddDays(-400);
+        var cutoff = QuickRecentOnly ? DateTime.Now.AddHours(-6) : DateTime.Now.AddDays(-400);
+        long nowTs = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        long recentDbMinTs = QuickRecentOnly ? (nowTs - 72L * 3600L) : 0L;
 
         IEnumerable<string> convDirs;
         try { convDirs = Directory.EnumerateDirectories(brainRoot); }
@@ -126,7 +137,7 @@ public sealed class AntigravityUsageSource : UsageSourceBase
             }
 
             return updates;
-        });
+        }, minTs: recentDbMinTs);
 
         foreach (var (cWmKey, sig) in updatedDbWms)
             SetWatermark(cWmKey, sig);
@@ -147,11 +158,39 @@ public sealed class AntigravityUsageSource : UsageSourceBase
         // 基于真实 ts 时间线（含父子对话链），进一步补齐无 gen_metadata 步骤（如 step 1 CHECKPOINT）与子代理会话的模型归属
         const long timelineVer = 2;
         const string tlWmKey = "ag_timeline_ver";
-        if (added > 0 || ledgerChanged || GetWatermark(tlWmKey) != timelineVer)
+        bool tlUpgrade = GetWatermark(tlWmKey) != timelineVer;
+        if (added > 0 || ledgerChanged || tlUpgrade)
         {
-            int tlEnriched = UsageStorage.EnrichAntigravityFromTimeline(ledger.ParentMap, graceSeconds: 120);
+            long tlMinTs = tlUpgrade ? 0L : (QuickRecentOnly ? recentDbMinTs : (nowTs - 14L * 86400L));
+            int tlEnriched = UsageStorage.EnrichAntigravityFromTimeline(ledger.ParentMap, graceSeconds: 120, minTs: tlMinTs);
             SetWatermark(tlWmKey, timelineVer);
             added += tlEnriched;
+        }
+
+        // 多账号归属原地补齐（前向因果 Stop Hook + 在线活跃会话切号屏障 + 历史 quota_snapshots 回溯 + 近期回合纠偏自愈）
+        const long acctAttrVer = 3;
+        const string acctWmKey = "ag_acct_attr_ver";
+        const string hookSigWmKey = "ag_hook_log_sig";
+        const string acctSrcWmKey = "ag_acct_src_sig";
+        var (hookSig, hookEntries) = AgHookService.LoadTurnEntries();
+        long acctSrcSig = UsageStorage.GetAccountAttributionSourceWatermark();
+        bool verUpgrade = GetWatermark(acctWmKey) != acctAttrVer;
+        bool hookChanged = hookSig != GetWatermark(hookSigWmKey);
+        if (added > 0 ||
+            hookChanged ||
+            acctSrcSig != GetWatermark(acctSrcWmKey) ||
+            verUpgrade)
+        {
+            long reconcileFromTs = verUpgrade
+                ? (nowTs - 72L * 3600L)
+                : (hookChanged ? (nowTs - 4L * 3600L) : 0L);
+            long acctMinTs = verUpgrade ? 0L : (QuickRecentOnly ? recentDbMinTs : (nowTs - 14L * 86400L));
+            int acctEnriched = UsageStorage.EnrichAntigravityAccounts(
+                ledger.ParentMap, hookEntries, reconcileFromTs, liveEmail, minTs: acctMinTs);
+            SetWatermark(acctWmKey, acctAttrVer);
+            SetWatermark(hookSigWmKey, hookSig);
+            SetWatermark(acctSrcWmKey, acctSrcSig);
+            added += acctEnriched;
         }
 
         return added;

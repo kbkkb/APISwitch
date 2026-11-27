@@ -75,18 +75,22 @@ public partial class MainWindow : Window
             App.LogStartup("MainWindow Loaded: start");
             ApplyTabTheme((Tabs.SelectedItem as TabItem)?.Tag?.ToString() ?? "antigravity");
             ShowCurrentVersion();
-            UsageStorage.CleanupOldData();
-            _ = System.Threading.Tasks.Task.Run(() => UsageScanner.ScanAll());
-            LocalProxyServer.StateChanged += () => Dispatcher.Invoke(UpdateRouterUI);
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(1500);
+                UsageStorage.CleanupOldData();
+                UsageScanner.ScanAll();
+            });
+            LocalProxyServer.StateChanged += () => Dispatcher.BeginInvoke(new Action(UpdateRouterUI));
             I18nService.LanguageChanged += () =>
             {
                 RebuildTrayMenu();
-                Dispatcher.Invoke(() =>
+                Dispatcher.BeginInvoke(new Action(() =>
                 {
                     _ = RefreshAntigravityAsync();
                     UpdateFloatingWidgetButtonVisual();
                     _floatingWidget?.RefreshLocalization();
-                });
+                }));
             };
             RefreshAll();
             UpdateRouterUI();
@@ -233,8 +237,7 @@ public partial class MainWindow : Window
 
     void OnOpenUsageMonitor(object sender, RoutedEventArgs e)
     {
-        var dlg = new UsageMonitorWindow { Owner = this };
-        dlg.ShowDialog();
+        UsageMonitorWindow.ShowOrActivate(this);
     }
 
     void OnOpenBugFeedbackClick(object sender, RoutedEventArgs e)

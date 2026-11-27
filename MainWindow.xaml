@@ -524,6 +524,12 @@
                                                                 <TextBlock Text="{DynamicResource Ag.RefreshQuotaBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                             </StackPanel>
                                                         </Button>
+                                                        <Button Style="{StaticResource CardGhostBtn}" Margin="6,0,0,0" Click="OnCardOpenQuotaInsights" ToolTip="{DynamicResource Usage.AgRowDetailTip}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Path Data="{StaticResource IconEye}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11.5" Height="11.5" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="{DynamicResource Usage.AgRowDetailBtn}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
                                                         <Button Style="{StaticResource CardDangerIconBtn}" Margin="6,0,0,0" Click="OnCardDeleteAntigravity" ToolTip="{DynamicResource Ag.DeleteTip}">
                                                             <Path Data="{StaticResource IconTrash}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"/>
                                                         </Button>
@@ -558,7 +564,13 @@
                                                                         <TextBlock Text="{Binding Quota5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota5hCountdownFg}"/>
                                                                     </Border>
                                                                 </StackPanel>
-                                                                <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                                    <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="5,0.5" Margin="0,0,6,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding Quota5hUsdVisibility}" ToolTip="{Binding Quota5hUsdTooltip}">
+                                                                        <TextBlock Text="{Binding Quota5hUsdText}" FontSize="10" FontWeight="Medium" Foreground="#475569"/>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding Quota5hPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource GreenBrush}" VerticalAlignment="Center"/>
+                                                                </StackPanel>
                                                             </Grid>
                                                             <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
                                                                         Foreground="{StaticResource GreenBrush}"/>
@@ -573,7 +585,13 @@
                                                                         <TextBlock Text="{Binding QuotaWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding QuotaWeeklyCountdownFg}"/>
                                                                     </Border>
                                                                 </StackPanel>
-                                                                <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                                    <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="5,0.5" Margin="0,0,6,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding QuotaWeeklyUsdVisibility}" ToolTip="{Binding QuotaWeeklyUsdTooltip}">
+                                                                        <TextBlock Text="{Binding QuotaWeeklyUsdText}" FontSize="10" FontWeight="Medium" Foreground="#475569"/>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding QuotaWeeklyPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                                                                </StackPanel>
                                                             </Grid>
                                                             <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding QuotaWeeklyPercentValue, Mode=OneWay}"
                                                                         Foreground="{StaticResource AccentBrush}"/>
@@ -640,7 +658,13 @@
                                                                         <TextBlock Text="{Binding Quota3p5hCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3p5hCountdownFg}"/>
                                                                     </Border>
                                                                 </StackPanel>
-                                                                <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                                    <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="5,0.5" Margin="0,0,6,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding Quota3p5hUsdVisibility}" ToolTip="{Binding Quota3p5hUsdTooltip}">
+                                                                        <TextBlock Text="{Binding Quota3p5hUsdText}" FontSize="10" FontWeight="Medium" Foreground="#475569"/>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding Quota3p5hPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
+                                                                </StackPanel>
                                                             </Grid>
                                                             <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3p5hPercentValue, Mode=OneWay}" Margin="0,0,0,8"
                                                                         Foreground="#10B981"/>
@@ -655,7 +679,13 @@
                                                                         <TextBlock Text="{Binding Quota3pWeeklyCountdown}" FontSize="10" FontWeight="Medium" Foreground="{Binding Quota3pWeeklyCountdownFg}"/>
                                                                     </Border>
                                                                 </StackPanel>
-                                                                <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                                    <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="5,0.5" Margin="0,0,6,0"
+                                                                            VerticalAlignment="Center" Visibility="{Binding Quota3pWeeklyUsdVisibility}" ToolTip="{Binding Quota3pWeeklyUsdTooltip}">
+                                                                        <TextBlock Text="{Binding Quota3pWeeklyUsdText}" FontSize="10" FontWeight="Medium" Foreground="#475569"/>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding Quota3pWeeklyPercentText}" FontSize="11.5" FontWeight="Bold" Foreground="#8B5CF6" VerticalAlignment="Center"/>
+                                                                </StackPanel>
                                                             </Grid>
                                                             <ProgressBar Style="{StaticResource MiniQuotaProgress}" Value="{Binding Quota3pWeeklyPercentValue, Mode=OneWay}"
                                                                         Foreground="#8B5CF6"/>

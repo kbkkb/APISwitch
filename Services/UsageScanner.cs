@@ -36,6 +36,7 @@ public static class UsageScanner
 
     // 扫描锁：避免主窗口与用量监控窗口并发执行时破坏字典与状态文件
     static readonly object _scanLock = new();
+    static long _lastFullScanUtcTicks;
 
     static readonly IUsageSource[] _sources = new IUsageSource[]
     {
@@ -141,8 +142,24 @@ public static class UsageScanner
                 return BackfillCore(backupIfExists: true).Written;
             }
 
-            return ScanIncrementalCore();
+            int res = ScanIncrementalCore();
+            System.Threading.Interlocked.Exchange(ref _lastFullScanUtcTicks, DateTime.UtcNow.Ticks);
+            return res;
         }
+    }
+
+    /// <summary>
+    /// 窗口打开时使用的智能增量扫描：若近期刚执行过全客户端扫描，则仅毫秒级快扫 Antigravity 增量，避免频繁枚举数百个历史日志阻塞界面。
+    /// </summary>
+    public static int ScanForWindowOpen(TimeSpan fullScanCooldown)
+    {
+        if (!AgPaths.IsSandboxed)
+        {
+            long last = System.Threading.Interlocked.Read(ref _lastFullScanUtcTicks);
+            if (last > 0 && (DateTime.UtcNow.Ticks - last) < fullScanCooldown.Ticks)
+                return ScanAntigravityQuick();
+        }
+        return ScanAll();
     }
 
     /// <summary>仅对 Antigravity 本地会话日志执行高频轻量化增量扫描，供桌面悬浮窗实时更新。</summary>
@@ -159,10 +176,18 @@ public static class UsageScanner
 
             int added = 0;
             var ctx = new UsageScanContext(_offsets, _scanLock, _fileModels);
-            foreach (var src in _sources)
+            AntigravityUsageSource.QuickRecentOnly = true;
+            try
             {
-                if (string.Equals(src.AgentId, UsageStorage.AgentAntigravity, StringComparison.Ordinal))
-                    added += src.Scan(ctx);
+                foreach (var src in _sources)
+                {
+                    if (string.Equals(src.AgentId, UsageStorage.AgentAntigravity, StringComparison.Ordinal))
+                        added += src.Scan(ctx);
+                }
+            }
+            finally
+            {
+                AntigravityUsageSource.QuickRecentOnly = false;
             }
             if (added > 0) SaveState();
             return added;
@@ -1357,6 +1382,7 @@ public static class UsageScanner
             _fileProviders = new(StringComparer.OrdinalIgnoreCase);
             _codexTurns.Clear();
             _scannerVersion = CurrentScannerVersion;
+            System.Threading.Interlocked.Exchange(ref _lastFullScanUtcTicks, 0);
             SaveState();
         }
     }

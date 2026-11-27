@@ -20,6 +20,10 @@ public class Profile : INotifyPropertyChanged
     public long? ExpiryTimestamp { get; set; }
     public string? SubscriptionTier { get; set; }
     public bool? IsPaidSubscription { get; set; }
+    /// <summary>用户设定的订阅起始日期（本地日期），用于按月统计订阅周期。</summary>
+    public DateTime? SubscriptionStartDate { get; set; }
+    /// <summary>每月订阅账单结算锚点日（1-31）；未设置时自动按 SubscriptionStartDate 或首次记录日期推算。</summary>
+    public int? BillingCycleDay { get; set; }
 
     // 5H Quota (Gemini)
     public double? Quota5hFraction { get; set; }
@@ -93,6 +97,8 @@ public class Profile : INotifyPropertyChanged
         ExpiryTimestamp = src.ExpiryTimestamp;
         SubscriptionTier = src.SubscriptionTier;
         IsPaidSubscription = src.IsPaidSubscription;
+        if (src.SubscriptionStartDate.HasValue) SubscriptionStartDate = src.SubscriptionStartDate;
+        if (src.BillingCycleDay.HasValue) BillingCycleDay = src.BillingCycleDay;
         Quota5hFraction = src.Quota5hFraction;
         Quota5hResetTime = src.Quota5hResetTime;
         QuotaWeeklyFraction = src.QuotaWeeklyFraction;
@@ -783,6 +789,62 @@ public class Profile : INotifyPropertyChanged
     [JsonIgnore]
     public System.Windows.Visibility Quota3pWeeklyCountdownVisibility =>
         string.IsNullOrEmpty(Quota3pWeeklyCountdown) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+
+    // ---------- 主窗口卡片 5H / 周限美元额度反推展示（O(1) 内存读取） ----------
+
+    string BuildCardUsdBadgeText(bool supported, string bucket, double? fraction)
+    {
+        if (!supported || !fraction.HasValue) return "";
+        if (!AgQuotaAnalyticsService.TryGetCardPoolUsd(this, bucket, fraction, out var remUsd, out var capUsd, out _, out _))
+            return "";
+        return $"≈ {UsagePricingService.FormatUsd(remUsd)} / {UsagePricingService.FormatUsd(capUsd)}";
+    }
+
+    string? BuildCardUsdTooltip(bool supported, string bucket, double? fraction)
+    {
+        if (!supported || !fraction.HasValue) return null;
+        if (!AgQuotaAnalyticsService.TryGetCardPoolUsd(this, bucket, fraction, out var remUsd, out var capUsd, out var spentUsd, out var measured))
+            return null;
+        string src = measured ? I18nService.T("AgInsight.BadgeMeasured") : I18nService.T("AgInsight.BadgeTierRef");
+        return I18nService.F(
+            "AgInsight.CardUsdTipFmt",
+            UsagePricingService.FormatUsd(spentUsd),
+            UsagePricingService.FormatUsd(remUsd),
+            UsagePricingService.FormatUsd(capUsd),
+            src);
+    }
+
+    [JsonIgnore]
+    public string Quota5hUsdText => BuildCardUsdBadgeText(HasGemini5hSupport, AgQuotaAnalyticsService.BucketGemini5h, Quota5hFraction);
+    [JsonIgnore]
+    public string? Quota5hUsdTooltip => BuildCardUsdTooltip(HasGemini5hSupport, AgQuotaAnalyticsService.BucketGemini5h, Quota5hFraction);
+    [JsonIgnore]
+    public System.Windows.Visibility Quota5hUsdVisibility =>
+        string.IsNullOrEmpty(Quota5hUsdText) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+
+    [JsonIgnore]
+    public string QuotaWeeklyUsdText => BuildCardUsdBadgeText(true, AgQuotaAnalyticsService.BucketGeminiWeekly, QuotaWeeklyFraction);
+    [JsonIgnore]
+    public string? QuotaWeeklyUsdTooltip => BuildCardUsdTooltip(true, AgQuotaAnalyticsService.BucketGeminiWeekly, QuotaWeeklyFraction);
+    [JsonIgnore]
+    public System.Windows.Visibility QuotaWeeklyUsdVisibility =>
+        string.IsNullOrEmpty(QuotaWeeklyUsdText) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+
+    [JsonIgnore]
+    public string Quota3p5hUsdText => BuildCardUsdBadgeText(Has3p5hSupport, AgQuotaAnalyticsService.Bucket3p5h, Quota3p5hFraction);
+    [JsonIgnore]
+    public string? Quota3p5hUsdTooltip => BuildCardUsdTooltip(Has3p5hSupport, AgQuotaAnalyticsService.Bucket3p5h, Quota3p5hFraction);
+    [JsonIgnore]
+    public System.Windows.Visibility Quota3p5hUsdVisibility =>
+        string.IsNullOrEmpty(Quota3p5hUsdText) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+
+    [JsonIgnore]
+    public string Quota3pWeeklyUsdText => BuildCardUsdBadgeText(Has3pQuota, AgQuotaAnalyticsService.Bucket3pWeekly, Quota3pWeeklyFraction);
+    [JsonIgnore]
+    public string? Quota3pWeeklyUsdTooltip => BuildCardUsdTooltip(Has3pQuota, AgQuotaAnalyticsService.Bucket3pWeekly, Quota3pWeeklyFraction);
+    [JsonIgnore]
+    public System.Windows.Visibility Quota3pWeeklyUsdVisibility =>
+        string.IsNullOrEmpty(Quota3pWeeklyUsdText) ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
     [JsonIgnore]
     public bool HasArgonQuota => QuotaArgon5hFraction.HasValue || QuotaArgonWeeklyFraction.HasValue;

@@ -13,26 +13,29 @@ public partial class MainWindow
 {
     FloatingWidgetWindow? _floatingWidget;
     FileSystemWatcher? _agBrainWatcher;
+    FileSystemWatcher? _agHubStorageWatcher;
     System.Windows.Threading.DispatcherTimer? _agWidgetScanTimer;
     CancellationTokenSource? _agWatchDebounceCts;
+    CancellationTokenSource? _agHubWatchDebounceCts;
     int _agQuickScanRunning;
 
     void InitFloatingWidget()
     {
         InitAgBrainWatcher();
+        InitAgHubStorageWatcher();
 
         _agWidgetScanTimer = new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(15)
+            Interval = TimeSpan.FromSeconds(30)
         };
         _agWidgetScanTimer.Tick += (_, _) =>
         {
+            if (_agBrainWatcher == null)
+                InitAgBrainWatcher();
+            if (_agHubStorageWatcher == null)
+                InitAgHubStorageWatcher();
             if (AppSettingsService.Current.FloatingWidgetEnabled && _floatingWidget is { IsVisible: true })
-            {
-                if (_agBrainWatcher == null)
-                    InitAgBrainWatcher();
                 _ = TriggerAntigravityQuickScanAsync();
-            }
         };
         _agWidgetScanTimer.Start();
 
@@ -70,7 +73,6 @@ public partial class MainWindow
 
     void OnAgBrainTranscriptChanged(object sender, FileSystemEventArgs e)
     {
-        if (!AppSettingsService.Current.FloatingWidgetEnabled) return;
         Dispatcher.BeginInvoke(() =>
         {
             _agWatchDebounceCts?.Cancel();
@@ -81,11 +83,66 @@ public partial class MainWindow
         });
     }
 
+    void InitAgHubStorageWatcher()
+    {
+        if (_agHubStorageWatcher != null) return;
+        try
+        {
+            var hubDir = Path.GetDirectoryName(AgPaths.HubAppStoragePath);
+            if (string.IsNullOrEmpty(hubDir) || !Directory.Exists(hubDir)) return;
+
+            var watcher = new FileSystemWatcher(hubDir, "app_storage.json")
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                EnableRaisingEvents = true
+            };
+            watcher.Changed += OnAgHubStorageChanged;
+            watcher.Created += OnAgHubStorageChanged;
+            watcher.Renamed += OnAgHubStorageChanged;
+            _agHubStorageWatcher = watcher;
+        }
+        catch { }
+    }
+
+    void OnAgHubStorageChanged(object sender, FileSystemEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            _agHubWatchDebounceCts?.Cancel();
+            _agHubWatchDebounceCts?.Dispose();
+            var cts = new CancellationTokenSource();
+            _agHubWatchDebounceCts = cts;
+            _ = DebouncedAgHubAccountSyncAsync(cts.Token);
+        });
+    }
+
+    async Task DebouncedAgHubAccountSyncAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(500, ct);
+            if (ct.IsCancellationRequested) return;
+            await Task.Run(() =>
+            {
+                var fastEmail = AgHookService.ReadCurrentAntigravityEmailFast();
+                if (!string.IsNullOrEmpty(fastEmail))
+                    UsageStorage.RecordAccountSession(fastEmail);
+            }, ct);
+            if (!ct.IsCancellationRequested)
+                await RefreshAntigravityAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch { }
+    }
+
     async Task DebouncedAgQuickScanAsync(CancellationToken ct)
     {
         try
         {
-            await Task.Delay(1500, ct);
+            int delayMs = (AppSettingsService.Current.FloatingWidgetEnabled && _floatingWidget is { IsVisible: true })
+                ? 4000
+                : 12000;
+            await Task.Delay(delayMs, ct);
             if (!ct.IsCancellationRequested)
                 await TriggerAntigravityQuickScanAsync();
         }
@@ -98,8 +155,11 @@ public partial class MainWindow
         try
         {
             await Task.Run(() => UsageScanner.ScanAntigravityQuick());
-            var stats = await Task.Run(() => UsageStorage.GetAntigravityWidgetStats());
-            await Dispatcher.InvokeAsync(() => _floatingWidget?.UpdateUsageStats(stats));
+            if (AppSettingsService.Current.FloatingWidgetEnabled && _floatingWidget is { IsVisible: true })
+            {
+                var stats = await Task.Run(() => UsageStorage.GetAntigravityWidgetStats());
+                await Dispatcher.InvokeAsync(() => _floatingWidget?.UpdateUsageStats(stats));
+            }
         }
         catch { }
         finally
@@ -187,7 +247,7 @@ public partial class MainWindow
     public Task SwitchProfileFromWidgetAsync(Profile target) => SwitchToProfile(target);
 
     public void OpenAntigravityUsageMonitorFromWidget() =>
-        OnOpenUsageMonitor(this, new RoutedEventArgs());
+        UsageMonitorWindow.ShowOrActivate(this, focusAntigravityTab: true);
 
     void NotifyFloatingWidgetProfilesUpdated()
     {
@@ -201,6 +261,9 @@ public partial class MainWindow
             _agWatchDebounceCts?.Cancel();
             _agWatchDebounceCts?.Dispose();
             _agWatchDebounceCts = null;
+            _agHubWatchDebounceCts?.Cancel();
+            _agHubWatchDebounceCts?.Dispose();
+            _agHubWatchDebounceCts = null;
         }
         catch { }
 
@@ -208,6 +271,8 @@ public partial class MainWindow
         {
             _agBrainWatcher?.Dispose();
             _agBrainWatcher = null;
+            _agHubStorageWatcher?.Dispose();
+            _agHubStorageWatcher = null;
         }
         catch { }
 

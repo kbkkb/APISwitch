@@ -277,6 +277,15 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Antigravity Per-Account Offline Tracking Card -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource General.AgTrackTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Text="{DynamicResource General.AgTrackDesc}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,12" TextWrapping="Wrap"/>
+                                    <CheckBox x:Name="AgAccountTrackingCheckBox" Content="{DynamicResource General.AgTrackEnableCheck}" Checked="AgAccountTrackingCheckBox_Changed" Unchecked="AgAccountTrackingCheckBox_Changed"/>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Window Close Behavior Card -->
                             <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="10" Padding="18,16">
                                 <StackPanel>

@@ -11,6 +11,7 @@ public class AppSettings
     /// <summary>界面语言：auto（跟随系统）/ zh-CN / en-US</summary>
     public string Language { get; set; } = "auto";
     public bool FloatingWidgetEnabled { get; set; } = true;
+    public bool AntigravityAccountTrackingEnabled { get; set; } = true;
     public double? FloatingWidgetAnchorX { get; set; }
     public double? FloatingWidgetAnchorY { get; set; }
     public bool? FloatingWidgetAnchorRight { get; set; }

@@ -1157,6 +1157,24 @@ CREATE TABLE gen_metadata (idx integer PRIMARY KEY, data blob, size integer NOT 
                                       Math.Abs(pCollapsed.Left - 2148) < 0.01 &&
                                       Math.Abs(pCollapsed.Top - 1338) < 0.01;
 
+                // 验证打开「用量监控 · 反重力明细」+「反重力额度透视」及触发模态禁用广播时，桌面悬浮窗全程保持可点击（Win32 IsWindowEnabled == true）
+                bool widgetClickableUnderDialogsOk = false;
+                {
+                    var fwProbe = new Dialogs.FloatingWidgetWindow(null!) { Opacity = 0, ShowActivated = false };
+                    fwProbe.Show();
+                    var fwHwnd = new System.Windows.Interop.WindowInteropHelper(fwProbe).Handle;
+                    var uProbe = Dialogs.UsageMonitorWindow.ShowOrActivate(focusAntigravityTab: true);
+                    var iProbe = Dialogs.AgQuotaInsightsDialog.ShowOrActivate();
+                    bool enabledWithBothOpen = fwHwnd != IntPtr.Zero && Dialogs.FloatingWidgetWindow.IsWindowEnabled(fwHwnd);
+                    Dialogs.FloatingWidgetWindow.SimulateModalDisableForTest(fwHwnd);
+                    bool enabledAfterModalBroadcast = fwHwnd != IntPtr.Zero && Dialogs.FloatingWidgetWindow.IsWindowEnabled(fwHwnd);
+                    bool agTabSelected = uProbe.TabAntigravityRadio.IsChecked == true;
+                    iProbe.Close();
+                    uProbe.Close();
+                    fwProbe.ForceClose();
+                    widgetClickableUnderDialogsOk = enabledWithBothOpen && enabledAfterModalBroadcast && agTabSelected;
+                }
+
                 bool widgetStatsOk = (wStats.TodayRequests - wBefore.TodayRequests) == 1 &&
                                      (wStats.TodayTotalTokens - wBefore.TodayTotalTokens) == 3000 &&
                                      Math.Abs(wStats.LastSpeedTokPerSec - 100.0) < 0.5 &&
@@ -1166,7 +1184,8 @@ CREATE TABLE gen_metadata (idx integer PRIMARY KEY, data blob, size integer NOT 
                                      reloadedSettings.FloatingWidgetAnchorY == 1396 &&
                                       reloadedSettings.FloatingWidgetAnchorRight == true &&
                                      reloadedSettings.FloatingWidgetAnchorBottom == true &&
-                                     anchorStableOk;
+                                     anchorStableOk &&
+                                     widgetClickableUnderDialogsOk;
 
                 // Antigravity 2.x Hub 凭据结构往返与 app_storage.json 同步断言
                 var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -1269,7 +1288,294 @@ CREATE TABLE gen_metadata (idx integer PRIMARY KEY, data blob, size integer NOT 
                                     gemPicked.FirstOrDefault() == "gemini-3.8-flash-low" &&
                                     p3Picked.FirstOrDefault() == "claude-sonnet-5-5-low";
 
-                sb.AppendLine($"usage_accuracy_probe=ok;codexOk={codexOk};claudeOk={claudeOk};piOk={piOk};ocOk={ocOk};gemOk={gemOk};dshOk={dshOk};agOk={agOk};agDbOk={agDbOk};mergeOk={mergeOk};stepModelOk={stepModelOk};modelDrawerOk={modelDrawerOk};widgetStatsOk={widgetStatsOk};agCredSyncOk={agCredSyncOk};agPoolSkipOk={agPoolSkipOk}");
+                // Antigravity 离线多账号 Hook 子进程 + 历史配额快照分池回溯 + 子代理传播 + 未覆盖诚实留空断言
+                Services.AgHookService.EnsureHookInstalled(true, Environment.ProcessPath);
+                bool hookInstallOk = Services.AgHookService.IsHookInstalled() &&
+                                     File.ReadAllText(Services.AgHookService.HooksConfigPath).Contains("--ag-hook", StringComparison.Ordinal);
+
+                Services.AgToolsService.WriteHubLastLoginEmail("hookacct@example.com");
+                string hookStdout = "";
+                int hookExit = -1;
+                var hookSw = System.Diagnostics.Stopwatch.StartNew();
+                using (var hp = new System.Diagnostics.Process())
+                {
+                    hp.StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = $"/d /s /c \"\"{Environment.ProcessPath}\" --ag-hook\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                    };
+                    hp.StartInfo.Environment["APISWITCH_APPDATA"] = Environment.GetEnvironmentVariable("APISWITCH_APPDATA") ?? "";
+                    hp.StartInfo.Environment["APISWITCH_HOME"] = Environment.GetEnvironmentVariable("APISWITCH_HOME") ?? "";
+                    hp.Start();
+                    await hp.StandardInput.WriteAsync("{\"conversationId\":\"conv-offline-1\",\"hookEventName\":\"Stop\",\"terminationReason\":\"NO_TOOL_CALL\"}");
+                    hp.StandardInput.Close();
+                    hookStdout = await hp.StandardOutput.ReadToEndAsync();
+                    hp.WaitForExit(5000);
+                    hookExit = hp.ExitCode;
+                }
+                hookSw.Stop();
+
+                var loadedHookTurns = Services.AgHookService.LoadTurnEntries().Entries;
+                bool hookExecOk = hookExit == 0 &&
+                                  hookStdout.Trim() == "{\"decision\":\"stop\"}" &&
+                                  loadedHookTurns.Any(x => x.ConversationId == "conv-offline-1" && x.Email == "hookacct@example.com");
+
+                Services.AgHookService.EnsureHookInstalled(false);
+                bool hookUninstallOk = !Services.AgHookService.IsHookInstalled();
+
+                // 模拟历史配额快照：同时间段 alpha 扣减 gemini-5h，beta 扣减 3p-5h
+                var histT0 = new DateTime(2026, 10, 15, 10, 0, 0, DateTimeKind.Utc);
+                var histReset = histT0.AddHours(4);
+                UsageStorage.RecordQuotaSnapshot("alpha@example.com", "gemini-5h", 1.0, histReset, histT0);
+                UsageStorage.RecordQuotaSnapshot("alpha@example.com", "gemini-5h", 0.92, histReset, histT0.AddSeconds(120));
+                UsageStorage.RecordQuotaSnapshot("beta@example.com", "3p-5h", 0.85, histReset, histT0);
+                UsageStorage.RecordQuotaSnapshot("beta@example.com", "3p-5h", 0.74, histReset, histT0.AddSeconds(120));
+
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "", "Antigravity", "gemini-4-neon",
+                    1000, 200, histT0.AddSeconds(60).ToLocalTime(), 0, 0, 1500, 300, "ag:conv-gem-hist:1");
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "", "Antigravity", "claude-opus-5-5",
+                    2000, 400, histT0.AddSeconds(60).ToLocalTime(), 0, 0, 2500, 400, "ag:conv-3p-hist:1");
+                // 同对话后续步骤（超出 120s 快照窗口）与子代理步骤应自动继承 alpha@example.com
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "", "Antigravity", "gemini-4-neon",
+                    500, 100, histT0.AddSeconds(360).ToLocalTime(), 0, 0, 1000, 200, "ag:conv-gem-hist:2");
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "", "Antigravity", "gemini-3.8-flash",
+                    300, 50, histT0.AddSeconds(370).ToLocalTime(), 0, 0, 800, 150, "ag:sub-gem-hist:1");
+                // 离线 Hook 捕获的步骤应精确归属给 hookacct@example.com
+                var hookStepTs = DateTime.UtcNow.AddSeconds(-3);
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "", "Antigravity", "gemini-4-carbon",
+                    800, 150, hookStepTs.ToLocalTime(), 0, 0, 1200, 250, "ag:conv-offline-1:1");
+                // 远古无快照无 Hook 的孤立事件应诚实保留未区分
+                var ancientTs = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "", "Antigravity", "gemini-4-neon",
+                    400, 80, ancientTs.ToLocalTime(), 0, 0, 900, 200, "ag:conv-ancient-0:1");
+
+                var testParentMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["sub-gem-hist"] = "conv-gem-hist"
+                };
+
+                // 模拟同一长对话中途切号：old@example.com 在 T0 结束上一回合 (Stop Hook)，
+                // 用户在 T0+20s 切换到 new@example.com 并启动新长回合（新回合 Stop 尚未触发），
+                // 新产生的步骤绝不能向过去倒推归给 old@example.com，而应立即归入当前活跃会话 new@example.com！
+                var swBaseUtc = new DateTime(2026, 10, 20, 10, 0, 0, DateTimeKind.Utc);
+                var swHooks = new List<Services.AgHookService.HookTurnEntry>(loadedHookTurns)
+                {
+                    new(new DateTimeOffset(swBaseUtc).ToUnixTimeSeconds(), "conv-mid-switch", "old@example.com")
+                };
+                UsageStorage.RecordAccountSession("old@example.com", swBaseUtc.AddMinutes(-5));
+                UsageStorage.RecordAccountSession("old@example.com", swBaseUtc.AddSeconds(2));
+                UsageStorage.RecordAccountSession("new@example.com", swBaseUtc.AddSeconds(20));
+                UsageStorage.RecordAccountSession("new@example.com", swBaseUtc.AddSeconds(300));
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "", "Antigravity", "gemini-4-carbon",
+                    1500, 300, swBaseUtc.AddSeconds(180).ToLocalTime(), 0, 0, 1200, 200, "ag:conv-mid-switch:2");
+
+                int acctEnriched = UsageStorage.EnrichAntigravityAccounts(testParentMap, swHooks);
+
+                long qFrom = new DateTimeOffset(ancientTs.AddHours(-1)).ToUnixTimeSeconds();
+                long qTo = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds();
+                // 1) 通用供应商明细表必须将 Antigravity 合并为单一 "Antigravity"
+                var mergedPm = UsageStorage.GetProviderModelTotals(qFrom, qTo, 100, UsageStorage.AgentAntigravity);
+                bool mergedProviderOk = mergedPm.Count > 0 && mergedPm.All(x => x.Provider == "Antigravity");
+
+                // 2) 反重力专属明细查询必须按 Google 邮箱独立拆分
+                var agAcctPm = UsageStorage.GetAntigravityAccountModelTotals(qFrom, qTo, 100);
+                long alphaTokens = agAcctPm.Where(x => x.AccountEmail == "alpha@example.com").Sum(x => x.InTokens + x.OutTokens);
+                long betaTokens = agAcctPm.Where(x => x.AccountEmail == "beta@example.com").Sum(x => x.InTokens + x.OutTokens);
+                long hookTokens = agAcctPm.Where(x => x.AccountEmail == "hookacct@example.com").Sum(x => x.InTokens + x.OutTokens);
+                long midSwitchNewTokens = agAcctPm.Where(x => x.AccountEmail == "new@example.com").Sum(x => x.InTokens + x.OutTokens);
+                long midSwitchOldTokens = agAcctPm.Where(x => x.AccountEmail == "old@example.com").Sum(x => x.InTokens + x.OutTokens);
+                bool ancientUnattributed = agAcctPm.Any(x => x.AccountEmail == "" && (x.InTokens + x.OutTokens) >= 480) &&
+                                           midSwitchNewTokens == 1800 && midSwitchOldTokens == 0;
+
+                // 3) 官方等比 API 计费断言（核对 pricing_ledger_v1.json 实测样本：2577 新增输入 + 12468 缓存读取 + 337 输出 = $0.004132）
+                double sampleFlashCost = Services.UsagePricingService.EstimateCostUsd(
+                    "gemini-3.8-flash-medium", UsageStorage.AgentAntigravity,
+                    inTokens: 2577 + 12468, outTokens: 337, cacheReadTokens: 12468, cacheWriteTokens: 0);
+                double sampleClaudeCost = Services.UsagePricingService.EstimateCostUsd(
+                    "claude-opus-5-5", UsageStorage.AgentAntigravity,
+                    inTokens: 1_000_000, outTokens: 100_000, cacheReadTokens: 900_000, cacheWriteTokens: 0);
+                // Claude Opus 5.5: 100k fresh * $5/M ($0.50) + 900k cache * $0.50/M ($0.45) + 100k out * $25/M ($2.50) = $3.45
+                // 4) 四层动态价格解析 + 多供应商同模型差异化定价断言
+                var stagedDyn = new Dictionary<string, Services.CachedModelRateDto>(StringComparer.OrdinalIgnoreCase);
+                int mdParsed = Services.UsagePricingService.ParseModelsDevJson(
+                    "{\"future-lab\":{\"models\":{\"super-llm-9\":{\"cost\":{\"input\":4.0,\"output\":20.0,\"cache_read\":0.4,\"cache_write\":5.0}}}}}",
+                    stagedDyn);
+                int orParsed = Services.UsagePricingService.ParseOpenRouterJson(
+                    "{\"data\":[{\"id\":\"open-org/nova-x1\",\"pricing\":{\"prompt\":\"0.0000015\",\"completion\":\"0.000006\",\"input_cache_read\":\"0.00000015\"}}]}",
+                    stagedDyn);
+                var learnedAg = Services.UsagePricingService.LearnRatesFromAntigravityLedgerJson(
+                    "{\"calls\":{\"c1\":{\"isPriced\":true,\"modelKey\":\"gemini-9-ultra\",\"inputTokens\":10000,\"cacheReadTokens\":0,\"outputTokens\":1000,\"costUSD\":0.045},\"c2\":{\"isPriced\":true,\"modelKey\":\"gemini-9-ultra\",\"inputTokens\":20000,\"cacheReadTokens\":10000,\"outputTokens\":500,\"costUSD\":0.0705},\"c3\":{\"isPriced\":true,\"modelKey\":\"gemini-9-ultra\",\"inputTokens\":5000,\"cacheReadTokens\":20000,\"outputTokens\":2000,\"costUSD\":0.051}}}");
+                // gemini-9-ultra: P_in=$3.0/M, P_cr=$0.3/M, P_out=$15.0/M
+                // c1: 0.01*3 + 0 + 0.001*15 = 0.045; c2: 0.02*3 + 0.01*0.3 + 0.0005*15 = 0.06+0.003+0.0075=0.0705; c3: 0.005*3 + 0.02*0.3 + 0.002*15 = 0.015+0.006+0.03=0.051
+                bool dynParseOk = mdParsed == 1 &&
+                                  orParsed == 1 &&
+                                  stagedDyn.TryGetValue("super-llm-9", out var slRate) &&
+                                  Math.Abs(slRate.Input - 4.0) < 0.001 &&
+                                  stagedDyn.TryGetValue("nova-x1", out var nvRate) &&
+                                  Math.Abs(nvRate.Input - 1.5) < 0.001 &&
+                                  Math.Abs(nvRate.Output - 6.0) < 0.001 &&
+                                  learnedAg.TryGetValue("gemini-9-ultra", out var g9Rate) &&
+                                  Math.Abs(g9Rate.InputPerMillion - 3.0) < 0.01 &&
+                                  Math.Abs(g9Rate.CacheReadPerMillion - 0.3) < 0.01 &&
+                                  Math.Abs(g9Rate.OutputPerMillion - 15.0) < 0.01;
+
+                // 同款模型 gpt-5.4 在不同供应商下：默认原价($2.5/$15) vs relay-20pct(0.2x -> $0.5/$3) vs relay-exact(精确覆盖 $1.0/$4，且不与同站倍率叠乘) vs relay-free(0x -> $0)
+                Services.UsagePricingService.SaveOverrides(new Services.PricingOverridesConfig
+                {
+                    AutoSyncCloudPrices = false,
+                    ProviderMultipliers = new List<Services.ProviderMultiplierRule>
+                    {
+                        new() { Provider = "relay-20pct", Multiplier = 0.2, Enabled = true },
+                        new() { Provider = "relay-exact", Multiplier = 0.5, Enabled = true },
+                        new() { Provider = "relay-free", Multiplier = 0.0, Enabled = true }
+                    },
+                    ModelOverrides = new List<Services.ModelPriceOverrideRule>
+                    {
+                        new() { Provider = "relay-exact", Model = "gpt-5.4", InputPerMillion = 1.0, OutputPerMillion = 4.0, CacheReadPerMillion = 0.1, Enabled = true }
+                    }
+                });
+
+                double costOfficial = Services.UsagePricingService.EstimateCostUsd("gpt-5.4", "openai", UsageStorage.AgentCodex, 1_000_000, 100_000, 0, 0);   // 2.5 + 1.5 = 4.0
+                double cost20Pct = Services.UsagePricingService.EstimateCostUsd("gpt-5.4", "relay-20pct", UsageStorage.AgentCodex, 1_000_000, 100_000, 0, 0); // 4.0 * 0.2 = 0.8
+                double costExact = Services.UsagePricingService.EstimateCostUsd("gpt-5.4", "relay-exact", UsageStorage.AgentCodex, 1_000_000, 100_000, 0, 0); // 1.0 + 0.4 = 1.4 (not * 0.5!)
+                double costExactOtherModel = Services.UsagePricingService.EstimateCostUsd("claude-sonnet-4-6", "relay-exact", UsageStorage.AgentClaudeCli, 1_000_000, 100_000, 0, 0); // (3.0 + 1.5) * 0.5 = 2.25
+                double costFree = Services.UsagePricingService.EstimateCostUsd("gpt-5.4", "relay-free", UsageStorage.AgentCodex, 1_000_000, 100_000, 0, 0);   // 0.0
+
+                var testHoverRow = new Dialogs.UsageMonitorWindow.ModelRowVM
+                {
+                    Name = "gpt-5.4",
+                    RawModel = "gpt-5.4",
+                    ProviderKey = "relay-20pct",
+                    ProviderLabel = "relay-20pct",
+                    AgentKey = UsageStorage.AgentCodex,
+                    InTokens = 1_000_000,
+                    OutTokens = 100_000,
+                    CostUsd = cost20Pct
+                };
+                var testHoverCard = testHoverRow.HoverCard;
+                bool hoverCardOk = testHoverCard.ModelTitle == "gpt-5.4" &&
+                                   testHoverCard.ProviderDisplay.Contains("relay-20pct", StringComparison.Ordinal) &&
+                                   testHoverCard.InputRateText == "$0.50" &&
+                                   testHoverCard.OutputRateText == "$3.00" &&
+                                   testHoverCard.SourceBadgeText.Contains("0.2x", StringComparison.Ordinal);
+
+                bool multiProvPricingOk = dynParseOk &&
+                                          hoverCardOk &&
+                                          Math.Abs(costOfficial - 4.0) < 0.001 &&
+                                          Math.Abs(cost20Pct - 0.8) < 0.001 &&
+                                          Math.Abs(costExact - 1.4) < 0.001 &&
+                                          Math.Abs(costExactOtherModel - 2.25) < 0.001 &&
+                                          Math.Abs(costFree) < 0.00001;
+
+                bool pricingOk = Math.Abs(sampleFlashCost - 0.00413185) < 0.00001 &&
+                                 Math.Abs(sampleClaudeCost - 3.45) < 0.001 &&
+                                 Services.UsagePricingService.FormatUsd(sampleClaudeCost) == "$3.45" &&
+                                 multiProvPricingOk;
+
+                // 5) 反重力账号额度与损耗透视引擎断言：100% 池上限反推 + 月账单周期 + 到期作废浪费 + 滚动发版去抖 + 多账号官方集体重置红利
+                Services.UsagePricingService.SaveOverrides(new Services.PricingOverridesConfig { AutoSyncCloudPrices = false });
+                var refLocal = new DateTime(2026, 11, 25, 18, 0, 0, DateTimeKind.Local);
+                long ToEpoch(DateTime localDt) => new DateTimeOffset(localDt.ToUniversalTime()).ToUnixTimeSeconds();
+
+                var profIns1 = new Models.Profile
+                {
+                    Name = "ins1",
+                    Email = "ins1@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    IsPaidSubscription = true,
+                    BillingCycleDay = 10,
+                    Quota3pWeeklyFraction = 1.0,
+                    Quota3pWeeklyResetTime = new DateTime(2026, 11, 28, 15, 2, 0, DateTimeKind.Local).ToUniversalTime().ToString("O"),
+                    QuotaWeeklyFraction = 0.85,
+                    QuotaWeeklyResetTime = new DateTime(2026, 11, 29, 12, 0, 0, DateTimeKind.Local).ToUniversalTime().ToString("O"),
+                    QuotaUpdatedAt = refLocal.ToUniversalTime()
+                };
+                var profIns2 = new Models.Profile
+                {
+                    Name = "ins2",
+                    Email = "ins2@example.com",
+                    SubscriptionTier = "Google AI Pro",
+                    IsPaidSubscription = true,
+                    BillingCycleDay = 10,
+                    Quota3pWeeklyFraction = 1.0,
+                    Quota3pWeeklyResetTime = new DateTime(2026, 11, 28, 15, 3, 0, DateTimeKind.Local).ToUniversalTime().ToString("O"),
+                    QuotaUpdatedAt = refLocal.ToUniversalTime()
+                };
+
+                // 周期 A：11-12 至 11-18 正常到期重置（消耗 $10 掉电 50% -> 反推 100% 上限 = $20；到期剩余 50% -> 作废浪费 $10）
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "ag:ins1@example.com", "ins1@example.com",
+                    "claude-opus-5-5", 2_000_000, 0, new DateTime(2026, 11, 15, 12, 0, 0, DateTimeKind.Local),
+                    cacheReadTokens: 0, cacheWriteTokens: 0, durationMs: 0, ttftMs: 0, sourceId: "ag:ins1:c1");
+                // 周期 B：11-18 至 11-21 消耗 $8（掉电 40% 至 60%），原定 11-25 重置，但 11-21 15:02 与 ins2 一起发生官方集体重置（含 5 分钟发版节点回跳抖动）
+                UsageStorage.RecordUsage(UsageStorage.AgentAntigravity, "ag:ins1@example.com", "ins1@example.com",
+                    "claude-opus-5-5", 1_600_000, 0, new DateTime(2026, 11, 20, 12, 0, 0, DateTimeKind.Local),
+                    cacheReadTokens: 0, cacheWriteTokens: 0, durationMs: 0, ttftMs: 0, sourceId: "ag:ins1:c2");
+
+                using (var qConn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={UsageStorage.DbPath}"))
+                {
+                    qConn.Open();
+                    void InsSnap(string em, string bkt, DateTime tLocal, double rem, DateTime rstLocal)
+                    {
+                        using var qc = qConn.CreateCommand();
+                        qc.CommandText = "INSERT INTO quota_snapshots(ts, account_email, bucket, remaining_fraction, reset_time) VALUES ($t, $e, $b, $r, $rt);";
+                        qc.Parameters.AddWithValue("$t", ToEpoch(tLocal));
+                        qc.Parameters.AddWithValue("$e", em);
+                        qc.Parameters.AddWithValue("$b", bkt);
+                        qc.Parameters.AddWithValue("$r", rem);
+                        qc.Parameters.AddWithValue("$rt", ToEpoch(rstLocal));
+                        qc.ExecuteNonQuery();
+                    }
+
+                    var sched1 = new DateTime(2026, 11, 18, 12, 0, 0, DateTimeKind.Local);
+                    var sched2 = new DateTime(2026, 11, 25, 12, 0, 0, DateTimeKind.Local);
+                    var sched3 = new DateTime(2026, 11, 28, 15, 2, 0, DateTimeKind.Local);
+
+                    InsSnap("ins1@example.com", "3p-weekly", new DateTime(2026, 11, 12, 12, 0, 0, DateTimeKind.Local), 1.00, sched1);
+                    InsSnap("ins1@example.com", "3p-weekly", new DateTime(2026, 11, 18, 11, 50, 0, DateTimeKind.Local), 0.50, sched1);
+                    // 11-18 12:05 正常到期回满
+                    InsSnap("ins1@example.com", "3p-weekly", new DateTime(2026, 11, 18, 12, 5, 0, DateTimeKind.Local), 1.00, sched2);
+                    InsSnap("ins1@example.com", "3p-weekly", new DateTime(2026, 11, 21, 14, 50, 0, DateTimeKind.Local), 0.60, sched2);
+                    // 11-21 15:02 官方提前集体重置 + 15:07 短暂节点脏读回跳 0.60 + 15:12 恢复 1.00
+                    InsSnap("ins1@example.com", "3p-weekly", new DateTime(2026, 11, 21, 15, 2, 0, DateTimeKind.Local), 1.00, sched3);
+                    InsSnap("ins1@example.com", "3p-weekly", new DateTime(2026, 11, 21, 15, 7, 0, DateTimeKind.Local), 0.60, sched2);
+                    InsSnap("ins1@example.com", "3p-weekly", new DateTime(2026, 11, 21, 15, 12, 0, DateTimeKind.Local), 1.00, sched3);
+
+                    // 账号 2 在同一 45 分钟窗口内从 55% 提前回满 -> 触发多账号集体重置聚类
+                    var ins2Sched = new DateTime(2026, 11, 26, 10, 0, 0, DateTimeKind.Local);
+                    InsSnap("ins2@example.com", "3p-weekly", new DateTime(2026, 11, 19, 10, 0, 0, DateTimeKind.Local), 1.00, ins2Sched);
+                    InsSnap("ins2@example.com", "3p-weekly", new DateTime(2026, 11, 21, 14, 55, 0, DateTimeKind.Local), 0.55, ins2Sched);
+                    InsSnap("ins2@example.com", "3p-weekly", new DateTime(2026, 11, 21, 15, 5, 0, DateTimeKind.Local), 1.00, sched3);
+                }
+
+                var insReport = Services.AgQuotaAnalyticsService.AnalyzeAccount(
+                    profIns1, new[] { profIns1, profIns2 }, monthOffset: 0, nowLocalOverride: refLocal);
+                var p3Pool = insReport.Pools.FirstOrDefault(x => x.BucketId == Services.AgQuotaAnalyticsService.Bucket3pWeekly);
+                bool agQuotaInsightOk =
+                    insReport.PeriodStartLocal.Date == new DateTime(2026, 11, 10) &&
+                    insReport.PeriodEndLocal.Date == new DateTime(2026, 12, 10) &&
+                    Math.Abs(insReport.ActualConsumedUsd - 18.0) < 0.01 &&
+                    p3Pool != null && p3Pool.IsMeasuredFromHistory && Math.Abs(p3Pool.EstimatedCapUsd - 20.0) < 0.5 &&
+                    insReport.AccountResetHistory.Count == 2 &&
+                    Math.Abs(insReport.ExpiredUnusedWasteUsd - 10.0) < 0.5 &&
+                    insReport.OfficialMassResetCount == 1 &&
+                    Math.Abs(insReport.OfficialMassResetBonusUsd - 8.0) < 0.5 &&
+                    insReport.AccountResetHistory.Any(r => r.IsGlobalMassReset && r.MassResetAccountCount == 2);
+
+                bool agAcctUsageOk = hookInstallOk && hookExecOk && hookUninstallOk &&
+                                     mergedProviderOk && pricingOk && agQuotaInsightOk &&
+                                     acctEnriched >= 5 &&
+                                     alphaTokens == (1200 + 600 + 350) &&
+                                     betaTokens == 2400 &&
+                                     hookTokens == 950 &&
+                                     ancientUnattributed;
+
+                sb.AppendLine($"hook_elapsed_ms={hookSw.ElapsedMilliseconds};hookInstallOk={hookInstallOk};hookExecOk={hookExecOk};hookUninstallOk={hookUninstallOk};agQuotaInsightOk={agQuotaInsightOk};acctEnriched={acctEnriched};alpha={alphaTokens};beta={betaTokens};hookTok={hookTokens};ancientUnattr={ancientUnattributed}");
+                sb.AppendLine($"usage_accuracy_probe=ok;codexOk={codexOk};claudeOk={claudeOk};piOk={piOk};ocOk={ocOk};gemOk={gemOk};dshOk={dshOk};agOk={agOk};agDbOk={agDbOk};mergeOk={mergeOk};stepModelOk={stepModelOk};modelDrawerOk={modelDrawerOk};widgetStatsOk={widgetStatsOk};agCredSyncOk={agCredSyncOk};agPoolSkipOk={agPoolSkipOk};agAcctUsageOk={agAcctUsageOk}");
             }
             catch (Exception ex)
             {
@@ -1280,6 +1586,8 @@ CREATE TABLE gen_metadata (idx integer PRIMARY KEY, data blob, size integer NOT 
                 UsageScanner.Reset();
                 Environment.SetEnvironmentVariable("APISWITCH_APPDATA", prevAppData);
                 AppSettingsService.Reload();
+                UsagePricingService.Reload();
+                Services.AgQuotaAnalyticsService.ResetCache();
             }
         }
         catch (Exception ex)

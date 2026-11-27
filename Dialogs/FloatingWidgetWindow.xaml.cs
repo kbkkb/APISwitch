@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using APISwitch.Models;
 using APISwitch.Services;
@@ -89,12 +91,41 @@ public partial class FloatingWidgetWindow : Window
         return bsh;
     }
 
+    [DllImport("user32.dll")]
+    private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
+
+    [DllImport("user32.dll")]
+    internal static extern bool IsWindowEnabled(IntPtr hWnd);
+
+    internal static void SimulateModalDisableForTest(IntPtr hWnd) => EnableWindow(hWnd, false);
+
+    private const int WM_ENABLE = 0x000A;
+
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+        if (PresentationSource.FromVisual(this) is HwndSource hwndSource)
+        {
+            hwndSource.AddHook(WndProcKeepWidgetEnabled);
+        }
         EnsureAnchorLoaded();
         RootGrid.Measure(new WpfSize(double.PositiveInfinity, double.PositiveInfinity));
         ApplyAnchorPosition();
+    }
+
+    /// <summary>
+    /// 拦截 WPF ShowDialog() 对同线程所有窗口广播的 EnableWindow(FALSE)，
+    /// 确保无论打开任何模态弹窗（定价中心、设置等），桌面悬浮窗始终保持可点击响应。
+    /// </summary>
+    private IntPtr WndProcKeepWidgetEnabled(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_ENABLE && wParam == IntPtr.Zero && !_forceClosing)
+        {
+            EnableWindow(hwnd, true);
+            handled = true;
+            return IntPtr.Zero;
+        }
+        return IntPtr.Zero;
     }
 
     void OnWidgetLoaded(object sender, RoutedEventArgs e)

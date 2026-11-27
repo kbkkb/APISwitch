@@ -23,7 +23,26 @@ public partial class MainWindow
 {
     // ---------- Antigravity ----------
 
-    async Task RefreshAntigravityAsync()
+    Task? _lastAgRefreshTask;
+
+    internal async Task EnsureAntigravityLoadedForRenderAsync()
+    {
+        if (_lastAgRefreshTask != null)
+            await _lastAgRefreshTask;
+        else
+            await RefreshAntigravityAsync();
+    }
+
+    Task RefreshAntigravityAsync()
+    {
+        if (_lastAgRefreshTask is { IsCompleted: false } inflight)
+            return inflight;
+        var task = RefreshAntigravityCoreAsync();
+        _lastAgRefreshTask = task;
+        return task;
+    }
+
+    async Task RefreshAntigravityCoreAsync()
     {
         var db = AgPaths.FindStateDb();
         DbPathText.Text = db ?? I18nService.T("Ag.DbNotFound");
@@ -100,6 +119,11 @@ public partial class MainWindow
                 {
                     dbError = ex.Message;
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(email) && email.Contains('@'))
+            {
+                UsageStorage.RecordAccountSession(email);
             }
 
             running = AgProcess.IsRunning();
@@ -193,6 +217,13 @@ public partial class MainWindow
         }
         AgEmpty.Visibility = _profiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         NotifyFloatingWidgetProfilesUpdated();
+
+        if (loaded.Count > 0)
+        {
+            await Task.Run(() => AgQuotaAnalyticsService.WarmAccountCapCache(loaded));
+            foreach (var p in _profiles)
+                p.NotifyQuotaUiChanged();
+        }
     }
 
     void OnToggleProfileModels(object sender, RoutedEventArgs e)
@@ -455,6 +486,8 @@ public partial class MainWindow
         try
         {
             var ok = await AgQuotaService.RefreshQuotaAsync(target);
+            var snapProfiles = _profiles.ToList();
+            await Task.Run(() => AgQuotaAnalyticsService.WarmAccountCapCache(snapProfiles));
             Dispatcher.Invoke(() =>
             {
                 target.NotifyQuotaUiChanged();
@@ -485,6 +518,14 @@ public partial class MainWindow
     void OnRowSwitchAntigravity(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is Profile p) _ = SwitchToProfile(p);
+    }
+
+    void OnCardOpenQuotaInsights(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is Profile p)
+        {
+            AgQuotaInsightsDialog.ShowOrActivate(p.Email, this, () => _ = RefreshAntigravityAsync());
+        }
     }
 
     async Task SwitchToProfile(Profile target)
@@ -536,6 +577,7 @@ public partial class MainWindow
             }
 
             // 2. Inject or restore full authentication session across all state.vscdb locations
+            UsageStorage.RecordAccountSession(target.Email);
             var dbs = AgPaths.FindAllStateDbs();
             var authValues = AgAuthHelper.BuildAuthValues(target);
             if (authValues.Count > 0)
@@ -698,7 +740,7 @@ public partial class MainWindow
 
             await RefreshAntigravityAsync();
 
-            Dispatcher.Invoke(() =>
+            _ = Dispatcher.BeginInvoke(new Action(() =>
             {
                 foreach (var p in _profiles) p.NotifyQuotaUiChanged();
                 NotifyFloatingWidgetProfilesUpdated();
@@ -706,7 +748,7 @@ public partial class MainWindow
                 {
                     ShowToast(I18nService.F("Msg.AgRefreshAllDoneFmt", _profiles.Count));
                 }
-            });
+            }));
         }
         catch (OperationCanceledException)
         {

@@ -17,27 +17,37 @@ $version = $proj.Project.PropertyGroup.Version
 if (-not $version) { $version = "0.1.1" }
 Write-Host "📦 目标版本: v$version" -ForegroundColor Green
 
-# 2. 执行多文件发布 (框架依赖模式，安装后展示清晰的 DLL 模块结构)
-$publishDir = "$root\bin\publish"
+# 2. 执行多文件发布（统一输出至唯一的 bin\ 根目录，杜绝多套构建副本并存）
+$publishDir = "$root\bin"
+$stageDir = "$root\obj\publish_stage"
 $releaseDir = "$root\Release_Package"
 
 if (-not (Test-Path $releaseDir)) {
     New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 }
 
-if (Test-Path $publishDir) {
-    Get-ChildItem -Path $publishDir -Force | Remove-Item -Recurse -Force
+if (Test-Path $stageDir) {
+    Remove-Item -Path $stageDir -Recurse -Force
 }
 
 Write-Host "`n🔨 正在编译生成多文件发布版本 (Framework-Dependent)..." -ForegroundColor Yellow
 dotnet publish "$root\APISwitch.csproj" -c Release -r win-x64 --self-contained false `
     -p:PublishSingleFile=false `
-    -o $publishDir
+    -o $stageDir
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "编译失败！请检查代码错误。"
     exit 1
 }
+
+if (Test-Path $publishDir) {
+    Get-ChildItem -Path $publishDir -File -Force -ErrorAction SilentlyContinue | Remove-Item -Force
+    Get-ChildItem -Path $publishDir -Directory -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+} else {
+    New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
+}
+Copy-Item -Path "$stageDir\*" -Destination $publishDir -Recurse -Force
+Remove-Item -Path $stageDir -Recurse -Force
 
 $mainExe = "$publishDir\APISwitch.exe"
 if (-not (Test-Path $mainExe)) {
@@ -50,7 +60,8 @@ $portableZip = "$releaseDir\APISwitch-v$version-win-x64.zip"
 
 Write-Host "`n📁 正在准备便携包..." -ForegroundColor Yellow
 if (Test-Path $portableZip) { Remove-Item $portableZip -Force }
-Compress-Archive -Path "$publishDir\*" -DestinationPath $portableZip -Force
+$binFiles = Get-ChildItem -Path $publishDir -File | Select-Object -ExpandProperty FullName
+Compress-Archive -Path $binFiles -DestinationPath $portableZip -Force
 Write-Host "✔ 便携压缩包已生成: $portableZip ($([Math]::Round((Get-Item $portableZip).Length / 1MB, 1)) MB)" -ForegroundColor Green
 
 # 4. 尝试检测 Inno Setup 编译器并生成安装包

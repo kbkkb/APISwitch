@@ -1271,9 +1271,9 @@ public static class AgQuotaService
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-weekly", profile.QuotaWeeklyFraction ?? 0, ParseResetUtc(profile.QuotaWeeklyResetTime));
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "3p-5h", profile.Quota3p5hFraction ?? 0, ParseResetUtc(profile.Quota3p5hResetTime));
             UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "3p-weekly", profile.Quota3pWeeklyFraction ?? 0, ParseResetUtc(profile.Quota3pWeeklyResetTime));
-            if (profile.QuotaArgon5hFraction.HasValue)
+            if (Profile.ShowArgonQuotaColumn && profile.QuotaArgon5hFraction.HasValue)
                 UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-argon-5h", profile.QuotaArgon5hFraction.Value, ParseResetUtc(profile.QuotaArgon5hResetTime));
-            if (profile.QuotaArgonWeeklyFraction.HasValue)
+            if (Profile.ShowArgonQuotaColumn && profile.QuotaArgonWeeklyFraction.HasValue)
                 UsageStorage.RecordQuotaSnapshot(profile.Email ?? "", "gemini-argon-weekly", profile.QuotaArgonWeeklyFraction.Value, ParseResetUtc(profile.QuotaArgonWeeklyResetTime));
             ProfileStore.Save(profile);
             return true;
@@ -1346,9 +1346,8 @@ public static class AgQuotaService
     {
         if (modelQuotas == null || modelQuotas.Count == 0) return quotaGot;
 
-        bool hasDisabledArgon = modelQuotas.Any(m => m.Disabled && m.ModelId.Contains("argon", StringComparison.OrdinalIgnoreCase));
         bool hasActiveArgon = modelQuotas.Any(m => !m.Disabled && m.ModelId.Contains("argon", StringComparison.OrdinalIgnoreCase));
-        if (hasDisabledArgon && !hasActiveArgon && !hasArgonGroupFound)
+        if (!hasActiveArgon && !hasArgonGroupFound)
         {
             profile.QuotaArgon5hFraction = null;
             profile.QuotaArgon5hResetTime = null;

@@ -9,8 +9,14 @@ namespace APISwitch.Services;
 /// </summary>
 public static class UsageStorage
 {
-    static string DbPath => Path.Combine(AgPaths.AppData, "APISwitch", "usage.db");
+    internal static string DbPath => Path.Combine(AgPaths.AppData, "APISwitch", "usage.db");
     static string? _initializedPath;
+    static long _mutationVersion = 1;
+
+    /// <summary>进程内纯内存原子写入代数（0 I/O、0 锁，供 UI 缓存瞬时判脏）。</summary>
+    public static long MutationVersion => System.Threading.Interlocked.Read(ref _mutationVersion);
+
+    internal static void BumpMutationVersion() => System.Threading.Interlocked.Increment(ref _mutationVersion);
 
     // agent 类型常量（与本地网关路由对应）
     public const string AgentCodex = "codex";
@@ -26,7 +32,7 @@ public static class UsageStorage
     public const string AgentGeminiCli = "gemini-cli";
     public const string AgentAntigravity = "antigravity";
 
-    static void EnsureInit()
+    internal static void EnsureInit()
     {
         var path = DbPath;
         if (_initializedPath == path) return;
@@ -42,6 +48,10 @@ public static class UsageStorage
 
             var cmd = conn.CreateCommand();
             cmd.CommandText = @"
+PRAGMA journal_mode=WAL;
+PRAGMA synchronous=NORMAL;
+PRAGMA busy_timeout=5000;
+
 CREATE TABLE IF NOT EXISTS usage_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts INTEGER NOT NULL,
@@ -60,6 +70,7 @@ CREATE TABLE IF NOT EXISTS usage_events (
 );
 CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage_events(ts);
 CREATE INDEX IF NOT EXISTS idx_usage_agent ON usage_events(agent);
+CREATE INDEX IF NOT EXISTS idx_usage_agent_ts ON usage_events(agent, ts);
 
 CREATE TABLE IF NOT EXISTS quota_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +82,15 @@ CREATE TABLE IF NOT EXISTS quota_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_quota_ts ON quota_snapshots(ts);
 CREATE INDEX IF NOT EXISTS idx_quota_acct ON quota_snapshots(account_email);
+CREATE INDEX IF NOT EXISTS idx_quota_acct_bkt_ts ON quota_snapshots(account_email, bucket, ts);
+
+CREATE TABLE IF NOT EXISTS account_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    start_ts INTEGER NOT NULL,
+    last_verified_ts INTEGER NOT NULL,
+    account_email TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_acct_sess_start ON account_sessions(start_ts);
 ";
             cmd.ExecuteNonQuery();
             MigrateUsageEventsColumns(conn);
@@ -116,7 +136,10 @@ CREATE INDEX IF NOT EXISTS idx_quota_acct ON quota_snapshots(account_email);
         try
         {
             using var idx = conn.CreateCommand();
-            idx.CommandText = "CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_source_id ON usage_events(source_id) WHERE source_id <> '';";
+            idx.CommandText = @"
+CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_source_id ON usage_events(source_id) WHERE source_id <> '';
+CREATE INDEX IF NOT EXISTS idx_usage_agent_ts ON usage_events(agent, ts);
+CREATE INDEX IF NOT EXISTS idx_quota_acct_bkt_ts ON quota_snapshots(account_email, bucket, ts);";
             idx.ExecuteNonQuery();
         }
         catch { }
@@ -181,6 +204,7 @@ ON CONFLICT(source_id) WHERE source_id <> '' DO UPDATE SET
             cmd.Parameters.AddWithValue("$ttft", Math.Max(0, ttftMs));
             cmd.Parameters.AddWithValue("$sid", sourceId ?? "");
             cmd.ExecuteNonQuery();
+            BumpMutationVersion();
         }
         catch { }
     }
@@ -235,6 +259,7 @@ ON CONFLICT(source_id) WHERE source_id <> '' DO UPDATE SET
                 cmd.ExecuteNonQuery();
             }
             tx.Commit();
+            BumpMutationVersion();
             return true;
         }
         catch (Exception ex)
@@ -296,8 +321,14 @@ FROM usage_events WHERE ts >= $from AND ts <= $to{af};";
         return new PerformanceStats(0, 0, 0, 0, 0, 0, 0, 0);
     }
 
+    public static string FormatAntigravityProviderId(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? "" : "ag:" + email.Trim().ToLowerInvariant();
+
+    public static string FormatAntigravityProviderName(string? email) =>
+        string.IsNullOrWhiteSpace(email) ? "Antigravity" : "Antigravity · " + email.Trim().ToLowerInvariant();
+
     /// <summary>记录一次配额快照（Antigravity）。</summary>
-    public static void RecordQuotaSnapshot(string accountEmail, string bucket, double remainingFraction, DateTime? resetTime)
+    public static void RecordQuotaSnapshot(string accountEmail, string bucket, double remainingFraction, DateTime? resetTime, DateTime? snapshotUtc = null)
     {
         try
         {
@@ -307,14 +338,128 @@ FROM usage_events WHERE ts >= $from AND ts <= $to{af};";
             var cmd = conn.CreateCommand();
             cmd.CommandText = @"INSERT INTO quota_snapshots (ts, account_email, bucket, remaining_fraction, reset_time)
 VALUES ($ts, $acct, $bucket, $frac, $reset);";
-            cmd.Parameters.AddWithValue("$ts", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            long tsSec = snapshotUtc.HasValue
+                ? new DateTimeOffset(resetTimeValue(snapshotUtc)).ToUnixTimeSeconds()
+                : DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            cmd.Parameters.AddWithValue("$ts", tsSec);
             cmd.Parameters.AddWithValue("$acct", accountEmail ?? "");
             cmd.Parameters.AddWithValue("$bucket", bucket ?? "");
             cmd.Parameters.AddWithValue("$frac", remainingFraction);
             cmd.Parameters.AddWithValue("$reset", resetTime.HasValue ? new DateTimeOffset(resetTimeValue(resetTime)).ToUnixTimeSeconds() : 0L);
             cmd.ExecuteNonQuery();
+            BumpMutationVersion();
         }
         catch { }
+    }
+
+    /// <summary>
+    /// 记录或续期 APISwitch 在线确认过的当前 Antigravity 登录账号时间段。
+    /// 若距上次确认超过 45 分钟（说明期间程序曾退出），则新建独立时间段而不跨空白期串联。
+    /// </summary>
+    public static void RecordAccountSession(string? accountEmail, DateTime? tsUtc = null)
+    {
+        var email = accountEmail?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(email) || !email.Contains('@')) return;
+
+        try
+        {
+            EnsureInit();
+            long nowTs = new DateTimeOffset((tsUtc ?? DateTime.UtcNow).ToUniversalTime()).ToUnixTimeSeconds();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+
+            long lastId = 0, lastVerified = 0;
+            string lastEmail = "";
+            using (var sel = conn.CreateCommand())
+            {
+                sel.CommandText = "SELECT id, account_email, last_verified_ts FROM account_sessions ORDER BY start_ts DESC, id DESC LIMIT 1;";
+                using var r = sel.ExecuteReader();
+                if (r.Read())
+                {
+                    lastId = r.GetInt64(0);
+                    lastEmail = r.IsDBNull(1) ? "" : r.GetString(1);
+                    lastVerified = r.GetInt64(2);
+                }
+            }
+
+            if (lastId > 0 &&
+                string.Equals(lastEmail, email, StringComparison.OrdinalIgnoreCase) &&
+                nowTs >= lastVerified - 60 &&
+                (nowTs - lastVerified) <= 2700)
+            {
+                if (nowTs > lastVerified)
+                {
+                    using var upd = conn.CreateCommand();
+                    upd.CommandText = "UPDATE account_sessions SET last_verified_ts = $ts WHERE id = $id;";
+                    upd.Parameters.AddWithValue("$ts", nowTs);
+                    upd.Parameters.AddWithValue("$id", lastId);
+                    upd.ExecuteNonQuery();
+                }
+                return;
+            }
+
+            using var ins = conn.CreateCommand();
+            ins.CommandText = "INSERT INTO account_sessions (start_ts, last_verified_ts, account_email) VALUES ($s, $v, $e);";
+            ins.Parameters.AddWithValue("$s", nowTs);
+            ins.Parameters.AddWithValue("$v", nowTs);
+            ins.Parameters.AddWithValue("$e", email);
+            ins.ExecuteNonQuery();
+        }
+        catch { }
+    }
+
+    public static long GetAccountAttributionSourceWatermark()
+    {
+        try
+        {
+            EnsureInit();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"SELECT
+  (SELECT COALESCE(MAX(id), 0) FROM quota_snapshots),
+  (SELECT COALESCE(MAX(id), 0) FROM account_sessions),
+  (SELECT COALESCE(MAX(last_verified_ts), 0) FROM account_sessions);";
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+                return (((r.GetInt64(0) * 397L) ^ r.GetInt64(1)) * 397L) ^ r.GetInt64(2);
+        }
+        catch { }
+        return 0;
+    }
+
+    /// <summary>
+    /// 极速（&lt;0.1ms）读取 usage.db 变更签名，用于分析报告与监控视图的内存快照命中判定。
+    /// 同时覆盖新行写入、近期行模型/账号原地补齐与配额快照更新。
+    /// </summary>
+    public static long GetFastDataChangeToken()
+    {
+        try
+        {
+            EnsureInit();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"SELECT
+  (SELECT COALESCE(MAX(id), 0) FROM usage_events),
+  (SELECT COALESCE(SUM(in_tokens + out_tokens + LENGTH(provider_id) * 13 + LENGTH(model) * 29), 0)
+   FROM usage_events
+   WHERE id > (SELECT COALESCE(MAX(id), 0) - 80 FROM usage_events)),
+  (SELECT COALESCE(MAX(id), 0) FROM quota_snapshots),
+  (SELECT COALESCE(MAX(last_verified_ts), 0) FROM account_sessions);";
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+            {
+                long h = 17;
+                h = h * 397L ^ r.GetInt64(0);
+                h = h * 397L ^ r.GetInt64(1);
+                h = h * 397L ^ r.GetInt64(2);
+                h = h * 397L ^ r.GetInt64(3);
+                return h;
+            }
+        }
+        catch { }
+        return DateTime.UtcNow.Ticks;
     }
 
     static DateTime resetTimeValue(DateTime? dt) => dt!.Value.Kind == DateTimeKind.Utc ? dt.Value : dt.Value.ToUniversalTime();
@@ -554,9 +699,11 @@ FROM usage_events WHERE ts >= $from AND ts <= $to GROUP BY model ORDER BY SUM(in
             using var conn = new SqliteConnection($"Data Source={DbPath}");
             conn.Open();
             var cmd = conn.CreateCommand();
-            cmd.CommandText = @"SELECT CASE WHEN provider_id <> '' THEN provider_id
+            cmd.CommandText = @"SELECT CASE
+       WHEN agent = 'antigravity' THEN 'Antigravity'
+       WHEN provider_id <> '' THEN provider_id
        WHEN provider_name <> '' AND provider_name <> 'Codex' AND provider_name <> 'Claude Code'
-            AND provider_name <> 'OpenCode' AND provider_name <> 'Pi' THEN provider_name
+            AND provider_name <> 'OpenCode' AND provider_name <> 'Pi' AND provider_name <> 'Antigravity' THEN provider_name
        ELSE agent END, SUM(in_tokens), SUM(out_tokens), SUM(requests),
        COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_write_tokens),0)
 FROM usage_events WHERE ts >= $from AND ts <= $to GROUP BY 1 ORDER BY SUM(in_tokens + out_tokens) DESC LIMIT $lim;";
@@ -572,6 +719,183 @@ FROM usage_events WHERE ts >= $from AND ts <= $to GROUP BY 1 ORDER BY SUM(in_tok
     }
 
     public record ProviderModelTotal(string Provider, string Model, long InTokens, long OutTokens, long Requests, long CacheRead, long CacheWrite);
+    public record AntigravityAccountModelTotal(string AccountEmail, string Model, long InTokens, long OutTokens, long Requests, long CacheRead, long CacheWrite);
+    public record AgentProviderModelTotal(string Agent, string Provider, string Model, long InTokens, long OutTokens, long Requests, long CacheRead, long CacheWrite);
+
+    /// <summary>按 Google 账号 × 模型汇总 Antigravity 专属明细（供「反重力明细」独立分页使用）。</summary>
+    public static List<AntigravityAccountModelTotal> GetAntigravityAccountModelTotals(long fromTs, long toTs, int limit = 600)
+    {
+        var list = new List<AntigravityAccountModelTotal>();
+        try
+        {
+            EnsureInit();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = @"SELECT CASE
+       WHEN provider_id LIKE 'ag:%' AND LENGTH(provider_id) > 3 THEN LOWER(TRIM(SUBSTR(provider_id, 4)))
+       ELSE '' END,
+       model, SUM(in_tokens), SUM(out_tokens), SUM(requests),
+       COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_write_tokens),0)
+FROM usage_events
+WHERE agent = $ag AND ts >= $from AND ts <= $to
+GROUP BY 1, 2 ORDER BY SUM(in_tokens + out_tokens) DESC LIMIT $lim;";
+            cmd.Parameters.AddWithValue("$ag", AgentAntigravity);
+            cmd.Parameters.AddWithValue("$from", fromTs);
+            cmd.Parameters.AddWithValue("$to", toTs);
+            cmd.Parameters.AddWithValue("$lim", limit);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                list.Add(new AntigravityAccountModelTotal(
+                    r.GetString(0), r.GetString(1), r.GetInt64(2), r.GetInt64(3),
+                    r.GetInt64(4), r.GetInt64(5), r.GetInt64(6)));
+        }
+        catch { }
+        return list;
+    }
+
+    /// <summary>
+    /// 按 客户端 × 供应商 × 模型 三维全量汇总，确保不同供应商同模型的差异化单价/倍率精确作用于客户端汇总与全局 KPI。
+    /// </summary>
+    public static List<AgentProviderModelTotal> GetAgentProviderModelTotals(long fromTs, long toTs, string? agentFilter = null)
+    {
+        var list = new List<AgentProviderModelTotal>();
+        try
+        {
+            EnsureInit();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+            var cmd = conn.CreateCommand();
+            var af = BuildAgentFilter(cmd, agentFilter);
+            cmd.CommandText = $@"SELECT agent,
+       CASE
+         WHEN agent = 'antigravity' THEN
+           CASE WHEN provider_id LIKE 'ag:%' AND LENGTH(provider_id) > 3 THEN provider_id ELSE 'Antigravity' END
+         WHEN provider_id <> '' THEN provider_id
+         WHEN provider_name <> '' AND provider_name NOT IN ('Codex', 'Claude Code', 'OpenCode', 'Pi', 'StepCode', 'zcode', 'dsh', 'Google', 'Antigravity', 'any') THEN provider_name
+         ELSE agent END,
+       model, SUM(in_tokens), SUM(out_tokens), SUM(requests),
+       COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_write_tokens),0)
+FROM usage_events
+WHERE ts >= $from AND ts <= $to{af}
+GROUP BY 1, 2, 3;";
+            cmd.Parameters.AddWithValue("$from", fromTs);
+            cmd.Parameters.AddWithValue("$to", toTs);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                list.Add(new AgentProviderModelTotal(
+                    r.GetString(0), r.GetString(1), r.GetString(2),
+                    r.GetInt64(3), r.GetInt64(4), r.GetInt64(5), r.GetInt64(6), r.GetInt64(7)));
+        }
+        catch { }
+        return list;
+    }
+
+    /// <summary>提取历史库中出现过的全部供应商名称（按实际消耗量降序）与模型名称，供「定价中心」下拉框智能补全。</summary>
+    public static (List<string> Providers, List<string> Models) GetDistinctProvidersAndModels()
+    {
+        var orderedProvs = new List<string>();
+        var seenProvs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var models = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 建立 UUID -> 可读供应商名称映射，避免把 cc-switch 导入的随机 GUID 直接暴露在下拉框
+        var idToFriendlyName = BuildProviderFriendlyNameMap();
+
+        void AddProv(string? raw)
+        {
+            var s = (raw ?? "").Trim();
+            if (string.IsNullOrEmpty(s)) return;
+            if (idToFriendlyName.TryGetValue(s, out var friendly) && !string.IsNullOrWhiteSpace(friendly))
+                s = friendly;
+            else if (Guid.TryParse(s, out _))
+                return;
+            if (seenProvs.Add(s))
+                orderedProvs.Add(s);
+        }
+
+        try
+        {
+            EnsureInit();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"SELECT CASE
+         WHEN agent = 'antigravity' THEN 'Antigravity'
+         WHEN provider_id <> '' THEN provider_id
+         WHEN provider_name <> '' AND provider_name NOT IN ('Codex', 'Claude Code', 'OpenCode', 'Pi', 'StepCode', 'zcode', 'dsh', 'Google', 'Antigravity', 'any') THEN provider_name
+         ELSE agent END,
+         SUM(in_tokens + out_tokens) AS tot
+FROM usage_events
+GROUP BY 1
+ORDER BY tot DESC;";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    if (!r.IsDBNull(0)) AddProv(r.GetString(0));
+                }
+            }
+
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT model, SUM(in_tokens + out_tokens) AS tot FROM usage_events WHERE model <> '' GROUP BY 1 ORDER BY tot DESC LIMIT 500;";
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    var m = r.IsDBNull(0) ? "" : r.GetString(0).Trim();
+                    if (!string.IsNullOrEmpty(m)) models.Add(m);
+                }
+            }
+        }
+        catch { }
+
+        AddProv("Antigravity");
+
+        try
+        {
+            foreach (var p in CliStore.LoadCodex())
+                if (!p.IsOfficial) AddProv(!Guid.TryParse(p.Id, out _) && !string.IsNullOrWhiteSpace(p.Id) ? p.Id : p.Name);
+            foreach (var p in CliStore.LoadClaude())
+                if (!p.IsOfficial) AddProv(!Guid.TryParse(p.Id, out _) && !string.IsNullOrWhiteSpace(p.Id) ? p.Id : p.Name);
+            foreach (var p in CliStore.LoadClaudeDesktop())
+                if (!p.IsOfficial) AddProv(!Guid.TryParse(p.Id, out _) && !string.IsNullOrWhiteSpace(p.Id) ? p.Id : p.Name);
+            foreach (var p in CliStore.LoadOpencode())
+                AddProv(!Guid.TryParse(p.Id, out _) && !string.IsNullOrWhiteSpace(p.Id) ? p.Id : p.Name);
+            foreach (var p in CliStore.LoadPiProviders())
+                AddProv(!Guid.TryParse(p.Id, out _) && !string.IsNullOrWhiteSpace(p.Id) ? p.Id : p.Name);
+            foreach (var ag in ProfileStore.Load())
+                if (!string.IsNullOrWhiteSpace(ag.Email)) AddProv(ag.Email.Trim().ToLowerInvariant());
+        }
+        catch { }
+
+        return (orderedProvs, models.ToList());
+    }
+
+    internal static Dictionary<string, string> BuildProviderFriendlyNameMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var p in CliStore.LoadClaude())
+                if (!string.IsNullOrWhiteSpace(p.Id) && !string.IsNullOrWhiteSpace(p.Name))
+                    map[p.Id.Trim()] = p.Name.Trim();
+            foreach (var p in CliStore.LoadClaudeDesktop())
+                if (!string.IsNullOrWhiteSpace(p.Id) && !string.IsNullOrWhiteSpace(p.Name))
+                    map[p.Id.Trim()] = p.Name.Trim();
+            foreach (var p in CliStore.LoadCodex())
+                if (!string.IsNullOrWhiteSpace(p.Id) && !string.IsNullOrWhiteSpace(p.Name))
+                    map[p.Id.Trim()] = p.Name.Trim();
+            foreach (var p in CliStore.LoadOpencode())
+                if (!string.IsNullOrWhiteSpace(p.Id) && !string.IsNullOrWhiteSpace(p.Name))
+                    map[p.Id.Trim()] = p.Name.Trim();
+            foreach (var p in CliStore.LoadPiProviders())
+                if (!string.IsNullOrWhiteSpace(p.Id) && !string.IsNullOrWhiteSpace(p.Name))
+                    map[p.Id.Trim()] = p.Name.Trim();
+        }
+        catch { }
+        return map;
+    }
 
     /// <summary>按供应商 × 模型交叉汇总（指定时间范围，按总量降序），用于下钻明细。</summary>
     public static List<ProviderModelTotal> GetProviderModelTotals(long fromTs, long toTs, int limit = 400, string? agentFilter = null)
@@ -584,7 +908,9 @@ FROM usage_events WHERE ts >= $from AND ts <= $to GROUP BY 1 ORDER BY SUM(in_tok
             conn.Open();
             var cmd = conn.CreateCommand();
             var af = BuildAgentFilter(cmd, agentFilter);
-            cmd.CommandText = $@"SELECT CASE WHEN provider_id <> '' THEN provider_id
+            cmd.CommandText = $@"SELECT CASE
+       WHEN agent = 'antigravity' THEN 'Antigravity'
+       WHEN provider_id <> '' THEN provider_id
        WHEN provider_name <> '' AND provider_name NOT IN ('Codex', 'Claude Code', 'OpenCode', 'Pi', 'StepCode', 'zcode', 'dsh', 'Google', 'Antigravity', 'any') THEN provider_name
        ELSE agent END,
        model, SUM(in_tokens), SUM(out_tokens), SUM(requests),
@@ -791,7 +1117,7 @@ FROM usage_events WHERE agent = $ag AND source_id NOT LIKE 'claude:stats-cache:%
     /// <summary>
     /// 批量原地补齐已有但 model 为空的记录（一次读取、单事务提交，供会话库按对话分组解析）。
     /// </summary>
-    public static int EnrichEmptyModelsBatch(string agent, Func<IReadOnlyList<EmptyModelRow>, Dictionary<long, string>> resolver)
+    public static int EnrichEmptyModelsBatch(string agent, Func<IReadOnlyList<EmptyModelRow>, Dictionary<long, string>> resolver, long minTs = 0)
     {
         try
         {
@@ -802,9 +1128,11 @@ FROM usage_events WHERE agent = $ag AND source_id NOT LIKE 'claude:stats-cache:%
             var rows = new List<EmptyModelRow>();
             using (var sel = conn.CreateCommand())
             {
-                sel.CommandText = @"SELECT id, ts, in_tokens, out_tokens, cache_read_tokens, source_id
-FROM usage_events WHERE agent = $ag AND model = '' AND source_id <> '';";
+                string tsClause = minTs > 0 ? " AND ts >= $minTs" : "";
+                sel.CommandText = $@"SELECT id, ts, in_tokens, out_tokens, cache_read_tokens, source_id
+FROM usage_events WHERE agent = $ag AND model = '' AND source_id <> ''{tsClause};";
                 sel.Parameters.AddWithValue("$ag", agent);
+                if (minTs > 0) sel.Parameters.AddWithValue("$minTs", minTs);
                 using var r = sel.ExecuteReader();
                 while (r.Read())
                 {
@@ -855,7 +1183,7 @@ FROM usage_events WHERE agent = $ag AND model = '' AND source_id <> '';";
     /// 2) 超过冷静期（默认 120s，避开刚切换模型尚未刷盘阶段）后，尝试同会话 ±30m 单模型窗口或同本地日单模型会话邻块；
     /// 3) 子代理会话沿 parent_conversation_id 向上回溯父会话时间线。
     /// </summary>
-    public static int EnrichAntigravityFromTimeline(IReadOnlyDictionary<string, string>? parentMap = null, long graceSeconds = 120)
+    public static int EnrichAntigravityFromTimeline(IReadOnlyDictionary<string, string>? parentMap = null, long graceSeconds = 120, long minTs = 0)
     {
         try
         {
@@ -868,11 +1196,13 @@ FROM usage_events WHERE agent = $ag AND model = '' AND source_id <> '';";
 
             using (var sel = conn.CreateCommand())
             {
-                sel.CommandText = @"SELECT id, ts, model, source_id
+                string tsClause = minTs > 0 ? " AND ts >= $minTs" : "";
+                sel.CommandText = $@"SELECT id, ts, model, source_id
 FROM usage_events
-WHERE agent = $ag AND source_id LIKE 'ag:%'
+WHERE agent = $ag AND source_id LIKE 'ag:%'{tsClause}
 ORDER BY ts ASC;";
                 sel.Parameters.AddWithValue("$ag", AgentAntigravity);
+                if (minTs > 0) sel.Parameters.AddWithValue("$minTs", minTs);
                 using var r = sel.ExecuteReader();
                 while (r.Read())
                 {
@@ -1095,5 +1425,556 @@ WHERE id = $id;";
             else hi = mid;
         }
         return lo;
+    }
+
+    private readonly record struct QuotaDropInterval(long StartTs, long EndTs, string Email, string Pool, double Delta);
+
+    /// <summary>
+    /// 原地补齐 Antigravity 用量记录的 Google 账号归属（绝不改变请求数与 Token 数）：
+    /// 优先级 1：全局 Stop 钩子离线记录（ag_turn_accounts.jsonl，精确到 conversationId + 回合结束时间，支持子代理父链继承）；
+    /// 优先级 2：历史 quota_snapshots 配额池消耗窗口（区分 gemini-* 与 claude/gpt 3p-* 池并按消耗密度评分）；
+    /// 优先级 3：APISwitch 在线确认过的活跃账号时间段（account_sessions）；
+    /// 第二遍：同对话/父子对话上下文传播与 15 分钟内唯一活跃扣费账号兜底；仍存歧义的老记录诚实保留为空（展示为未区分历史记录）。
+    /// </summary>
+    public static int EnrichAntigravityAccounts(
+        IReadOnlyDictionary<string, string>? parentMap = null,
+        IReadOnlyList<AgHookService.HookTurnEntry>? hookEntries = null,
+        long reconcileFromTs = 0,
+        string? liveActiveEmail = null,
+        long minTs = 0)
+    {
+        try
+        {
+            EnsureInit();
+            using var conn = new SqliteConnection($"Data Source={DbPath}");
+            conn.Open();
+
+            long nowTs = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            string normLiveEmail = (liveActiveEmail ?? "").Trim().ToLowerInvariant();
+            if (!normLiveEmail.Contains('@')) normLiveEmail = "";
+
+            var candidates = new List<(long Id, long Ts, string Model, string ConvId, string ExistingEmail)>();
+            var convKnown = new Dictionary<string, List<(long Ts, string Email)>>(StringComparer.OrdinalIgnoreCase);
+
+            using (var sel = conn.CreateCommand())
+            {
+                string tsClause = minTs > 0 ? " AND ts >= $minTs" : "";
+                sel.CommandText = $@"SELECT id, ts, model, provider_id, source_id
+FROM usage_events
+WHERE agent = $ag{tsClause}
+ORDER BY ts ASC, id ASC;";
+                sel.Parameters.AddWithValue("$ag", AgentAntigravity);
+                if (minTs > 0) sel.Parameters.AddWithValue("$minTs", minTs);
+                using var r = sel.ExecuteReader();
+                while (r.Read())
+                {
+                    long id = r.GetInt64(0);
+                    long ts = r.GetInt64(1);
+                    string model = r.IsDBNull(2) ? "" : r.GetString(2);
+                    string pid = r.IsDBNull(3) ? "" : r.GetString(3);
+                    string sid = r.IsDBNull(4) ? "" : r.GetString(4);
+                    string cid = ExtractAgConvId(sid);
+
+                    if (string.IsNullOrEmpty(pid))
+                    {
+                        candidates.Add((id, ts, model, cid, ""));
+                    }
+                    else if (pid.StartsWith("ag:", StringComparison.OrdinalIgnoreCase) && pid.Length > 3)
+                    {
+                        string email = pid.Substring(3).Trim().ToLowerInvariant();
+                        if (reconcileFromTs > 0 && ts >= reconcileFromTs)
+                        {
+                            candidates.Add((id, ts, model, cid, email));
+                        }
+                        else if (!string.IsNullOrEmpty(cid))
+                        {
+                            if (!convKnown.TryGetValue(cid, out var klist))
+                                convKnown[cid] = klist = new List<(long, string)>();
+                            klist.Add((ts, email));
+                        }
+                    }
+                }
+            }
+
+            if (candidates.Count == 0) return 0;
+
+            // 1. 构建离线 Hook 索引（带 conversationId 的记录严格限定在该会话及子代理链内，绝不跨会话串染）
+            var hooksByConv = new Dictionary<string, List<(long Ts, string Email)>>(StringComparer.OrdinalIgnoreCase);
+            var unscopedHooks = new List<(long Ts, string Email)>();
+            if (hookEntries != null && hookEntries.Count > 0)
+            {
+                foreach (var h in hookEntries)
+                {
+                    var em = h.Email?.Trim().ToLowerInvariant() ?? "";
+                    if (h.Ts <= 0 || string.IsNullOrEmpty(em) || !em.Contains('@')) continue;
+                    if (!string.IsNullOrEmpty(h.ConversationId))
+                    {
+                        if (!hooksByConv.TryGetValue(h.ConversationId, out var hlist))
+                            hooksByConv[h.ConversationId] = hlist = new List<(long, string)>();
+                        hlist.Add((h.Ts, em));
+                    }
+                    else
+                    {
+                        unscopedHooks.Add((h.Ts, em));
+                    }
+                }
+                unscopedHooks.Sort((a, b) => a.Ts.CompareTo(b.Ts));
+                foreach (var kv in hooksByConv)
+                    kv.Value.Sort((a, b) => a.Ts.CompareTo(b.Ts));
+            }
+
+            // 2. 构建历史 quota_snapshots 消耗下降窗口
+            var dropIntervals = LoadQuotaDropIntervals(conn, minTs > 0 ? Math.Max(0, minTs - 86400) : 0);
+
+            // 3. 读取在线已确认的活跃账号时间段（合并相邻同账号窗口）
+            var sessions = new List<(long StartTs, long EndTs, string Email)>();
+            using (var sCmd = conn.CreateCommand())
+            {
+                sCmd.CommandText = "SELECT start_ts, last_verified_ts, LOWER(TRIM(account_email)) FROM account_sessions WHERE account_email <> '' ORDER BY start_ts ASC, id ASC;";
+                using var sr = sCmd.ExecuteReader();
+                while (sr.Read())
+                {
+                    long s = sr.GetInt64(0);
+                    long e = Math.Max(s, sr.GetInt64(1));
+                    string em = sr.IsDBNull(2) ? "" : sr.GetString(2);
+                    if (!string.IsNullOrEmpty(em) && em.Contains('@'))
+                        sessions.Add((s, e, em));
+                }
+            }
+
+            var resolved = new Dictionary<long, string>();
+
+            // 第一遍：直接权威证据归属（前向因果 Stop Hook -> 在线活跃账号会话 -> 配额快照掉电窗口）
+            foreach (var row in candidates)
+            {
+                string directEmail = ResolveAccountFromHook(hooksByConv, unscopedHooks, parentMap, row.ConvId, row.Ts, sessions);
+                if (string.IsNullOrEmpty(directEmail))
+                    directEmail = ResolveAccountFromSessions(sessions, row.Ts, normLiveEmail, nowTs);
+                if (string.IsNullOrEmpty(directEmail) && string.IsNullOrEmpty(row.ExistingEmail))
+                    directEmail = ResolveAccountFromQuotaDrops(dropIntervals, row.Ts, ClassifyAgModelPool(row.Model), sessions);
+
+                string finalDirect = !string.IsNullOrEmpty(directEmail) ? directEmail : row.ExistingEmail;
+                if (!string.IsNullOrEmpty(finalDirect))
+                {
+                    if (!string.Equals(finalDirect, row.ExistingEmail, StringComparison.OrdinalIgnoreCase))
+                        resolved[row.Id] = finalDirect;
+                    if (!string.IsNullOrEmpty(row.ConvId))
+                    {
+                        if (!convKnown.TryGetValue(row.ConvId, out var klist))
+                            convKnown[row.ConvId] = klist = new List<(long, string)>();
+                        klist.Add((row.Ts, finalDirect));
+                    }
+                }
+            }
+
+            foreach (var kv in convKnown)
+                kv.Value.Sort((a, b) => a.Ts.CompareTo(b.Ts));
+
+            // 第二遍（多轮收敛，仅针对尚未归属记录）：同对话传播 -> 父子代理会话链传播 -> 15 分钟内唯一活跃扣费账号兜底
+            for (int pass = 0; pass < 3; pass++)
+            {
+                var newlyAdded = new List<(string ConvId, long Ts, string Email)>();
+                foreach (var row in candidates)
+                {
+                    if (!string.IsNullOrEmpty(row.ExistingEmail) || resolved.ContainsKey(row.Id)) continue;
+
+                    string email = "";
+                    if (!string.IsNullOrEmpty(row.ConvId))
+                    {
+                        email = ResolveAccountFromConvTimeline(convKnown, row.ConvId, row.Ts, sessions, normLiveEmail, nowTs);
+                        if (string.IsNullOrEmpty(email) && parentMap != null && parentMap.Count > 0)
+                        {
+                            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { row.ConvId };
+                            string cur = row.ConvId;
+                            for (int depth = 0; depth < 4 && parentMap.TryGetValue(cur, out var par) && seen.Add(par); depth++)
+                            {
+                                email = ResolveAccountFromConvTimeline(convKnown, par, row.Ts, sessions, normLiveEmail, nowTs);
+                                if (!string.IsNullOrEmpty(email)) break;
+                                cur = par;
+                            }
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(email))
+                        email = ResolveSoleNearbyDropAccount(dropIntervals, row.Ts, 900, sessions);
+
+                    if (!string.IsNullOrEmpty(email))
+                    {
+                        resolved[row.Id] = email;
+                        if (!string.IsNullOrEmpty(row.ConvId))
+                            newlyAdded.Add((row.ConvId, row.Ts, email));
+                    }
+                }
+
+                if (newlyAdded.Count == 0) break;
+                foreach (var (cid, ts, em) in newlyAdded)
+                {
+                    if (!convKnown.TryGetValue(cid, out var klist))
+                        convKnown[cid] = klist = new List<(long, string)>();
+                    klist.Add((ts, em));
+                }
+                foreach (var kv in convKnown)
+                    kv.Value.Sort((a, b) => a.Ts.CompareTo(b.Ts));
+            }
+
+            if (resolved.Count == 0) return 0;
+
+            using var tx = conn.BeginTransaction();
+            using var upd = conn.CreateCommand();
+            upd.Transaction = tx;
+            upd.CommandText = "UPDATE usage_events SET provider_id = $pid, provider_name = $pname WHERE id = $id;";
+            var pPid = upd.Parameters.Add("$pid", SqliteType.Text);
+            var pPname = upd.Parameters.Add("$pname", SqliteType.Text);
+            var pId = upd.Parameters.Add("$id", SqliteType.Integer);
+            int updated = 0;
+            foreach (var (id, email) in resolved)
+            {
+                pPid.Value = FormatAntigravityProviderId(email);
+                pPname.Value = FormatAntigravityProviderName(email);
+                pId.Value = id;
+                updated += upd.ExecuteNonQuery();
+            }
+            tx.Commit();
+            if (updated > 0) BumpMutationVersion();
+            return updated;
+        }
+        catch (Exception ex)
+        {
+            App.LogStartup("UsageStorage.EnrichAntigravityAccounts failed: " + ex.Message);
+            return 0;
+        }
+    }
+
+    private static List<QuotaDropInterval> LoadQuotaDropIntervals(SqliteConnection conn, long minTs = 0)
+    {
+        var intervals = new List<QuotaDropInterval>();
+        using var cmd = conn.CreateCommand();
+        string tsClause = minTs > 0 ? " AND ts >= $minTs" : "";
+        cmd.CommandText = $@"SELECT ts, LOWER(TRIM(account_email)), bucket, remaining_fraction, reset_time
+FROM quota_snapshots
+WHERE account_email <> ''{tsClause}
+ORDER BY LOWER(TRIM(account_email)) ASC, bucket ASC, ts ASC;";
+        if (minTs > 0) cmd.Parameters.AddWithValue("$minTs", minTs);
+        using var r = cmd.ExecuteReader();
+
+        string prevEmail = "", prevBucket = "";
+        long prevTs = 0, prevReset = 0;
+        double prevRem = 0;
+        bool hasPrev = false;
+
+        while (r.Read())
+        {
+            long ts = r.GetInt64(0);
+            string email = r.IsDBNull(1) ? "" : r.GetString(1);
+            string bucket = r.IsDBNull(2) ? "" : r.GetString(2);
+            double rem = r.GetDouble(3);
+            long reset = r.GetInt64(4);
+
+            if (string.IsNullOrEmpty(email) || !email.Contains('@')) continue;
+
+            if (hasPrev &&
+                string.Equals(email, prevEmail, StringComparison.Ordinal) &&
+                string.Equals(bucket, prevBucket, StringComparison.Ordinal))
+            {
+                long dt = ts - prevTs;
+                if (dt > 0 && dt <= 172800)
+                {
+                    double delta = 0;
+                    if (prevReset > 0 && reset > prevReset + 180)
+                    {
+                        // 跨过了周期重置且新周期已经产生消耗
+                        if (rem < 0.9995)
+                            delta = 1.0 - rem;
+                    }
+                    else if (prevRem - rem > 0.00005)
+                    {
+                        delta = prevRem - rem;
+                    }
+
+                    if (delta > 0.00005)
+                    {
+                        intervals.Add(new QuotaDropInterval(prevTs, ts, email, ClassifyQuotaBucketPool(bucket), delta));
+                    }
+                }
+            }
+
+            prevEmail = email;
+            prevBucket = bucket;
+            prevTs = ts;
+            prevRem = rem;
+            prevReset = reset;
+            hasPrev = true;
+        }
+
+        intervals.Sort((a, b) => a.StartTs.CompareTo(b.StartTs));
+        return intervals;
+    }
+
+    private static string ClassifyQuotaBucketPool(string bucket) =>
+        bucket.StartsWith("3p-", StringComparison.OrdinalIgnoreCase) ? "3p" : "gemini";
+
+    private static string ClassifyAgModelPool(string model)
+    {
+        if (string.IsNullOrEmpty(model)) return "";
+        if (model.Contains("claude", StringComparison.OrdinalIgnoreCase) ||
+            model.Contains("gpt", StringComparison.OrdinalIgnoreCase))
+            return "3p";
+        if (model.Contains("gemini", StringComparison.OrdinalIgnoreCase))
+            return "gemini";
+        return "";
+    }
+
+    private static bool HasDifferentSessionBetween(
+        List<(long StartTs, long EndTs, string Email)> sessions,
+        long t1,
+        long t2,
+        string candidateEmail)
+    {
+        if (sessions.Count == 0 || string.IsNullOrEmpty(candidateEmail)) return false;
+        long lo = Math.Min(t1, t2);
+        long hi = Math.Max(t1, t2);
+        foreach (var s in sessions)
+        {
+            if (s.StartTs > hi + 5) break;
+            if (s.EndTs < lo - 5 && s.StartTs < lo - 5) continue;
+            if ((s.StartTs >= lo - 5 && s.StartTs <= hi + 5) ||
+                (lo >= s.StartTs - 5 && lo <= s.EndTs + 300) ||
+                (hi >= s.StartTs - 5 && hi <= s.EndTs + 300))
+            {
+                if (!string.Equals(s.Email, candidateEmail, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static string ResolveAccountFromHook(
+        Dictionary<string, List<(long Ts, string Email)>> hooksByConv,
+        List<(long Ts, string Email)> allHooks,
+        IReadOnlyDictionary<string, string>? parentMap,
+        string convId,
+        long ts,
+        List<(long StartTs, long EndTs, string Email)> sessions)
+    {
+        if (!string.IsNullOrEmpty(convId))
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { convId };
+            string cur = convId;
+            for (int depth = 0; depth < 5; depth++)
+            {
+                if (hooksByConv.TryGetValue(cur, out var list) && list.Count > 0)
+                {
+                    var match = MatchHookList(list, ts, sessions);
+                    if (!string.IsNullOrEmpty(match)) return match;
+                }
+                if (parentMap == null || !parentMap.TryGetValue(cur, out var par) || !seen.Add(par))
+                    break;
+                cur = par;
+            }
+        }
+
+        // 若某条 Hook 无 conversationId，仅向前匹配该步骤结束后 5 分钟内的全局唯一 Stop 账号
+        if (allHooks.Count > 0)
+        {
+            string? sole = null;
+            foreach (var h in allHooks)
+            {
+                if (h.Ts < ts - 15) continue;
+                if (h.Ts > ts + 300) break;
+                if (sole == null) sole = h.Email;
+                else if (!string.Equals(sole, h.Email, StringComparison.Ordinal))
+                    return "";
+            }
+            if (sole != null && !HasDifferentSessionBetween(sessions, ts, ts + 60, sole))
+                return sole;
+        }
+
+        return "";
+    }
+
+    private static string MatchHookList(
+        List<(long Ts, string Email)> list,
+        long ts,
+        List<(long StartTs, long EndTs, string Email)> sessions)
+    {
+        // 1. 严格因果原则：Stop 钩子仅在回合结束触发，只能归属给 >= ts - 15s 的最早一次 Stop！
+        //    绝不向过去（h.Ts < ts - 15s）倒推匹配，因为旧回合结束后用户可能已切号并开启尚未结束的新回合。
+        foreach (var h in list)
+        {
+            if (h.Ts >= ts - 15 && h.Ts - ts <= 7200)
+            {
+                if (!HasDifferentSessionBetween(sessions, ts + 5, h.Ts - 5, h.Email))
+                    return h.Email;
+                break;
+            }
+        }
+
+        // 2. 仅当步骤严格处于同一账号前后两次已结束 Stop 钩子之间（且中间无切号记录）时，才允许夹逼继承
+        int idx = LowerBound(list, ts);
+        (long Ts, string Email)? prev = idx > 0 ? list[idx - 1] : null;
+        (long Ts, string Email)? next = idx < list.Count ? list[idx] : null;
+        if (prev.HasValue && next.HasValue &&
+            string.Equals(prev.Value.Email, next.Value.Email, StringComparison.Ordinal) &&
+            (next.Value.Ts - prev.Value.Ts) <= 7200 &&
+            !HasDifferentSessionBetween(sessions, prev.Value.Ts, next.Value.Ts, prev.Value.Email))
+        {
+            return prev.Value.Email;
+        }
+
+        return "";
+    }
+
+    private static string ResolveAccountFromQuotaDrops(
+        List<QuotaDropInterval> intervals,
+        long ts,
+        string modelPool,
+        List<(long StartTs, long EndTs, string Email)> sessions)
+    {
+        if (intervals.Count == 0) return "";
+        string bestEmail = "";
+        double bestScore = 0;
+
+        foreach (var d in intervals)
+        {
+            if (d.StartTs - 45 > ts) break;
+            if (d.EndTs + 45 < ts) continue;
+            if (HasDifferentSessionBetween(sessions, ts, ts, d.Email)) continue;
+
+            double poolWeight = (modelPool.Length == 0 || string.Equals(d.Pool, modelPool, StringComparison.Ordinal))
+                ? 1.0
+                : 0.12;
+            double density = d.Delta / Math.Max(60.0, d.EndTs - d.StartTs);
+            double score = poolWeight * density;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestEmail = d.Email;
+            }
+        }
+
+        return bestEmail;
+    }
+
+    private static string ResolveAccountFromSessions(
+        List<(long StartTs, long EndTs, string Email)> sessions,
+        long ts,
+        string liveEmail,
+        long nowTs)
+    {
+        if (sessions.Count == 0) return "";
+        string? candidate = null;
+        for (int i = 0; i < sessions.Count; i++)
+        {
+            var s = sessions[i];
+            if (s.StartTs - 8 > ts) break;
+
+            long nextStart = i + 1 < sessions.Count ? sessions[i + 1].StartTs : long.MaxValue;
+            if (ts >= nextStart - 2) continue;
+
+            long effectiveEnd = s.EndTs;
+            // 若当前正处于最后一段会话且磁盘当前登录邮箱仍一致，则有效末尾自动延伸至当前时刻
+            if (i == sessions.Count - 1 &&
+                !string.IsNullOrEmpty(liveEmail) &&
+                string.Equals(s.Email, liveEmail, StringComparison.OrdinalIgnoreCase) &&
+                nowTs >= s.StartTs)
+            {
+                effectiveEnd = Math.Max(effectiveEnd, nowTs);
+            }
+
+            if (effectiveEnd + 900 < ts) continue;
+            if (candidate == null) candidate = s.Email;
+            else if (!string.Equals(candidate, s.Email, StringComparison.Ordinal))
+                return "";
+        }
+        return candidate ?? "";
+    }
+
+    private static string ResolveAccountFromConvTimeline(
+        Dictionary<string, List<(long Ts, string Email)>> convKnown,
+        string cid,
+        long ts,
+        List<(long StartTs, long EndTs, string Email)> sessions,
+        string liveEmail,
+        long nowTs)
+    {
+        if (!convKnown.TryGetValue(cid, out var list) || list.Count == 0) return "";
+
+        int idx = LowerBound(list, ts);
+        (long Ts, string Email)? prev = idx > 0 ? list[idx - 1] : null;
+        (long Ts, string Email)? next = idx < list.Count ? list[idx] : null;
+
+        if (prev.HasValue && next.HasValue &&
+            string.Equals(prev.Value.Email, next.Value.Email, StringComparison.Ordinal) &&
+            (next.Value.Ts - prev.Value.Ts) <= 12 * 3600 &&
+            !HasDifferentSessionBetween(sessions, prev.Value.Ts, next.Value.Ts, prev.Value.Email))
+        {
+            return prev.Value.Email;
+        }
+
+        // 若步骤位于对话最新尾部且距当前时刻很近（正在进行的活跃回合），且与当前实际登录账号不一致，绝不盲目延续旧账号
+        if (!next.HasValue && (nowTs - ts) <= 7200 && !string.IsNullOrEmpty(liveEmail) &&
+            prev.HasValue && !string.Equals(prev.Value.Email, liveEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        int lo = LowerBound(list, ts - 7200);
+        int hi = UpperBound(list, ts + 7200);
+        string? winEmail = null;
+        bool winConsistent = true;
+        long nearestWinTs = ts;
+        long bestWinGap = long.MaxValue;
+        for (int i = lo; i < hi; i++)
+        {
+            if (winEmail == null) winEmail = list[i].Email;
+            else if (!string.Equals(winEmail, list[i].Email, StringComparison.Ordinal))
+            {
+                winConsistent = false;
+                break;
+            }
+            long g = Math.Abs(list[i].Ts - ts);
+            if (g < bestWinGap) { bestWinGap = g; nearestWinTs = list[i].Ts; }
+        }
+        if (winEmail != null && winConsistent && !HasDifferentSessionBetween(sessions, nearestWinTs, ts, winEmail))
+            return winEmail;
+
+        string first = list[0].Email;
+        bool single = true;
+        long minGap = long.MaxValue;
+        long nearestTs = ts;
+        foreach (var item in list)
+        {
+            if (!string.Equals(item.Email, first, StringComparison.Ordinal))
+            {
+                single = false;
+                break;
+            }
+            long g = Math.Abs(item.Ts - ts);
+            if (g < minGap) { minGap = g; nearestTs = item.Ts; }
+        }
+        if (single && minGap <= 86400 && !HasDifferentSessionBetween(sessions, nearestTs, ts, first))
+            return first;
+        return "";
+    }
+
+    private static string ResolveSoleNearbyDropAccount(
+        List<QuotaDropInterval> intervals,
+        long ts,
+        long windowSec,
+        List<(long StartTs, long EndTs, string Email)> sessions)
+    {
+        if (intervals.Count == 0) return "";
+        string? sole = null;
+        foreach (var d in intervals)
+        {
+            if (d.StartTs - windowSec > ts) break;
+            if (d.EndTs + windowSec < ts) continue;
+            if (d.EndTs - d.StartTs > 7200) continue;
+            if (HasDifferentSessionBetween(sessions, ts, ts, d.Email)) continue;
+            if (sole == null) sole = d.Email;
+            else if (!string.Equals(sole, d.Email, StringComparison.Ordinal))
+                return "";
+        }
+        return sole ?? "";
     }
 }

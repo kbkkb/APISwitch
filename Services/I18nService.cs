@@ -11,6 +11,7 @@ public static class I18nService
 {
     static int _localeDictIndex = -1;
     static string _requestedLanguage = "auto";
+    static volatile Dictionary<string, string> _threadSafeLookup = new(StringComparer.Ordinal);
 
     /// <summary>语言切换后触发（UI 线程）。托盘菜单、动态文本等订阅此事件重建。</summary>
     public static event Action? LanguageChanged;
@@ -71,6 +72,14 @@ public static class I18nService
             using var stream = sri.Stream;
             var dict = (ResourceDictionary)System.Windows.Markup.XamlReader.Load(stream);
 
+            var snap = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (System.Collections.DictionaryEntry entry in dict)
+            {
+                if (entry.Key is string k && entry.Value is string v)
+                    snap[k] = v;
+            }
+            _threadSafeLookup = snap;
+
             var dicts = Application.Current.Resources.MergedDictionaries;
             if (_localeDictIndex >= 0 && _localeDictIndex < dicts.Count)
             {
@@ -90,12 +99,17 @@ public static class I18nService
         }
     }
 
-    /// <summary>取词。缺失时回退为 key 本身（便于发现漏译）。</summary>
+    /// <summary>取词（任意后台线程安全 O(1) 读取，不触碰 WPF DispatcherObject）。缺失时回退为 key 本身。</summary>
     public static string T(string key)
     {
+        if (string.IsNullOrEmpty(key)) return "";
+        if (_threadSafeLookup.TryGetValue(key, out var fastVal))
+            return fastVal;
         try
         {
-            if (Application.Current?.Resources[key] is string s) return s;
+            var app = Application.Current;
+            if (app != null && app.Dispatcher.CheckAccess() && app.Resources[key] is string s)
+                return s;
         }
         catch { }
         return key;
